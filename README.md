@@ -58,21 +58,29 @@ Navigate to [http://localhost:3000](http://localhost:3000)
 - Skills (Hard & Soft)
 - Job Description (Optional but recommended)
 
-### 2. **AI-Powered Enhancement** (Google Gemini)
+### 2. **🎓 Certificate Upload with OCR** (NEW!)
+- Upload diploma or certificate images
+- Automatic text extraction using Tesseract.js OCR
+- Auto-populate education fields (degree, institution, dates, GPA, honors)
+- Supports PNG, JPG, GIF, PDF, and other image formats
+- Client-side processing (privacy-first, no server uploads)
+- See [certificates/README.md](./certificates/README.md) for details
+
+### 3. **AI-Powered Enhancement** (Google Gemini)
 - Restructures content for clarity
 - Uses strong action verbs
 - Maintains Harvard format
 - Integrates job description keywords naturally
 - **Never invents or fabricates information**
 
-### 3. **ATS Scoring Algorithm** (Server-Side)
+### 4. **ATS Scoring Algorithm** (Server-Side)
 - Extracts keywords from job description
 - Matches against resume content
 - Calculates percentage-based score
 - Shows matched and missing keywords
 - Provides actionable suggestions
 
-### 4. **Professional Output**
+### 5. **Professional Output**
 - Harvard Business School format
 - ATS-compatible formatting
 - 1-page optimized
@@ -123,12 +131,18 @@ harvard-ats-resume/
 │   └── globals.css           # Global styles
 ├── components/
 │   ├── ResumeForm.tsx        # Guided form (React Hook Form)
-│   └── ResumeResults.tsx     # Results display with ATS score
+│   ├── ResumeResults.tsx     # Results display with ATS score
+│   ├── CertificateUpload.tsx # OCR certificate upload component
+│   └── VoiceInput.tsx        # Voice input component
 ├── lib/
 │   ├── schemas.ts            # Zod validation schemas
 │   ├── gemini.ts             # Gemini AI integration
 │   ├── ats-scoring.ts        # ATS algorithm (keyword extraction)
 │   └── rate-limit.ts         # Rate limiting utility
+├── certificates/
+│   ├── README.md             # Certificate upload documentation
+│   ├── .gitignore            # Protect privacy of uploaded images
+│   └── localhost.pem         # SSL certificates for HTTPS
 ├── package.json
 ├── tsconfig.json
 ├── tailwind.config.js
@@ -309,12 +323,14 @@ Soft Skills: Leadership, Communication
 "AI ATS-Optimized Harvard Resume Builder for Tech Professionals"
 
 ### Key Differentiators
-1. ✅ Job description alignment
-2. ✅ Keyword gap detection
-3. ✅ Real-time ATS score
-4. ✅ Structured Harvard formatting
-5. ✅ **No hallucinated experience** - only enhancement
-6. ✅ Algorithm-based scoring (not AI guessing)
+1. ✅ **OCR Certificate Upload** - Auto-fill education from diploma images
+2. ✅ Job description alignment
+3. ✅ Keyword gap detection
+4. ✅ Real-time ATS score
+5. ✅ Structured Harvard formatting
+6. ✅ **No hallucinated experience** - only enhancement
+7. ✅ Algorithm-based scoring (not AI guessing)
+8. ✅ Voice input for faster data entry
 
 ---
 
@@ -398,6 +414,8 @@ done
 - [x] Keyword matching analysis
 - [x] PDF export
 - [x] Rate limiting
+- [x] **OCR Certificate Upload** (NEW!)
+- [x] Voice input for text fields
 
 ### Phase 2 (Planned)
 - [ ] User authentication (Clerk)
@@ -435,6 +453,7 @@ MIT License - feel free to use for personal and commercial projects.
 ## 🙏 Acknowledgments
 
 - **Google Gemini**: AI-powered content enhancement
+- **Tesseract.js**: OCR for certificate text extraction
 - **Next.js**: React framework
 - **React Hook Form**: Form state management
 - **Zod**: Runtime validation

@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  
+
   async headers() {
     return [
       {
@@ -34,6 +34,11 @@ const nextConfig = {
         ],
       },
     ];
+  },
+
+  webpack: (config) => {
+    config.resolve.alias.canvas = false;
+    return config;
   },
 };
 
