@@ -59,64 +59,40 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <header className="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-16 px-4">
-        <div className="max-w-6xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            AI Harvard ATS Resume Builder
-          </h1>
-          <p className="text-xl md:text-2xl mb-2 text-blue-100">
-            Create Job-Winning Resumes Optimized for Applicant Tracking Systems
-          </p>
-          <p className="text-lg text-blue-200">
-            For Tech Professionals • University Students • Bootcamp Graduates
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12 max-w-4xl mx-auto">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-              <div className="text-3xl mb-2">🎯</div>
-              <h3 className="font-bold text-lg mb-2">ATS-Optimized</h3>
-              <p className="text-sm text-blue-100">
-                Keyword matching and ATS score analysis
-              </p>
-            </div>
-
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-              <div className="text-3xl mb-2">🤖</div>
-              <h3 className="font-bold text-lg mb-2">AI-Enhanced</h3>
-              <p className="text-sm text-blue-100">
-                Powered by Gemini AI for professional content
-              </p>
-            </div>
-
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-              <div className="text-3xl mb-2">🎓</div>
-              <h3 className="font-bold text-lg mb-2">Harvard Style</h3>
-              <p className="text-sm text-blue-100">
-                Follows HBS formatting guidelines
-              </p>
-            </div>
+      {/* Minimal Header */}
+      <header className="bg-white border-b border-gray-200 py-6 sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-6 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gray-900 text-white flex items-center justify-center font-serif font-bold rounded-sm">H</div>
+            <h1 className="text-xl font-semibold tracking-tight text-gray-900">
+              Harvard ATS Builder
+            </h1>
           </div>
+          <nav className="text-sm font-medium text-gray-600 gap-6 hidden md:flex">
+            <span>ATS Optimized</span>
+            <span>AI Powered</span>
+            <span>Free & Open Source</span>
+          </nav>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-12">
+      <main className="max-w-5xl mx-auto px-6 py-12">
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 rounded-lg text-red-800">
-            <h3 className="font-bold mb-1">Error</h3>
-            <p>{error}</p>
+          <div className="mb-8 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-sm flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+            {error}
           </div>
         )}
 
         {!results ? (
           <div>
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-800 mb-4">
+            <div className="text-center mb-10">
+              <h2 className="text-3xl font-serif font-bold text-gray-900 mb-3 tracking-tight">
                 Build Your Professional Resume
               </h2>
-              <p className="text-gray-600 max-w-2xl mx-auto">
-                Fill in your information. Our AI will create a Harvard-style resume optimized for ATS
-                systems with keyword matching analysis and improvement suggestions.
+              <p className="text-gray-500 max-w-2xl mx-auto text-sm leading-relaxed">
+                Enter your details below. Our system will generate a Harvard-standard, ATS-optimized resume using advanced keyword matching.
               </p>
             </div>
 
@@ -124,12 +100,12 @@ export default function Home() {
           </div>
         ) : (
           <div>
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-800 mb-4">
-                Your ATS-Optimized Resume
+            <div className="text-center mb-10">
+              <h2 className="text-3xl font-serif font-bold text-gray-900 mb-3 tracking-tight">
+                Resume Generated
               </h2>
-              <p className="text-gray-600 max-w-2xl mx-auto">
-                Your professional resume has been generated with ATS scoring and keyword analysis.
+              <p className="text-gray-500 max-w-2xl mx-auto text-sm">
+                Review your analysis and download your document.
               </p>
             </div>
 
@@ -138,59 +114,11 @@ export default function Home() {
         )}
       </main>
 
-      {/* Features Section (only show on form page) */}
-      {!results && (
-        <section className="bg-white py-16 px-4 mt-12 border-t-2 border-gray-200">
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">
-              Why Use Our ATS Resume Builder?
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="text-center">
-                <div className="text-4xl mb-4">📊</div>
-                <h3 className="font-bold text-lg mb-2">ATS Score Analysis</h3>
-                <p className="text-gray-600 text-sm">
-                  Get a real-time score based on keyword matching with job descriptions
-                </p>
-              </div>
-
-              <div className="text-center">
-                <div className="text-4xl mb-4">🔍</div>
-                <h3 className="font-bold text-lg mb-2">Keyword Matching</h3>
-                <p className="text-gray-600 text-sm">
-                  See which keywords you matched and which ones you're missing
-                </p>
-              </div>
-
-              <div className="text-center">
-                <div className="text-4xl mb-4">💡</div>
-                <h3 className="font-bold text-lg mb-2">Smart Suggestions</h3>
-                <p className="text-gray-600 text-sm">
-                  Get actionable improvement suggestions based on your content
-                </p>
-              </div>
-
-              <div className="text-center">
-                <div className="text-4xl mb-4">✅</div>
-                <h3 className="font-bold text-lg mb-2">No Fabrication</h3>
-                <p className="text-gray-600 text-sm">
-                  AI only restructures your data - never invents experience or metrics
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Footer */}
-      <footer className="bg-gray-800 text-white py-8 px-4 mt-16">
-        <div className="max-w-6xl mx-auto text-center">
-          <p className="text-sm text-gray-300">
-            © 2024 AI Harvard ATS Resume Builder. Powered by Google Gemini AI.
-          </p>
-          <p className="text-xs text-gray-400 mt-2">
-            Built with Next.js, TypeScript, and React Hook Form
+      {/* Minimal Footer */}
+      <footer className="border-t border-gray-200 py-12 mt-12 bg-white">
+        <div className="max-w-5xl mx-auto px-6 text-center">
+          <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">
+            © 2026 Em3rc0d
           </p>
         </div>
       </footer>

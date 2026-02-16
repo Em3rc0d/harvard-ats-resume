@@ -98,15 +98,15 @@ export default function ResumeResults({
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Action Buttons */}
-      <div className="no-print flex gap-4 justify-center flex-wrap">
-        <button onClick={downloadPDF} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-          📄 Download PDF
+      <div className="no-print flex gap-4 justify-center flex-wrap pb-6 border-b border-gray-200">
+        <button onClick={downloadPDF} className="px-6 py-2.5 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium text-sm transition-colors shadow-sm flex items-center gap-2">
+          <span>Download PDF</span>
         </button>
-        <button onClick={printResume} className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium">
-          🖨️ Print Resume
+        <button onClick={printResume} className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors flex items-center gap-2">
+          <span>Print</span>
         </button>
-        <button onClick={onStartOver} className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">
-          🔄 Create New Resume
+        <button onClick={onStartOver} className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors">
+          Create New
         </button>
       </div>
 
@@ -114,90 +114,72 @@ export default function ResumeResults({
         {/* Left Column: ATS Analytics */}
         <div className="lg:col-span-1 space-y-6 no-print">
           {/* ATS Score Card */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">ATS Score</h3>
-            <div className="text-center">
-              <div className={`text-6xl font-bold ${getScoreColor(atsScore)} mb-2`}>
+          {/* ATS Score Card */}
+          <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
+            <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">ATS Compatibility Score</h3>
+            <div className="text-center py-4">
+              <div className="text-5xl font-serif font-bold text-gray-900 mb-2">
                 {atsScore}%
               </div>
-              <div className={`text-lg font-semibold ${getScoreColor(atsScore)}`}>
+              <div className="text-sm font-medium text-gray-600 uppercase tracking-wide">
                 {getScoreLabel(atsScore)}
               </div>
             </div>
-            <div className="mt-4 bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div className="mt-4 bg-gray-100 rounded-full h-1 overflow-hidden">
               <div
-                className={`h-full ${atsScore >= 85 ? 'bg-green-600' : atsScore >= 70 ? 'bg-yellow-600' : 'bg-red-600'
-                  }`}
+                className={`h-full ${atsScore >= 85 ? 'bg-gray-800' : atsScore >= 70 ? 'bg-gray-600' : 'bg-gray-400'}`}
                 style={{ width: `${atsScore}%` }}
               />
             </div>
-            <p className="text-sm text-gray-600 mt-3 text-center">
-              Based on keyword matching with job description
-            </p>
           </div>
 
           {/* Matched Keywords */}
           {matchedKeywords.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200">
-              <h3 className="text-lg font-bold text-gray-800 mb-3">
-                ✅ Matched Keywords ({matchedKeywords.length})
+            <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
+              <h3 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
+                Matched Keywords
               </h3>
               <div className="flex flex-wrap gap-2">
                 {matchedKeywords.slice(0, 15).map((keyword, index) => (
                   <span
                     key={index}
-                    className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
+                    className="px-2 py-1 bg-gray-100 text-gray-700 rounded-sm text-xs font-medium border border-gray-200"
                   >
                     {keyword}
                   </span>
                 ))}
               </div>
-              {matchedKeywords.length > 15 && (
-                <p className="text-sm text-gray-500 mt-2">
-                  +{matchedKeywords.length - 15} more keywords matched
-                </p>
-              )}
             </div>
           )}
 
-          {/* Missing Keywords */}
           {missingKeywords.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200">
-              <h3 className="text-lg font-bold text-gray-800 mb-3">
-                ⚠️ Missing Keywords ({missingKeywords.length})
+            <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
+              <h3 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
+                Missing Keywords
               </h3>
               <div className="flex flex-wrap gap-2">
                 {missingKeywords.slice(0, 15).map((keyword, index) => (
                   <span
                     key={index}
-                    className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm"
+                    className="px-2 py-1 bg-white text-gray-600 rounded-sm text-xs border border-gray-300 border-dashed"
                   >
                     {keyword}
                   </span>
                 ))}
               </div>
-              {missingKeywords.length > 15 && (
-                <p className="text-sm text-gray-500 mt-2">
-                  +{missingKeywords.length - 15} more keywords missing
-                </p>
-              )}
-              <p className="text-sm text-gray-600 mt-3">
-                Consider adding these if they're relevant to your experience
-              </p>
             </div>
           )}
 
-          {/* Improvement Suggestions */}
           {suggestions.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200">
-              <h3 className="text-lg font-bold text-gray-800 mb-3">
-                💡 Improvement Suggestions
+            <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
+              <h3 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
+                Suggestions
               </h3>
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {suggestions.map((suggestion, index) => (
-                  <li key={index} className="text-sm text-gray-700 flex gap-2">
-                    <span className="text-blue-600 font-bold">{index + 1}.</span>
-                    <span>{suggestion}</span>
+                  <li key={index} className="text-sm text-gray-700 flex gap-3 items-start">
+                    <span className="text-gray-400 font-medium text-xs mt-0.5">{index + 1}.</span>
+                    <span className="leading-relaxed">{suggestion}</span>
                   </li>
                 ))}
               </ul>
@@ -207,15 +189,16 @@ export default function ResumeResults({
 
         {/* Right Column: Resume Preview */}
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl shadow-2xl border-2 border-gray-200">
+          <div className="bg-white rounded-sm shadow-sm border border-gray-200">
             <div
               ref={resumeRef}
-              className="p-12 font-serif"
+              className="p-16 font-serif bg-white"
               style={{
                 minHeight: '11in',
                 fontFamily: 'Georgia, Times New Roman, serif',
                 fontSize: '11pt',
-                lineHeight: '1.5',
+                lineHeight: '1.4',
+                color: '#000'
               }}
             >
               <div className="whitespace-pre-wrap">{formattedResume}</div>

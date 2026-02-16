@@ -164,29 +164,16 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
     <form onSubmit={onFormSubmit} className="max-w-4xl mx-auto">
       {/* Progress Bar */}
       <div className="mb-8">
-        <div className="flex justify-between mb-4">
-          {sections.map((section, index) => (
-            <div key={index} className="flex items-center flex-1">
-              <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full font-bold transition-all ${index <= currentSection
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-300 text-gray-600'
-                  }`}
-              >
-                {index + 1}
-              </div>
-              {index < sections.length - 1 && (
-                <div
-                  className={`flex-1 h-1 mx-2 ${index < currentSection ? 'bg-blue-600' : 'bg-gray-300'
-                    }`}
-                />
-              )}
-            </div>
-          ))}
+        <div className="flex justify-between items-end mb-2">
+          <h2 className="text-xl font-bold text-gray-900">{sections[currentSection]}</h2>
+          <span className="text-sm font-medium text-gray-500">Step {currentSection + 1} of {sections.length}</span>
         </div>
-        <p className="text-center text-lg font-semibold text-gray-700">
-          {sections[currentSection]}
-        </p>
+        <div className="w-full bg-gray-200 h-1 rounded-sm">
+          <div
+            className="bg-gray-900 h-1 rounded-sm transition-all duration-300 ease-in-out"
+            style={{ width: `${((currentSection + 1) / sections.length) * 100}%` }}
+          />
+        </div>
       </div>
 
       {/* Section 0: Personal Information */}
@@ -316,9 +303,9 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
                 <button
                   type="button"
                   onClick={() => removeExperience(index)}
-                  className="float-right text-red-600 hover:text-red-800 font-bold"
+                  className="float-right text-red-500 hover:text-red-700 text-sm font-medium"
                 >
-                  ✕ Remove
+                  Remove
                 </button>
               )}
 
@@ -411,7 +398,7 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
               description: '',
               technologies: [],
             })}
-            className="w-full py-2 px-4 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-medium"
+            className="w-full py-2.5 px-4 border border-gray-900 text-gray-900 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors"
           >
             + Add Experience
           </button>
@@ -429,9 +416,9 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
                 <button
                   type="button"
                   onClick={() => removeEducation(index)}
-                  className="float-right text-red-600 hover:text-red-800 font-bold"
+                  className="float-right text-red-500 hover:text-red-700 text-sm font-medium"
                 >
-                  ✕ Remove
+                  Remove
                 </button>
               )}
 
@@ -499,7 +486,7 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
               startDate: '',
               endDate: '',
             })}
-            className="w-full py-2 px-4 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-medium"
+            className="w-full py-2.5 px-4 border border-gray-900 text-gray-900 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors"
           >
             + Add Education
           </button>
@@ -511,48 +498,69 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
         <div className="card space-y-6">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Skills</h2>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Technical/Hard Skills * (at least one required)
-            </label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={hardSkillsInput}
-                onChange={(e) => setHardSkillsInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addHardSkill())}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="React, Python, AWS, etc."
-              />
-              <button
-                type="button"
-                onClick={addHardSkill}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Add
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {hardSkills.map((skill, index) => (
-                <span
-                  key={index}
-                  className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center gap-2"
-                >
-                  {skill}
-                  <button
-                    type="button"
-                    onClick={() => removeHardSkill(index)}
-                    className="text-blue-600 hover:text-blue-800 font-bold"
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-            {hardSkills.length === 0 && (
-              <p className="text-red-500 text-sm mt-1">At least one hard skill is required</p>
-            )}
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Technical/Hard Skills * (at least one required)
+          </label>
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              value={hardSkillsInput}
+              onChange={(e) => setHardSkillsInput(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (hardSkillsInput.includes(',')) {
+                    const newSkills = hardSkillsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                    const updatedSkills = [...hardSkills, ...newSkills];
+                    setHardSkills(updatedSkills);
+                    setValue('skills.hardSkills', updatedSkills, { shouldValidate: true });
+                    setHardSkillsInput('');
+                  } else {
+                    addHardSkill();
+                  }
+                }
+              }}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="React, Python, AWS (comma separated enabled)"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (hardSkillsInput.includes(',')) {
+                  const newSkills = hardSkillsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                  const updatedSkills = [...hardSkills, ...newSkills];
+                  setHardSkills(updatedSkills);
+                  setValue('skills.hardSkills', updatedSkills, { shouldValidate: true });
+                  setHardSkillsInput('');
+                } else {
+                  addHardSkill();
+                }
+              }}
+              className="px-6 py-2 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium text-sm transition-colors"
+            >
+              Add
+            </button>
           </div>
+          <div className="flex flex-wrap gap-2">
+            {hardSkills.map((skill, index) => (
+              <span
+                key={index}
+                className="px-3 py-1 bg-gray-100 text-gray-800 rounded-sm text-sm flex items-center gap-2 border border-gray-200"
+              >
+                {skill}
+                <button
+                  type="button"
+                  onClick={() => removeHardSkill(index)}
+                  className="text-gray-500 hover:text-gray-800 font-bold"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          {hardSkills.length === 0 && (
+            <p className="text-red-500 text-sm mt-1">At least one hard skill is required</p>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -563,14 +571,37 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
                 type="text"
                 value={softSkillsInput}
                 onChange={(e) => setSoftSkillsInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSoftSkill())}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (softSkillsInput.includes(',')) {
+                      const newSkills = softSkillsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                      const updatedSkills = [...softSkills, ...newSkills];
+                      setSoftSkills(updatedSkills);
+                      setValue('skills.softSkills', updatedSkills, { shouldValidate: true });
+                      setSoftSkillsInput('');
+                    } else {
+                      addSoftSkill();
+                    }
+                  }
+                }}
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Leadership, Communication, etc."
+                placeholder="Leadership, Communication (comma separated enabled)"
               />
               <button
                 type="button"
-                onClick={addSoftSkill}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                onClick={() => {
+                  if (softSkillsInput.includes(',')) {
+                    const newSkills = softSkillsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                    const updatedSkills = [...softSkills, ...newSkills];
+                    setSoftSkills(updatedSkills);
+                    setValue('skills.softSkills', updatedSkills, { shouldValidate: true });
+                    setSoftSkillsInput('');
+                  } else {
+                    addSoftSkill();
+                  }
+                }}
+                className="px-6 py-2 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium text-sm transition-colors"
               >
                 Add
               </button>
@@ -579,15 +610,15 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
               {softSkills.map((skill, index) => (
                 <span
                   key={index}
-                  className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm flex items-center gap-2"
+                  className="px-3 py-1 bg-gray-100 text-gray-800 rounded-sm text-sm flex items-center gap-2 border border-gray-200"
                 >
                   {skill}
                   <button
                     type="button"
                     onClick={() => removeSoftSkill(index)}
-                    className="text-green-600 hover:text-green-800 font-bold"
+                    className="text-gray-500 hover:text-gray-800 font-bold"
                   >
-                    ✕
+                    ×
                   </button>
                 </span>
               ))}
@@ -633,7 +664,7 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
             type="button"
             onClick={prevSection}
             disabled={isLoading}
-            className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50"
+            className="px-6 py-2.5 border border-gray-300 text-gray-600 rounded-sm hover:bg-gray-50 font-medium disabled:opacity-50 text-sm transition-colors"
           >
             ← Previous
           </button>
@@ -644,7 +675,7 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
             type="button"
             onClick={nextSection}
             disabled={isLoading}
-            className="ml-auto px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"
+            className="ml-auto px-6 py-2.5 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium disabled:opacity-50 text-sm transition-colors"
           >
             Next →
           </button>
@@ -652,18 +683,18 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
           <button
             type="submit"
             disabled={isLoading || hardSkills.length === 0}
-            className="ml-auto px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+            className="ml-auto px-8 py-2.5 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors shadow-sm"
           >
             {isLoading ? (
               <span className="flex items-center gap-2">
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Generating Resume...
+                Generating...
               </span>
             ) : (
-              '🎯 Generate ATS-Optimized Resume'
+              'Generate Resume'
             )}
           </button>
         )}

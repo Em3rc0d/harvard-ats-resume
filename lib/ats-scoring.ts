@@ -33,7 +33,7 @@ export function extractKeywords(text: string): string[] {
 
   // Remove stopwords and count frequency
   const wordFreq: Map<string, number> = new Map();
-  
+
   for (const word of words) {
     if (!STOPWORDS.has(word)) {
       wordFreq.set(word, (wordFreq.get(word) || 0) + 1);
@@ -52,11 +52,11 @@ export function extractKeywords(text: string): string[] {
   keywords.push(...multiWordTerms);
 
   // Add single word keywords based on frequency and patterns
-  for (const [word, freq] of wordFreq.entries()) {
+  for (const [word, freq] of Array.from(wordFreq.entries())) {
     // Include if: appears 2+ times, or matches technical pattern, or is capitalized
     const matchesTechnical = technicalPatterns.some(pattern => pattern.test(word));
     const isRepeated = freq >= 2;
-    
+
     if (matchesTechnical || isRepeated) {
       if (!keywords.includes(word)) {
         keywords.push(word);
@@ -75,7 +75,7 @@ export function extractKeywords(text: string): string[] {
  */
 function extractMultiWordTerms(text: string): string[] {
   const multiWordTerms: string[] = [];
-  
+
   // Common multi-word technical terms
   const patterns = [
     /\b(machine learning|deep learning|artificial intelligence|natural language processing|computer vision|data science|software engineering|full stack|front end|back end|dev ?ops|ci\/cd|test driven development|agile development|scrum master|product manager|project manager|business analyst|data analyst|quality assurance|user experience|user interface|cloud computing|web development|mobile development|api development|rest api|graphql api)\b/gi,
@@ -121,16 +121,16 @@ export function calculateATSScore(
 
   const resumeLower = resumeText.toLowerCase();
   const skillsLower = skills.map(s => s.toLowerCase());
-  
+
   const matchedKeywords: string[] = [];
   const missingKeywords: string[] = [];
 
   for (const keyword of jobKeywords) {
     const keywordLower = keyword.toLowerCase();
-    
+
     // Check if keyword appears in resume or skills
     const inResume = resumeLower.includes(keywordLower);
-    const inSkills = skillsLower.some(skill => 
+    const inSkills = skillsLower.some(skill =>
       skill.includes(keywordLower) || keywordLower.includes(skill)
     );
 
@@ -179,19 +179,19 @@ export function generateSuggestions(
   }
 
   // Experience-based suggestions
-  const hasMetrics = experience.some(exp => 
+  const hasMetrics = experience.some(exp =>
     /\d+%|\d+x|increased|reduced|improved|grew/i.test(exp.description)
   );
-  
+
   if (!hasMetrics) {
     suggestions.push('Add quantifiable achievements (e.g., "Increased performance by 40%") to strengthen your impact.');
   }
 
   // Action verb check
-  const weakVerbs = experience.filter(exp => 
+  const weakVerbs = experience.filter(exp =>
     /^(responsible for|worked on|helped with|did)/i.test(exp.description)
   );
-  
+
   if (weakVerbs.length > 0) {
     suggestions.push('Use strong action verbs (Led, Developed, Implemented, Achieved) instead of passive language.');
   }

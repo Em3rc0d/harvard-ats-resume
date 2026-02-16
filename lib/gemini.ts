@@ -39,7 +39,7 @@ function constructUserPrompt(data: ResumeRequest): string {
   let prompt = `Generate a Harvard-style resume using the following candidate data.
 
 Candidate JSON:
-${candidateJSON}
+${JSON.stringify(data, null, 2)}
 `;
 
   if (data.jobDescription) {
@@ -50,16 +50,13 @@ ${data.jobDescription}
 Instructions:
 - Extract key technical and role-related keywords from the job description.
 - Naturally integrate them into the resume where appropriate.
-- Do not force irrelevant keywords.
-- Maintain authenticity.
 `;
   }
 
   prompt += `
-Return output in the following structured format:
-
-=== FORMATTED RESUME ===
-[Full Harvard-structured resume text here - format with clear sections:]
+Return output in the following structured format. 
+IMPORTANT: DO NOT use markdown code blocks or '===' separators for the resume content.
+Return the resume text directly.
 
 [FULL NAME]
 [Location] | [Email] | [LinkedIn] | [GitHub]
@@ -70,9 +67,8 @@ PROFESSIONAL SUMMARY
 EXPERIENCE
 [Company Name] — [Role]
 [Start Date] - [End Date]
-• [Achievement-focused bullet point with action verb]
-• [Achievement-focused bullet point with action verb]
-• [Achievement-focused bullet point with action verb]
+• [Achievement-focused bullet point]
+• [Achievement-focused bullet point]
 
 [Repeat for each experience]
 
@@ -80,13 +76,9 @@ EDUCATION
 [Institution Name]
 [Degree], [Start Date] - [End Date]
 
-[Repeat for each education]
-
 SKILLS
-Technical Skills: [Comma-separated list]
-Soft Skills: [Comma-separated list]
-
-=== END FORMATTED RESUME ===
+Technical Skills: [Comma-separated list of technical skills]
+Soft Skills: [Comma-separated list of soft skills]
 
 === MATCHED KEYWORDS ===
 [List of keywords from job description that appear in the resume, comma-separated]
@@ -94,7 +86,6 @@ Soft Skills: [Comma-separated list]
 === IMPROVEMENT SUGGESTIONS ===
 1. [Specific actionable suggestion]
 2. [Specific actionable suggestion]
-3. [Specific actionable suggestion]
 `;
 
   return prompt;
@@ -108,9 +99,9 @@ function parseGeminiResponse(responseText: string): {
   matchedKeywords: string[];
   suggestions: string[];
 } {
-  // Extract formatted resume
-  const resumeMatch = responseText.match(/===\s*FORMATTED RESUME\s*===\s*([\s\S]*?)\s*===\s*END FORMATTED RESUME\s*===/i);
-  const formattedResume = resumeMatch ? resumeMatch[1].trim() : responseText;
+  // Extract formatted resume (everything before the keywords section)
+  const resumeMatch = responseText.split('=== MATCHED KEYWORDS ===')[0];
+  const formattedResume = resumeMatch ? resumeMatch.trim() : responseText;
 
   // Extract matched keywords
   const keywordsMatch = responseText.match(/===\s*MATCHED KEYWORDS\s*===\s*([\s\S]*?)\s*===/i);
