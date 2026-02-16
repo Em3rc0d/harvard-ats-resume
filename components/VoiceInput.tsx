@@ -17,6 +17,7 @@ export default function VoiceInput({
 }: VoiceInputProps) {
     const [internalIsListening, setInternalIsListening] = useState(false);
     const [isSupported, setIsSupported] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const recognitionRef = useRef<any>(null);
 
     const isListening = typeof externalIsListening !== 'undefined' ? externalIsListening : internalIsListening;
@@ -36,7 +37,8 @@ export default function VoiceInput({
                 recognitionRef.current = new SpeechRecognition();
                 recognitionRef.current.continuous = true;
                 recognitionRef.current.interimResults = true;
-                recognitionRef.current.lang = 'en-US';
+                // Use browser language or default to English
+                recognitionRef.current.lang = navigator.language || 'en-US';
 
                 recognitionRef.current.onresult = (event: any) => {
                     let finalTranscript = '';
@@ -47,11 +49,22 @@ export default function VoiceInput({
                     }
                     if (finalTranscript) {
                         onTranscript(finalTranscript);
+                        setError(null);
                     }
                 };
 
                 recognitionRef.current.onerror = (event: any) => {
                     console.error('Speech recognition error', event.error);
+                    let errorMessage = 'Error listening';
+                    if (event.error === 'not-allowed') {
+                        errorMessage = 'Mic access denied';
+                    } else if (event.error === 'no-speech') {
+                        // Ignore no-speech errors usually, or handle gently
+                        return;
+                    } else if (event.error === 'network') {
+                        errorMessage = 'Network error';
+                    }
+                    setError(errorMessage);
                     handleIsListeningChange(false);
                 };
 
@@ -66,6 +79,7 @@ export default function VoiceInput({
         if (recognitionRef.current) {
             if (isListening) {
                 try {
+                    setError(null);
                     recognitionRef.current.start();
                 } catch (e) {
                     // Ignore error if already started
@@ -90,32 +104,39 @@ export default function VoiceInput({
     }
 
     return (
-        <button
-            type="button"
-            onClick={toggleListening}
-            className={`p-2 rounded-full transition-all duration-200 flex items-center gap-2 ${isListening
+        <div className="relative inline-block">
+            <button
+                type="button"
+                onClick={toggleListening}
+                className={`p-2 rounded-full transition-all duration-200 flex items-center gap-2 ${isListening
                     ? 'bg-red-100 text-red-600 animate-pulse ring-2 ring-red-400'
                     : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                } ${className}`}
-            title={isListening ? "Stop listening" : "Start voice input"}
-        >
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                    } ${className}`}
+                title={isListening ? "Stop listening" : "Start voice input"}
             >
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-            {isListening && <span className="text-xs font-medium">Listening...</span>}
-        </button>
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                >
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+                {isListening && <span className="text-xs font-medium">Listening...</span>}
+            </button>
+            {error && (
+                <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-red-100 text-red-600 px-2 py-1 rounded text-xs whitespace-nowrap shadow-md border border-red-200 z-10">
+                    {error}
+                </div>
+            )}
+        </div>
     );
 }
