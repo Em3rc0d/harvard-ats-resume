@@ -3,7 +3,8 @@
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { resumeRequestSchema, ResumeRequest } from '@/lib/schemas';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import VoiceInput from './VoiceInput';
 
 interface ResumeFormProps {
   onSubmit: (data: ResumeRequest) => Promise<void>;
@@ -12,7 +13,7 @@ interface ResumeFormProps {
 
 export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
   const [currentSection, setCurrentSection] = useState(0);
-  
+
   const sections = [
     'Personal Info',
     'Summary',
@@ -28,6 +29,8 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
     handleSubmit,
     formState: { errors },
     trigger,
+    setValue,
+    watch,
   } = useForm<ResumeRequest>({
     resolver: zodResolver(resumeRequestSchema),
     defaultValues: {
@@ -111,7 +114,7 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
   const nextSection = async () => {
     const fieldsToValidate = getSectionFields(currentSection);
     const isValid = await trigger(fieldsToValidate as any);
-    
+
     if (isValid && currentSection < sections.length - 1) {
       setCurrentSection(currentSection + 1);
     }
@@ -142,6 +145,15 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
     onSubmit(data);
   });
 
+  const handleVoiceInput = useCallback((field: any, text: string) => {
+    const current = watch(field) || '';
+    const newText = current + (current && !current.endsWith(' ') ? ' ' : '') + text;
+    setValue(field, newText, {
+      shouldValidate: true,
+      shouldDirty: true
+    });
+  }, [setValue, watch]);
+
   return (
     <form onSubmit={onFormSubmit} className="max-w-4xl mx-auto">
       {/* Progress Bar */}
@@ -150,19 +162,17 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
           {sections.map((section, index) => (
             <div key={index} className="flex items-center flex-1">
               <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full font-bold transition-all ${
-                  index <= currentSection
+                className={`flex items-center justify-center w-10 h-10 rounded-full font-bold transition-all ${index <= currentSection
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-300 text-gray-600'
-                }`}
+                  }`}
               >
                 {index + 1}
               </div>
               {index < sections.length - 1 && (
                 <div
-                  className={`flex-1 h-1 mx-2 ${
-                    index < currentSection ? 'bg-blue-600' : 'bg-gray-300'
-                  }`}
+                  className={`flex-1 h-1 mx-2 ${index < currentSection ? 'bg-blue-600' : 'bg-gray-300'
+                    }`}
                 />
               )}
             </div>
@@ -177,7 +187,7 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
       {currentSection === 0 && (
         <div className="card space-y-4">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Personal Information</h2>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Full Name *
@@ -260,17 +270,22 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
           <p className="text-gray-600 mb-4">
             Write a concise 2-3 sentence summary of your professional background and career goals.
           </p>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Summary *
             </label>
-            <textarea
-              {...register('summary')}
-              rows={5}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Experienced software engineer with 5 years in full-stack development, specializing in React and Node.js. Proven track record of building scalable web applications and leading development teams..."
-            />
+            <div className="relative">
+              <textarea
+                {...register('summary')}
+                rows={5}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pb-10"
+                placeholder="Experienced software engineer with 5 years in full-stack development, specializing in React and Node.js. Proven track record of building scalable web applications and leading development teams..."
+              />
+              <div className="absolute bottom-2 right-2">
+                <VoiceInput onTranscript={(text) => handleVoiceInput('summary', text)} />
+              </div>
+            </div>
             {errors.summary && (
               <p className="text-red-500 text-sm mt-1">{errors.summary.message}</p>
             )}
@@ -359,12 +374,17 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Description & Achievements *
                 </label>
-                <textarea
-                  {...register(`experience.${index}.description`)}
-                  rows={5}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="Led team of 5 engineers. Increased system performance by 40%. Reduced costs by $200K annually through optimization..."
-                />
+                <div className="relative">
+                  <textarea
+                    {...register(`experience.${index}.description`)}
+                    rows={5}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 pb-10"
+                    placeholder="Led team of 5 engineers. Increased system performance by 40%. Reduced costs by $200K annually through optimization..."
+                  />
+                  <div className="absolute bottom-2 right-2">
+                    <VoiceInput onTranscript={(text) => handleVoiceInput(`experience.${index}.description`, text)} />
+                  </div>
+                </div>
                 {errors.experience?.[index]?.description && (
                   <p className="text-red-500 text-sm mt-1">{errors.experience[index]?.description?.message}</p>
                 )}
@@ -582,12 +602,17 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Job Description
             </label>
-            <textarea
-              {...register('jobDescription')}
-              rows={12}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Paste the job description here..."
-            />
+            <div className="relative">
+              <textarea
+                {...register('jobDescription')}
+                rows={12}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pb-10"
+                placeholder="Paste the job description here..."
+              />
+              <div className="absolute bottom-2 right-2">
+                <VoiceInput onTranscript={(text) => handleVoiceInput('jobDescription', text)} />
+              </div>
+            </div>
             <p className="text-sm text-gray-500 mt-1">
               Leave blank if you want a general Harvard-style resume without job-specific optimization
             </p>
