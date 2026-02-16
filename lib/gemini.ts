@@ -148,7 +148,7 @@ export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
   try {
     const genAI = getGeminiClient();
     const model = genAI.getGenerativeModel({
-      model: 'gemini-pro',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         temperature: 0.7,
         topK: 40,

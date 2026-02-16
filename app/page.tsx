@@ -16,9 +16,12 @@ export default function Home() {
     suggestions: string[];
   } | null>(null);
 
+  const [userName, setUserName] = useState<string>('Candidate');
+
   const handleSubmit = async (data: ResumeRequest) => {
     setIsLoading(true);
     setError(null);
+    setUserName(data.personalInfo.fullName);
 
     try {
       const response = await fetch('/api/generate-resume', {
@@ -130,7 +133,7 @@ export default function Home() {
               </p>
             </div>
 
-            <ResumeResults {...results} onStartOver={handleStartOver} />
+            <ResumeResults {...results} userName={userName} onStartOver={handleStartOver} />
           </div>
         )}
       </main>

@@ -91,6 +91,7 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
     if (hardSkillsInput.trim()) {
       const newSkills = [...hardSkills, hardSkillsInput.trim()];
       setHardSkills(newSkills);
+      setValue('skills.hardSkills', newSkills, { shouldValidate: true });
       setHardSkillsInput('');
     }
   };
@@ -99,16 +100,21 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
     if (softSkillsInput.trim()) {
       const newSkills = [...softSkills, softSkillsInput.trim()];
       setSoftSkills(newSkills);
+      setValue('skills.softSkills', newSkills, { shouldValidate: true });
       setSoftSkillsInput('');
     }
   };
 
   const removeHardSkill = (index: number) => {
-    setHardSkills(hardSkills.filter((_, i) => i !== index));
+    const newSkills = hardSkills.filter((_, i) => i !== index);
+    setHardSkills(newSkills);
+    setValue('skills.hardSkills', newSkills, { shouldValidate: true });
   };
 
   const removeSoftSkill = (index: number) => {
-    setSoftSkills(softSkills.filter((_, i) => i !== index));
+    const newSkills = softSkills.filter((_, i) => i !== index);
+    setSoftSkills(newSkills);
+    setValue('skills.softSkills', newSkills, { shouldValidate: true });
   };
 
   const nextSection = async () => {
@@ -163,8 +169,8 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
             <div key={index} className="flex items-center flex-1">
               <div
                 className={`flex items-center justify-center w-10 h-10 rounded-full font-bold transition-all ${index <= currentSection
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-300 text-gray-600'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-300 text-gray-600'
                   }`}
               >
                 {index + 1}

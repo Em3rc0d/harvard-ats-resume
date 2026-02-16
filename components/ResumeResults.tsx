@@ -9,6 +9,7 @@ interface ResumeResultsProps {
   matchedKeywords: string[];
   missingKeywords: string[];
   suggestions: string[];
+  userName: string;
   onStartOver: () => void;
 }
 
@@ -18,6 +19,7 @@ export default function ResumeResults({
   matchedKeywords,
   missingKeywords,
   suggestions,
+  userName,
   onStartOver,
 }: ResumeResultsProps) {
   const resumeRef = useRef<HTMLDivElement>(null);
@@ -80,7 +82,9 @@ export default function ResumeResults({
         y += lineHeight * splitText.length;
       });
 
-      pdf.save('harvard-ats-resume.pdf');
+      const currentYear = new Date().getFullYear();
+      const fileName = `${userName}, CV- ${currentYear}.pdf`;
+      pdf.save(fileName);
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF. Please try again.');
@@ -122,9 +126,8 @@ export default function ResumeResults({
             </div>
             <div className="mt-4 bg-gray-200 rounded-full h-3 overflow-hidden">
               <div
-                className={`h-full ${
-                  atsScore >= 85 ? 'bg-green-600' : atsScore >= 70 ? 'bg-yellow-600' : 'bg-red-600'
-                }`}
+                className={`h-full ${atsScore >= 85 ? 'bg-green-600' : atsScore >= 70 ? 'bg-yellow-600' : 'bg-red-600'
+                  }`}
                 style={{ width: `${atsScore}%` }}
               />
             </div>
