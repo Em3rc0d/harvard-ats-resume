@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ResumeRequest } from '@/lib/schemas';
+import { useLanguage } from '@/components/LanguageProvider';
 
 interface CVUploadProps {
     onDataExtracted: (data: ResumeRequest) => void;
@@ -9,6 +10,7 @@ interface CVUploadProps {
 }
 
 export default function CVUpload({ onDataExtracted, onCancel }: CVUploadProps) {
+    const { t } = useLanguage();
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const n8nUrl = process.env.NEXT_PUBLIC_N8N_RESUME_URL;
@@ -112,9 +114,9 @@ export default function CVUpload({ onDataExtracted, onCancel }: CVUploadProps) {
                         <line x1="12" y1="3" x2="12" y2="15"></line>
                     </svg>
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Upload Your Resume</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">{t.upload.title}</h2>
                 <p className="text-gray-500">
-                    Upload your existing CV (PDF or Word) and we'll automatically extract your details to get you started faster.
+                    {t.upload.desc}
                 </p>
             </div>
 
@@ -136,13 +138,13 @@ export default function CVUpload({ onDataExtracted, onCancel }: CVUploadProps) {
                         {isUploading ? (
                             <div className="flex flex-col items-center">
                                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-                                <p className="text-blue-600 font-medium">Analyzing your resume...</p>
-                                <p className="text-sm text-gray-400 mt-1">This may take a few seconds</p>
+                                <p className="text-blue-600 font-medium">{t.upload.analyzing}</p>
+                                <p className="text-sm text-gray-400 mt-1">{t.upload.wait}</p>
                             </div>
                         ) : (
                             <div className="flex flex-col items-center">
-                                <span className="text-gray-600 font-medium mb-2">Click to upload or drag and drop</span>
-                                <span className="text-sm text-gray-400">PDF, DOCX up to 10MB</span>
+                                <span className="text-gray-600 font-medium mb-2">{t.upload.dragDrop}</span>
+                                <span className="text-sm text-gray-400">{t.upload.formats}</span>
                             </div>
                         )}
                     </label>
@@ -159,7 +161,7 @@ export default function CVUpload({ onDataExtracted, onCancel }: CVUploadProps) {
                         onClick={onCancel}
                         className="text-gray-500 hover:text-gray-700 text-sm font-medium"
                     >
-                        I prefer to start from scratch
+                        {t.upload.cancel}
                     </button>
                 </div>
             </div>

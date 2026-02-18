@@ -3,9 +3,10 @@
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { resumeRequestSchema, ResumeRequest } from '@/lib/schemas';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import VoiceInput from './VoiceInput';
+import { useLanguage } from '@/components/LanguageProvider';
 
 // Dynamic import with SSR disabled to prevent PDF.js server-side errors
 const CertificateUpload = dynamic(() => import('./CertificateUpload'), {
@@ -25,16 +26,17 @@ interface ResumeFormProps {
 }
 
 export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeFormProps) {
+  const { t } = useLanguage();
   const [currentSection, setCurrentSection] = useState(0);
 
-  const sections = [
-    'Personal Info',
-    'Summary',
-    'Experience',
-    'Education',
-    'Skills',
-    'Job Description (Optional)'
-  ];
+  const sections = useMemo(() => [
+    t.sections.personal,
+    t.sections.summary,
+    t.sections.experience,
+    t.sections.education,
+    t.sections.skills,
+    t.sections.jobDesc
+  ], [t]);
 
   const {
     register,
@@ -279,7 +281,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
       <div className="mb-8">
         <div className="flex justify-between items-end mb-2">
           <h2 className="text-xl font-bold text-gray-900">{sections[currentSection]}</h2>
-          <span className="text-sm font-medium text-gray-500">Step {currentSection + 1} of {sections.length}</span>
+          <span className="text-sm font-medium text-gray-500">{t.form.step} {currentSection + 1} {t.form.of} {sections.length}</span>
         </div>
         <div className="w-full bg-gray-200 h-1 rounded-sm">
           <div
@@ -292,11 +294,11 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
       {/* Section 0: Personal Information */}
       {currentSection === 0 && (
         <div className="card space-y-4">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Personal Information</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.form.personalInfo}</h2>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Full Name *
+              {t.fields.fullName} *
             </label>
             <input
               {...register('personalInfo.fullName')}
@@ -310,7 +312,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Location *
+              {t.fields.location} *
             </label>
             <input
               {...register('personalInfo.location')}
@@ -324,7 +326,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email *
+              {t.fields.email} *
             </label>
             <input
               {...register('personalInfo.email')}
@@ -339,7 +341,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              LinkedIn URL
+              {t.fields.linkedin}
             </label>
             <input
               {...register('personalInfo.linkedin')}
@@ -372,21 +374,18 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
       {/* Section 1: Professional Summary */}
       {currentSection === 1 && (
         <div className="card space-y-4">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Professional Summary</h2>
-          <p className="text-gray-600 mb-4">
-            Write a concise 2-3 sentence summary of your professional background and career goals.
-          </p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.form.summary}</h2>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Summary *
+              {t.sections.summary} *
             </label>
             <div className="relative">
               <textarea
                 {...register('summary')}
                 rows={5}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pb-10"
-                placeholder="Experienced software engineer with 5 years in full-stack development, specializing in React and Node.js. Proven track record of building scalable web applications and leading development teams..."
+                placeholder={t.fields.summaryPlaceholder}
               />
               <div className="absolute bottom-2 right-2">
                 <VoiceInput onTranscript={(text) => handleVoiceInput('summary', text)} />
@@ -408,12 +407,12 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
                 {optimizingField === 'summary' ? (
                   <>
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-700"></div>
-                    Optimizing...
+                    {t.form.optimizing}
                   </>
                 ) : (
                   <>
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                    Optimize & Improve
+                    {t.form.optimize}
                   </>
                 )}
               </button>
@@ -425,10 +424,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
       {/* Section 2: Work Experience */}
       {currentSection === 2 && (
         <div className="card space-y-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Work Experience</h2>
-          <p className="text-gray-600 mb-4">
-            Add your work experience. Focus on achievements and quantifiable results.
-          </p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.form.experience}</h2>
 
           {experienceFields.map((field, index) => (
             <div key={field.id} className="p-4 border-2 border-gray-200 rounded-lg space-y-4">
@@ -438,16 +434,16 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
                   onClick={() => removeExperience(index)}
                   className="float-right text-red-500 hover:text-red-700 text-sm font-medium"
                 >
-                  Remove
+                  {t.form.remove}
                 </button>
               )}
 
-              <h3 className="font-bold text-lg">Experience #{index + 1}</h3>
+              <h3 className="font-bold text-lg">{t.sections.experience} #{index + 1}</h3>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Company *
+                    {t.fields.company} *
                   </label>
                   <input
                     {...register(`experience.${index}.company`)}
@@ -461,7 +457,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Role *
+                    {t.fields.role} *
                   </label>
                   <input
                     {...register(`experience.${index}.role`)}
@@ -475,7 +471,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date *
+                    {t.fields.startDate} *
                   </label>
                   <input
                     {...register(`experience.${index}.startDate`)}
@@ -486,7 +482,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date *
+                    {t.fields.endDate} *
                   </label>
                   <input
                     {...register(`experience.${index}.endDate`)}
@@ -498,7 +494,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description & Achievements *
+                  {t.fields.description} *
                 </label>
                 <div className="relative">
                   <textarea
@@ -553,7 +549,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
             })}
             className="w-full py-2.5 px-4 border border-gray-900 text-gray-900 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors"
           >
-            + Add Experience
+            {t.form.addExperience}
           </button>
         </div>
       )}
@@ -561,10 +557,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
       {/* Section 3: Education */}
       {currentSection === 3 && (
         <div className="card space-y-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Education</h2>
-          <p className="text-gray-600 mb-4">
-            Add your educational background. You can manually enter details or upload certificate/diploma images to auto-fill the information.
-          </p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.form.education}</h2>
 
           {/* Batch Upload Section */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
@@ -595,11 +588,11 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
                   onClick={() => removeEducation(index)}
                   className="float-right text-red-500 hover:text-red-700 text-sm font-medium"
                 >
-                  Remove
+                  {t.form.remove}
                 </button>
               )}
 
-              <h3 className="font-bold text-lg">Education #{index + 1}</h3>
+              <h3 className="font-bold text-lg">{t.sections.education} #{index + 1}</h3>
 
               {/* Certificate Upload */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -621,7 +614,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Institution *
+                  {t.fields.institution} *
                 </label>
                 <input
                   {...register(`education.${index}.institution`)}
@@ -635,7 +628,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Degree *
+                  {t.fields.degree} *
                 </label>
                 <input
                   {...register(`education.${index}.degree`)}
@@ -650,7 +643,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date *
+                    {t.fields.startDate} *
                   </label>
                   <input
                     {...register(`education.${index}.startDate`)}
@@ -661,7 +654,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date *
+                    {t.fields.endDate} *
                   </label>
                   <input
                     {...register(`education.${index}.endDate`)}
@@ -683,7 +676,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
             })}
             className="w-full py-2.5 px-4 border border-gray-900 text-gray-900 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors"
           >
-            + Add Education
+            {t.form.addEducation}
           </button>
         </div>
       )}
@@ -691,10 +684,10 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
       {/* Section 4: Skills */}
       {currentSection === 4 && (
         <div className="card space-y-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Skills</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.form.skills}</h2>
 
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Technical/Hard Skills * (at least one required)
+            {t.fields.hardSkills} *
           </label>
           <div className="flex gap-2 mb-2">
             <input
@@ -759,7 +752,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Soft Skills (Optional)
+              {t.fields.softSkills}
             </label>
             <div className="flex gap-2 mb-2">
               <input
@@ -825,21 +818,18 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
       {/* Section 5: Job Description */}
       {currentSection === 5 && (
         <div className="card space-y-4">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Job Description (Optional but Recommended)</h2>
-          <p className="text-gray-600 mb-4">
-            Paste the job description you're applying for. This helps optimize your resume for ATS and provides keyword matching analysis.
-          </p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.form.jobDesc}</h2>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Job Description
+              {t.fields.jobDescLabel}
             </label>
             <div className="relative">
               <textarea
                 {...register('jobDescription')}
                 rows={12}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pb-10"
-                placeholder="Paste the job description here..."
+                placeholder={t.fields.jobDescPlaceholder}
               />
               <div className="absolute bottom-2 right-2">
                 <VoiceInput onTranscript={(text) => handleVoiceInput('jobDescription', text)} />
@@ -861,7 +851,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
             disabled={isLoading}
             className="px-6 py-2.5 border border-gray-300 text-gray-600 rounded-sm hover:bg-gray-50 font-medium disabled:opacity-50 text-sm transition-colors"
           >
-            ← Previous
+            {t.form.prev}
           </button>
         )}
 
@@ -872,7 +862,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
             disabled={isLoading}
             className="ml-auto px-6 py-2.5 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium disabled:opacity-50 text-sm transition-colors"
           >
-            Next →
+            {t.form.next}
           </button>
         ) : (
           <button
@@ -886,11 +876,9 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeF
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Generating...
+                {t.form.generating}
               </span>
-            ) : (
-              'Generate Resume'
-            )}
+            ) : t.form.generate}
           </button>
         )}
       </div>

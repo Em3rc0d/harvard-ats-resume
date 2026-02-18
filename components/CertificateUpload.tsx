@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { createWorker } from 'tesseract.js';
+import { useLanguage } from '@/components/LanguageProvider';
 
 // PDF.js will be loaded dynamically on client side only
 let pdfjsLib: any = null;
@@ -27,6 +28,7 @@ export default function CertificateUpload({
     index = 0,
     allowMultiple = false
 }: CertificateUploadProps) {
+    const { t } = useLanguage();
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [preview, setPreview] = useState<string | null>(null);
@@ -331,13 +333,13 @@ export default function CertificateUpload({
                             />
                         </svg>
                         <div className="text-sm text-gray-600">
-                            <span className="font-semibold text-gray-900">Click to upload</span> or drag and drop
+                            <span className="font-semibold text-gray-900">{t.certificate.clickToUpload}</span> {t.certificate.dragDrop}
                         </div>
                         <p className="text-xs text-gray-500">
-                            PNG, JPG, GIF, PDF up to 10MB{allowMultiple ? ' (multiple files allowed)' : ''}
+                            {t.certificate.formats}{allowMultiple ? ` ${t.certificate.multipleAllowed}` : ''}
                         </p>
                         <p className="text-xs text-blue-600 font-medium mt-2">
-                            📜 Upload your {allowMultiple ? 'certificates' : 'diploma or certificate'} to auto-fill education details
+                            📜 {t.certificate.uploadPrompt}
                         </p>
                     </div>
                 </label>
@@ -355,7 +357,7 @@ export default function CertificateUpload({
                                 />
                             </div>
                             <p className="text-xs text-blue-600 mt-1 text-center">
-                                Processing... {progress}%
+                                {t.certificate.processing} {progress}%
                             </p>
                         </div>
                     </div>
@@ -380,7 +382,7 @@ export default function CertificateUpload({
             {!allowMultiple && extractedText && (
                 <details className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
                     <summary className="text-sm font-medium text-gray-900 cursor-pointer">
-                        View Extracted Text
+                        {t.certificate.viewExtracted}
                     </summary>
                     <pre className="mt-2 text-xs text-gray-600 whitespace-pre-wrap font-mono p-2 bg-white rounded border border-gray-200 max-h-40 overflow-y-auto">
                         {extractedText}

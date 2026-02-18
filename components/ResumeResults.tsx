@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import jsPDF from 'jspdf';
+import { useLanguage } from '@/components/LanguageProvider';
 
 interface ResumeResultsProps {
   formattedResume: string;
@@ -22,6 +23,7 @@ export default function ResumeResults({
   userName,
   onStartOver,
 }: ResumeResultsProps) {
+  const { t } = useLanguage();
   const resumeRef = useRef<HTMLDivElement>(null);
 
   const getScoreColor = (score: number) => {
@@ -31,10 +33,10 @@ export default function ResumeResults({
   };
 
   const getScoreLabel = (score: number) => {
-    if (score >= 85) return 'Excellent';
-    if (score >= 70) return 'Good';
-    if (score >= 50) return 'Fair';
-    return 'Needs Improvement';
+    if (score >= 85) return t.results.excellent;
+    if (score >= 70) return t.results.good;
+    if (score >= 50) return t.results.fair;
+    return t.results.needsImprovement;
   };
 
   const downloadPDF = () => {
@@ -100,13 +102,13 @@ export default function ResumeResults({
       {/* Action Buttons */}
       <div className="no-print flex gap-4 justify-center flex-wrap pb-6 border-b border-gray-200">
         <button onClick={downloadPDF} className="px-6 py-2.5 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium text-sm transition-colors shadow-sm flex items-center gap-2">
-          <span>Download PDF</span>
+          <span>{t.results.downloadPDF}</span>
         </button>
         <button onClick={printResume} className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors flex items-center gap-2">
-          <span>Print</span>
+          <span>{t.results.print}</span>
         </button>
         <button onClick={onStartOver} className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors">
-          Create New
+          {t.results.createNew}
         </button>
       </div>
 
@@ -116,7 +118,7 @@ export default function ResumeResults({
           {/* ATS Score Card */}
           {/* ATS Score Card */}
           <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
-            <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">ATS Compatibility Score</h3>
+            <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">{t.results.atsCompatibility}</h3>
             <div className="text-center py-4">
               <div className="text-5xl font-serif font-bold text-gray-900 mb-2">
                 {atsScore}%
@@ -137,7 +139,7 @@ export default function ResumeResults({
           {matchedKeywords.length > 0 && (
             <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
               <h3 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                Matched Keywords
+                {t.results.matchedKeywords}
               </h3>
               <div className="flex flex-wrap gap-2">
                 {matchedKeywords.slice(0, 15).map((keyword, index) => (
@@ -155,7 +157,7 @@ export default function ResumeResults({
           {missingKeywords.length > 0 && (
             <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
               <h3 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                Missing Keywords
+                {t.results.missingKeywords}
               </h3>
               <div className="flex flex-wrap gap-2">
                 {missingKeywords.slice(0, 15).map((keyword, index) => (
@@ -173,7 +175,7 @@ export default function ResumeResults({
           {suggestions.length > 0 && (
             <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
               <h3 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                Suggestions
+                {t.results.suggestions}
               </h3>
               <ul className="space-y-3">
                 {suggestions.map((suggestion, index) => (

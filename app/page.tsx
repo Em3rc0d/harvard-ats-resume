@@ -5,8 +5,11 @@ import ResumeForm from '@/components/ResumeForm';
 import ResumeResults from '@/components/ResumeResults';
 import CVUpload from '@/components/CVUpload';
 import { ResumeRequest } from '@/lib/schemas';
+import { useLanguage } from '@/components/LanguageProvider';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 export default function Home() {
+  const { t } = useLanguage();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<{
@@ -75,16 +78,19 @@ export default function Home() {
       <header className="bg-white border-b border-gray-200 py-6 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gray-900 text-white flex items-center justify-center font-serif font-bold rounded-sm">H</div>
+            <div className="w-8 h-8 bg-gray-900 text-white flex items-center justify-center font-serif font-bold rounded-sm">C</div>
             <h1 className="text-xl font-semibold tracking-tight text-gray-900">
-              Harvard ATS Builder
+              {t.hero.title}
             </h1>
           </div>
-          <nav className="text-sm font-medium text-gray-600 gap-6 hidden md:flex">
-            <span>ATS Optimized</span>
-            <span>AI Powered</span>
-            <span>Free & Open Source</span>
-          </nav>
+          <div className="flex items-center gap-6">
+            <nav className="text-sm font-medium text-gray-600 gap-6 hidden md:flex">
+              <span>{t.nav.ats}</span>
+              <span>{t.nav.ai}</span>
+              <span>{t.nav.opensource}</span>
+            </nav>
+            <LanguageSwitcher />
+          </div>
         </div>
       </header>
 
@@ -107,10 +113,10 @@ export default function Home() {
             <div className="max-w-2xl mx-auto text-center space-y-8">
               <div className="mb-10">
                 <h2 className="text-3xl font-serif font-bold text-gray-900 mb-3 tracking-tight">
-                  Build Your Professional Resume
+                  {t.hero.subtitle}
                 </h2>
                 <p className="text-gray-500 max-w-lg mx-auto text-sm leading-relaxed">
-                  Create a Harvard-standard, ATS-optimized resume in minutes. Start from scratch or let AI extract details from your existing CV.
+                  {t.hero.description}
                 </p>
               </div>
 
@@ -127,9 +133,9 @@ export default function Home() {
                       <line x1="12" y1="3" x2="12" y2="15"></line>
                     </svg>
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Upload Existing CV</h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">{t.hero.uploadCV}</h3>
                   <p className="text-sm text-gray-500">
-                    We'll extract your information automatically using AI.
+                    {t.hero.uploadDesc}
                   </p>
                 </button>
 
@@ -144,9 +150,9 @@ export default function Home() {
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Start from Scratch</h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">{t.hero.startManual}</h3>
                   <p className="text-sm text-gray-500">
-                    Fill in your details manually using our guided wizard.
+                    {t.hero.manualDesc}
                   </p>
                 </button>
               </div>
@@ -156,12 +162,12 @@ export default function Home() {
           <div>
             <div className="text-center mb-10">
               <h2 className="text-3xl font-serif font-bold text-gray-900 mb-3 tracking-tight">
-                {initialResumeData ? 'Review & Edit Your Details' : 'Build Your Professional Resume'}
+                {initialResumeData ? t.hero.reviewTitle : t.hero.buildTitle}
               </h2>
               <p className="text-gray-500 max-w-2xl mx-auto text-sm leading-relaxed">
                 {initialResumeData
-                  ? 'We\'ve extracted your information. Please review and add any missing details.'
-                  : 'Enter your details below. Our system will generate a Harvard-standard, ATS-optimized resume using advanced keyword matching.'
+                  ? t.hero.reviewDesc
+                  : t.hero.buildDesc
                 }
               </p>
             </div>
@@ -176,10 +182,10 @@ export default function Home() {
           <div>
             <div className="text-center mb-10">
               <h2 className="text-3xl font-serif font-bold text-gray-900 mb-3 tracking-tight">
-                Resume Generated
+                {t.hero.generatedTitle}
               </h2>
               <p className="text-gray-500 max-w-2xl mx-auto text-sm">
-                Review your analysis and download your document.
+                {t.hero.generatedDesc}
               </p>
             </div>
 
