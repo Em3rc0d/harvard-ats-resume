@@ -16,24 +16,24 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export function LanguageProvider({ children }: Readonly<{ children: ReactNode }>) {
     // Default to English, but try to persist preference
-    const [language, setLanguageState] = useState<Language>('en');
+    const [language, setLanguage] = useState<Language>('en');
 
     useEffect(() => {
         // Load saved language from localStorage if available
         const saved = localStorage.getItem('language') as Language;
         if (saved && ['en', 'es', 'fr', 'pt'].includes(saved)) {
-            setLanguageState(saved);
+            setLanguage(saved);
         }
     }, []);
 
-    const setLanguage = (lang: Language) => {
-        setLanguageState(lang);
+    const handleSetLanguage = (lang: Language) => {
+        setLanguage(lang);
         localStorage.setItem('language', lang);
     };
 
     const value = useMemo(() => ({
         language,
-        setLanguage,
+        setLanguage: handleSetLanguage,
         t: translations[language],
     }), [language]);
 
