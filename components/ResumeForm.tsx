@@ -21,9 +21,10 @@ const CertificateUpload = dynamic(() => import('./CertificateUpload'), {
 interface ResumeFormProps {
   onSubmit: (data: ResumeRequest) => Promise<void>;
   isLoading: boolean;
+  initialData?: ResumeRequest;
 }
 
-export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
+export default function ResumeForm({ onSubmit, isLoading, initialData }: ResumeFormProps) {
   const [currentSection, setCurrentSection] = useState(0);
 
   const sections = [
@@ -45,7 +46,7 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
     watch,
   } = useForm<ResumeRequest>({
     resolver: zodResolver(resumeRequestSchema),
-    defaultValues: {
+    defaultValues: initialData || {
       personalInfo: {
         fullName: '',
         location: '',
@@ -96,8 +97,8 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
 
   const [hardSkillsInput, setHardSkillsInput] = useState('');
   const [softSkillsInput, setSoftSkillsInput] = useState('');
-  const [hardSkills, setHardSkills] = useState<string[]>([]);
-  const [softSkills, setSoftSkills] = useState<string[]>([]);
+  const [hardSkills, setHardSkills] = useState<string[]>(initialData?.skills?.hardSkills || []);
+  const [softSkills, setSoftSkills] = useState<string[]>(initialData?.skills?.softSkills || []);
 
   const addHardSkill = () => {
     if (hardSkillsInput.trim()) {
@@ -127,6 +128,55 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
     const newSkills = softSkills.filter((_, i) => i !== index);
     setSoftSkills(newSkills);
     setValue('skills.softSkills', newSkills, { shouldValidate: true });
+  };
+
+  const [optimizingField, setOptimizingField] = useState<string | null>(null);
+  const optimizeUrl = process.env.NEXT_PUBLIC_N8N_OPTIMIZE_URL;
+
+  const handleOptimize = async (fieldPath: any) => {
+    const currentText = watch(fieldPath);
+    if (!currentText || currentText.length < 10) {
+      alert('Please write some content first (at least 10 characters) for the AI to optimize.');
+      return;
+    }
+
+    if (!optimizeUrl) {
+      alert('Optimization service is not configured (Missing NEXT_PUBLIC_N8N_OPTIMIZE_URL).');
+      return;
+    }
+
+    setOptimizingField(fieldPath);
+    try {
+      // We send the text as 'summary' because the N8N workflow expects this key
+      const response = await fetch(optimizeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ summary: currentText }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to optimize content');
+      }
+
+      const rawResponse = await response.json();
+      // n8n often returns an array, take the first item
+      const result = Array.isArray(rawResponse) ? rawResponse[0] : rawResponse;
+
+      // Handle various response formats from n8n
+      const optimizedText = result.output || result.optimizedSummary || result.summary || (typeof result === 'string' ? result : JSON.stringify(result));
+
+      if (optimizedText) {
+        setValue(fieldPath, optimizedText, { shouldValidate: true, shouldDirty: true });
+      } else {
+        throw new Error('Invalid response format');
+      }
+
+    } catch (error) {
+      console.error('Optimization error:', error);
+      alert('Failed to optimize content. Please try again.');
+    } finally {
+      setOptimizingField(null);
+    }
   };
 
   // Handle batch certificate upload
@@ -345,9 +395,29 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
             {errors.summary && (
               <p className="text-red-500 text-sm mt-1">{errors.summary.message}</p>
             )}
-            <p className="text-sm text-gray-500 mt-1">
-              AI will enhance this to be more impactful and ATS-optimized
-            </p>
+            <div className="flex justify-between items-center mt-2">
+              <p className="text-sm text-gray-500">
+                AI will enhance this to be more impactful and ATS-optimized
+              </p>
+              <button
+                type="button"
+                onClick={() => handleOptimize('summary')}
+                disabled={optimizingField === 'summary'}
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-sm text-sm font-medium hover:bg-blue-100 transition-colors border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {optimizingField === 'summary' ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-700"></div>
+                    Optimizing...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                    Optimize & Improve
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -447,6 +517,26 @@ export default function ResumeForm({ onSubmit, isLoading }: ResumeFormProps) {
                 <p className="text-sm text-gray-500 mt-1">
                   Include quantifiable metrics when possible
                 </p>
+                <div className="flex justify-end mt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOptimize(`experience.${index}.description`)}
+                    disabled={optimizingField === `experience.${index}.description`}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-sm text-sm font-medium hover:bg-blue-100 transition-colors border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {optimizingField === `experience.${index}.description` ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-700"></div>
+                        Optimizing...
+                      </>
+                    ) : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        Optimize & Improve
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           ))}

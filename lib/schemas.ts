@@ -36,7 +36,7 @@ export const skillsSchema = z.object({
 // Complete Resume Request Schema
 export const resumeRequestSchema = z.object({
   personalInfo: personalInfoSchema,
-  summary: z.string().min(20, 'Summary must be at least 20 characters').max(500),
+  summary: z.string().min(20, 'Summary must be at least 20 characters').max(2000),
   experience: z.array(workExperienceSchema).min(1, 'At least one work experience is required'),
   education: z.array(educationSchema).min(1, 'At least one education entry is required'),
   skills: skillsSchema,
