@@ -3,6 +3,7 @@
 import { useRef } from 'react';
 import jsPDF from 'jspdf';
 import { useLanguage } from '@/components/LanguageProvider';
+import { Download, Printer, RefreshCw } from 'lucide-react';
 
 interface ResumeResultsProps {
   formattedResume: string;
@@ -102,13 +103,16 @@ export default function ResumeResults({
       {/* Action Buttons */}
       <div className="no-print flex gap-4 justify-center flex-wrap pb-6 border-b border-gray-200">
         <button onClick={downloadPDF} className="px-6 py-2.5 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium text-sm transition-colors shadow-sm flex items-center gap-2">
+          <Download className="w-4 h-4" />
           <span>{t.results.downloadPDF}</span>
         </button>
         <button onClick={printResume} className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors flex items-center gap-2">
+          <Printer className="w-4 h-4" />
           <span>{t.results.print}</span>
         </button>
-        <button onClick={onStartOver} className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors">
-          {t.results.createNew}
+        <button onClick={onStartOver} className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors flex items-center gap-2">
+          <RefreshCw className="w-4 h-4" />
+          <span>{t.results.createNew}</span>
         </button>
       </div>
 

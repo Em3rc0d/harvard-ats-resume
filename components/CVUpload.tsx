@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import { ResumeRequest } from '@/lib/schemas';
 import { useLanguage } from '@/components/LanguageProvider';
+import { Upload } from 'lucide-react';
 
 interface CVUploadProps {
     onDataExtracted: (data: ResumeRequest) => void;
     onCancel: () => void;
 }
 
-export default function CVUpload({ onDataExtracted, onCancel }: CVUploadProps) {
+export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploadProps>) {
     const { t } = useLanguage();
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -108,11 +109,7 @@ export default function CVUpload({ onDataExtracted, onCancel }: CVUploadProps) {
         <div className="max-w-2xl mx-auto text-center p-8 bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="mb-8">
                 <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
+                    <Upload className="w-8 h-8" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">{t.upload.title}</h2>
                 <p className="text-gray-500">

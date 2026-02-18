@@ -7,6 +7,7 @@ import CVUpload from '@/components/CVUpload';
 import { ResumeRequest } from '@/lib/schemas';
 import { useLanguage } from '@/components/LanguageProvider';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { Upload, FileSignature, AlertCircle } from 'lucide-react';
 
 export default function Home() {
   const { t } = useLanguage();
@@ -98,100 +99,104 @@ export default function Home() {
       <main className="max-w-5xl mx-auto px-6 py-12">
         {error && (
           <div className="mb-8 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-sm flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+            <AlertCircle className="w-4 h-4" />
             {error}
           </div>
         )}
 
-        {!hasStarted ? (
-          isUploading ? (
-            <CVUpload
-              onDataExtracted={handleCVData}
-              onCancel={() => setIsUploading(false)}
-            />
-          ) : (
-            <div className="max-w-2xl mx-auto text-center space-y-8">
-              <div className="mb-10">
+        {(() => {
+          if (!hasStarted) {
+            if (isUploading) {
+              return (
+                <CVUpload
+                  onDataExtracted={handleCVData}
+                  onCancel={() => setIsUploading(false)}
+                />
+              );
+            }
+            return (
+              <div className="max-w-2xl mx-auto text-center space-y-8">
+                <div className="mb-10">
+                  <h2 className="text-3xl font-serif font-bold text-gray-900 mb-3 tracking-tight">
+                    {t.hero.subtitle}
+                  </h2>
+                  <p className="text-gray-500 max-w-lg mx-auto text-sm leading-relaxed">
+                    {t.hero.description}
+                  </p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Option 1: Upload CV */}
+                  <button
+                    onClick={() => setIsUploading(true)}
+                    className="group relative p-8 bg-white border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-300 text-left"
+                  >
+                    <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <Upload className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{t.hero.uploadCV}</h3>
+                    <p className="text-sm text-gray-500">
+                      {t.hero.uploadDesc}
+                    </p>
+                  </button>
+
+                  {/* Option 2: Start Manually */}
+                  <button
+                    onClick={() => setHasStarted(true)}
+                    className="group relative p-8 bg-white border-2 border-gray-100 rounded-xl hover:border-gray-900 hover:bg-gray-50 transition-all duration-300 text-left shadow-sm hover:shadow-md"
+                  >
+                    <div className="w-12 h-12 bg-gray-100 text-gray-900 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <FileSignature className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{t.hero.startManual}</h3>
+                    <p className="text-sm text-gray-500">
+                      {t.hero.manualDesc}
+                    </p>
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          if (!results) {
+            return (
+              <div>
+                <div className="text-center mb-10">
+                  <h2 className="text-3xl font-serif font-bold text-gray-900 mb-3 tracking-tight">
+                    {initialResumeData ? t.hero.reviewTitle : t.hero.buildTitle}
+                  </h2>
+                  <p className="text-gray-500 max-w-2xl mx-auto text-sm leading-relaxed">
+                    {initialResumeData
+                      ? t.hero.reviewDesc
+                      : t.hero.buildDesc
+                    }
+                  </p>
+                </div>
+
+                <ResumeForm
+                  onSubmit={handleSubmit}
+                  isLoading={isLoading}
+                  initialData={initialResumeData}
+                />
+              </div>
+            );
+          }
+
+          return (
+            <div>
+              <div className="text-center mb-10">
                 <h2 className="text-3xl font-serif font-bold text-gray-900 mb-3 tracking-tight">
-                  {t.hero.subtitle}
+                  {t.hero.generatedTitle}
                 </h2>
-                <p className="text-gray-500 max-w-lg mx-auto text-sm leading-relaxed">
-                  {t.hero.description}
+                <p className="text-gray-500 max-w-2xl mx-auto text-sm">
+                  {t.hero.generatedDesc}
                 </p>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Option 1: Upload CV */}
-                <button
-                  onClick={() => setIsUploading(true)}
-                  className="group relative p-8 bg-white border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-300 text-left"
-                >
-                  <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                      <polyline points="17 8 12 3 7 8"></polyline>
-                      <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">{t.hero.uploadCV}</h3>
-                  <p className="text-sm text-gray-500">
-                    {t.hero.uploadDesc}
-                  </p>
-                </button>
-
-                {/* Option 2: Start Manually */}
-                <button
-                  onClick={() => setHasStarted(true)}
-                  className="group relative p-8 bg-white border-2 border-gray-100 rounded-xl hover:border-gray-900 hover:bg-gray-50 transition-all duration-300 text-left shadow-sm hover:shadow-md"
-                >
-                  <div className="w-12 h-12 bg-gray-100 text-gray-900 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">{t.hero.startManual}</h3>
-                  <p className="text-sm text-gray-500">
-                    {t.hero.manualDesc}
-                  </p>
-                </button>
-              </div>
+              <ResumeResults {...results} userName={userName} onStartOver={handleStartOver} />
             </div>
-          )
-        ) : !results ? (
-          <div>
-            <div className="text-center mb-10">
-              <h2 className="text-3xl font-serif font-bold text-gray-900 mb-3 tracking-tight">
-                {initialResumeData ? t.hero.reviewTitle : t.hero.buildTitle}
-              </h2>
-              <p className="text-gray-500 max-w-2xl mx-auto text-sm leading-relaxed">
-                {initialResumeData
-                  ? t.hero.reviewDesc
-                  : t.hero.buildDesc
-                }
-              </p>
-            </div>
-
-            <ResumeForm
-              onSubmit={handleSubmit}
-              isLoading={isLoading}
-              initialData={initialResumeData}
-            />
-          </div>
-        ) : (
-          <div>
-            <div className="text-center mb-10">
-              <h2 className="text-3xl font-serif font-bold text-gray-900 mb-3 tracking-tight">
-                {t.hero.generatedTitle}
-              </h2>
-              <p className="text-gray-500 max-w-2xl mx-auto text-sm">
-                {t.hero.generatedDesc}
-              </p>
-            </div>
-
-            <ResumeResults {...results} userName={userName} onStartOver={handleStartOver} />
-          </div>
-        )}
+          );
+        })()}
       </main>
 
       {/* Minimal Footer */}

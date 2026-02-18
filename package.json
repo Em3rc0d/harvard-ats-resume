@@ -14,6 +14,7 @@
     "@hookform/resolvers": "^3.9.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",
+    "lucide-react": "^0.574.0",
     "natural": "^8.0.1",
     "next": "^14.2.0",
     "pdfjs-dist": "^5.4.624",

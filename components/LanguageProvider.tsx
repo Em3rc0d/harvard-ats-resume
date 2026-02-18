@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { translations } from '@/lib/translations';
 
 type Language = 'en' | 'es' | 'fr' | 'pt';
@@ -14,7 +14,7 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
+export function LanguageProvider({ children }: Readonly<{ children: ReactNode }>) {
     // Default to English, but try to persist preference
     const [language, setLanguageState] = useState<Language>('en');
 
@@ -31,11 +31,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('language', lang);
     };
 
-    const value = {
+    const value = useMemo(() => ({
         language,
         setLanguage,
         t: translations[language],
-    };
+    }), [language]);
 
     return (
         <LanguageContext.Provider value={value}>
