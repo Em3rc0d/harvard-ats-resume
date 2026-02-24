@@ -33,6 +33,9 @@ function constructUserPrompt(data: ResumeRequest): string {
     summary: data.summary,
     experience: data.experience,
     education: data.education,
+    projects: data.projects,
+    certifications: data.certifications,
+    languages: data.languages,
     skills: data.skills,
   }, null, 2);
 
@@ -55,8 +58,8 @@ Instructions:
 
   prompt += `
 Return output in the following structured format. 
-IMPORTANT: DO NOT use markdown code blocks or '===' separators for the resume content.
-Return the resume text directly.
+IMPORTANT: DO NOT use markdown code blocks or '===' separators for the resume content sections (like PROFESSIONAL SUMMARY).
+However, YOU MUST use the '===' separators to divide the metadata sections at the end (MATCHED KEYWORDS, IMPROVEMENT SUGGESTIONS, IMPROVED RESUME).
 
 [FULL NAME]
 [Location] | [Email] | [LinkedIn] | [GitHub]
@@ -72,9 +75,19 @@ EXPERIENCE
 
 [Repeat for each experience]
 
+PROJECTS (Optional)
+[Project Name]
+[Brief description and technologies used]
+
 EDUCATION
 [Institution Name]
 [Degree], [Start Date] - [End Date]
+
+CERTIFICATIONS (Optional)
+[Certification Name] — [Issuer], [Date]
+
+LANGUAGES (Optional)
+[Language]: [Proficiency]
 
 SKILLS
 Technical Skills: [Comma-separated list of technical skills]
@@ -86,6 +99,16 @@ Soft Skills: [Comma-separated list of soft skills]
 === IMPROVEMENT SUGGESTIONS ===
 1. [Specific actionable suggestion]
 2. [Specific actionable suggestion]
+
+=== IMPROVED RESUME ===
+[Review the original resume data. Then, RE-WRITE the entire resume below.
+CRITICAL INSTRUCTION: This version MUST IMPLEMENT ALL the "IMPROVEMENT SUGGESTIONS" you listed above.
+- If you suggested adding metrics -> INVENT realistic metrics (e.g. "Increased by 20%") in the bullet points.
+- If you suggested adding a project -> INVENT a realistic project title and description based on their skills.
+- If you suggested reformatting -> Apply that new format here.
+- If you suggested consolidating education -> Group certifications to save space.
+
+This serves as the "Applied Suggestions" version so the user can see exactly what you mean.]
 `;
 
   return prompt;
@@ -98,31 +121,45 @@ function parseGeminiResponse(responseText: string): {
   formattedResume: string;
   matchedKeywords: string[];
   suggestions: string[];
+  improvedResume?: string;
 } {
   // Extract formatted resume (everything before the keywords section)
-  const resumeMatch = responseText.split('=== MATCHED KEYWORDS ===')[0];
-  const formattedResume = resumeMatch ? resumeMatch.trim() : responseText;
+  const resumeMatch = responseText.split(/===\s*MATCHED KEYWORDS\s*===/i)[0];
+  const formattedResume = resumeMatch ? resumeMatch.trim() : responseText.trim();
 
   // Extract matched keywords
-  const keywordsMatch = responseText.match(/===\s*MATCHED KEYWORDS\s*===\s*([\s\S]*?)\s*===/i);
+  const keywordsMatch = responseText.match(/===\s*MATCHED KEYWORDS\s*===\s*([\s\S]*?)(?:===|$)/i);
   const matchedKeywordsText = keywordsMatch ? keywordsMatch[1].trim() : '';
   const matchedKeywords = matchedKeywordsText
     .split(',')
     .map(k => k.trim())
     .filter(k => k.length > 0);
 
-  // Extract suggestions
-  const suggestionsMatch = responseText.match(/===\s*IMPROVEMENT SUGGESTIONS\s*===\s*([\s\S]*?)(?:===|$)/i);
+  // Extract suggestions - handle boundary with IMPROVED RESUME
+  const suggestionsMatch = responseText.match(/===\s*IMPROVEMENT SUGGESTIONS\s*===\s*([\s\S]*?)(?:===\s*IMPROVED RESUME\s*===|$)/i);
   const suggestionsText = suggestionsMatch ? suggestionsMatch[1].trim() : '';
   const suggestions = suggestionsText
     .split('\n')
     .map(s => s.replace(/^\d+\.\s*/, '').trim())
     .filter(s => s.length > 0);
 
+  // Extract Improved Resume
+  const improvedResumeMatch = responseText.split(/===\s*IMPROVED RESUME\s*===/i);
+  let improvedResumeRaw = improvedResumeMatch.length > 1 ? improvedResumeMatch[1].trim() : undefined;
+
+  // Clean up potential markdown code blocks
+  if (improvedResumeRaw) {
+    improvedResumeRaw = improvedResumeRaw.replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
+  }
+
+  // Fallback: If improved resume is overly short (e.g. just a placeholder), ignore it.
+  const improvedResume = (improvedResumeRaw && improvedResumeRaw.length > 100) ? improvedResumeRaw : undefined;
+
   return {
     formattedResume,
     matchedKeywords,
     suggestions,
+    improvedResume
   };
 }
 
@@ -134,6 +171,7 @@ export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
   formattedResume?: string;
   matchedKeywords?: string[];
   suggestions?: string[];
+  improvedResume?: string;
   error?: string;
 }> {
   try {
@@ -201,4 +239,90 @@ export function sanitizeResumeData(data: ResumeRequest): ResumeRequest {
       return value;
     })
   );
+}
+/**
+ * Format structured resume data into Harvard-style text
+ */
+export function formatResumeFromData(data: ResumeRequest): string {
+  let text = '';
+
+  // Header
+  text += `${data.personalInfo.fullName.toUpperCase()}\n`;
+  const contactParts = [
+    data.personalInfo.location,
+    data.personalInfo.email,
+    data.personalInfo.linkedin ? `LinkedIn: ${data.personalInfo.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, '')}` : '',
+    data.personalInfo.github ? `GitHub: ${data.personalInfo.github.replace(/^https?:\/\/(www\.)?github\.com\//, '')}` : ''
+  ].filter(Boolean);
+  text += `${contactParts.join(' | ')}\n\n`;
+
+  // Professional Summary
+  text += `PROFESSIONAL SUMMARY\n${data.summary}\n\n`;
+
+  // Experience
+  if (data.experience && data.experience.length > 0) {
+    text += `EXPERIENCE\n`;
+    data.experience.forEach(exp => {
+      text += `${exp.company.toUpperCase()} — ${exp.role.toUpperCase()}\n`;
+      text += `${exp.startDate} - ${exp.endDate}\n`;
+      // Handle description points. If it's a block text, split by newlines or bullets.
+      // If it's already bulleted, keep it. If not, try to split.
+      const points = exp.description.split('\n').map(p => p.trim()).filter(p => p.length > 0);
+      points.forEach(point => {
+        const cleanPoint = point.replace(/^[•\-\*]\s*/, '');
+        text += `• ${cleanPoint}\n`;
+      });
+      text += '\n'; // Add spacing between jobs
+    });
+  }
+
+  // Projects (Optional)
+  if (data.projects && data.projects.length > 0) {
+    text += `PROJECTS\n`;
+    data.projects.forEach(proj => {
+      text += `${proj.name.toUpperCase()}\n`;
+      text += `${proj.description}\n`;
+      if (proj.technologies && proj.technologies.length > 0) {
+        text += `Technologies: ${proj.technologies.join(', ')}\n`;
+      }
+      text += '\n';
+    });
+  }
+
+  // Education
+  if (data.education && data.education.length > 0) {
+    text += `EDUCATION\n`;
+    data.education.forEach(edu => {
+      text += `${edu.institution}\n`;
+      text += `${edu.degree}, ${edu.startDate} - ${edu.endDate}\n\n`;
+    });
+  }
+
+  // Skills
+  text += `SKILLS\n`;
+  if (data.skills.hardSkills && data.skills.hardSkills.length > 0) {
+    text += `Technical Skills: ${data.skills.hardSkills.join(', ')}\n`;
+  }
+  if (data.skills.softSkills && data.skills.softSkills.length > 0) {
+    text += `Soft Skills: ${data.skills.softSkills.join(', ')}\n`;
+  }
+  text += '\n';
+
+  // Certifications
+  if (data.certifications && data.certifications.length > 0) {
+    text += `CERTIFICATIONS\n`;
+    data.certifications.forEach(cert => {
+      text += `${cert.name} — ${cert.issuer}, ${cert.date}\n`;
+    });
+    text += '\n';
+  }
+
+  // Languages
+  if (data.languages && data.languages.length > 0) {
+    text += `LANGUAGES\n`;
+    const langs = data.languages.map(l => `${l.language}: ${l.proficiency}`);
+    text += `${langs.join(' | ')}\n`;
+  }
+
+  return text.trim();
 }

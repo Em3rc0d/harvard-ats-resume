@@ -36,6 +36,9 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
     t.sections.experience,
     t.sections.education,
     t.sections.skills,
+    t.sections.projects,
+    t.sections.certifications,
+    t.sections.languages,
     t.sections.jobDesc
   ], [t]);
 
@@ -76,6 +79,9 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
         hardSkills: [],
         softSkills: [],
       },
+      projects: [],
+      certifications: [],
+      languages: [],
       jobDescription: '',
     },
   });
@@ -98,10 +104,42 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
     name: 'education',
   });
 
+  const {
+    fields: projectFields,
+    append: appendProject,
+    remove: removeProject,
+  } = useFieldArray({
+    control,
+    name: 'projects',
+  });
+
+  const {
+    fields: certificationFields,
+    append: appendCertification,
+    remove: removeCertification,
+  } = useFieldArray({
+    control,
+    name: 'certifications',
+  });
+
+  const {
+    fields: languageFields,
+    append: appendLanguage,
+    remove: removeLanguage,
+  } = useFieldArray({
+    control,
+    name: 'languages',
+  });
+
   const [hardSkillsInput, setHardSkillsInput] = useState('');
   const [softSkillsInput, setSoftSkillsInput] = useState('');
   const [hardSkills, setHardSkills] = useState<string[]>(initialData?.skills?.hardSkills || []);
   const [softSkills, setSoftSkills] = useState<string[]>(initialData?.skills?.softSkills || []);
+
+  /* New State for Job Optimization Step */
+  const [wantsJobOptimization, setWantsJobOptimization] = useState<boolean | null>(
+    initialData?.jobDescription ? true : null
+  );
 
   const addHardSkill = () => {
     if (hardSkillsInput.trim()) {
@@ -232,7 +270,10 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
       case 2: return ['experience'];
       case 3: return ['education'];
       case 4: return ['skills'];
-      case 5: return ['jobDescription'];
+      case 5: return ['projects'];
+      case 6: return ['certifications'];
+      case 7: return ['languages'];
+      case 8: return ['jobDescription'];
       default: return [];
     }
   };
@@ -591,17 +632,19 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
 
               <h3 className="font-bold text-lg">{t.sections.education} #{index + 1}</h3>
 
-              {/* Certificate Upload */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Quick Fill: Upload Certificate #{index + 1}
-                </h4>
-                <p className="text-xs text-blue-700 mb-3">
-                  Upload a diploma or certificate image to automatically fill the fields below
-                </p>
-                <CertificateUpload onDataExtracted={(data) => handleCertificateData(data, index)} index={index} />
-              </div>
+              {/* Certificate Upload - Only show if fields are empty */}
+              {(!watch(`education.${index}.institution`) && !watch(`education.${index}.degree`)) && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 transition-all duration-300">
+                  <h4 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Quick Fill: Upload Certificate #{index + 1}
+                  </h4>
+                  <p className="text-xs text-blue-700 mb-3">
+                    Upload a diploma or certificate image to automatically fill the fields below
+                  </p>
+                  <CertificateUpload onDataExtracted={(data) => handleCertificateData(data, index)} index={index} />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -806,30 +849,335 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
         </div>
       )}
 
-      {/* Section 5: Job Description */}
+      {/* Section 5: Projects */}
       {currentSection === 5 && (
-        <div className="card space-y-4">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.form.jobDesc}</h2>
+        <div className="card space-y-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.sections.projects}</h2>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t.fields.jobDescLabel}
-            </label>
-            <div className="relative">
-              <textarea
-                {...register('jobDescription')}
-                rows={12}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pb-10"
-                placeholder={t.fields.jobDescPlaceholder}
-              />
-              <div className="absolute bottom-2 right-2">
-                <VoiceInput onTranscript={(text) => handleVoiceInput('jobDescription', text)} />
+          {projectFields.map((field, index) => (
+            <div key={field.id} className="p-4 border-2 border-gray-200 rounded-lg space-y-4">
+              <button
+                type="button"
+                onClick={() => removeProject(index)}
+                className="float-right text-red-500 hover:text-red-700 text-sm font-medium"
+              >
+                {t.form.remove}
+              </button>
+
+              <h3 className="font-bold text-lg">{t.sections.projects} #{index + 1}</h3>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t.fields.projectName} *
+                </label>
+                <input
+                  {...register(`projects.${index}.name`)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Portfolio Website"
+                />
+                {errors.projects?.[index]?.name && (
+                  <p className="text-red-500 text-sm mt-1">{errors.projects[index]?.name?.message}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t.fields.projectLink}
+                </label>
+                <input
+                  {...register(`projects.${index}.link`)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://github.com/username/project"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t.fields.description} *
+                </label>
+                <div className="relative">
+                  <textarea
+                    {...register(`projects.${index}.description`)}
+                    rows={4}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Built a reactive web application using React and TypeScript..."
+                  />
+                  <div className="absolute bottom-2 right-2">
+                    <VoiceInput onTranscript={(text) => handleVoiceInput(`projects.${index}.description`, text)} />
+                  </div>
+                </div>
+                {errors.projects?.[index]?.description && (
+                  <p className="text-red-500 text-sm mt-1">{errors.projects[index]?.description?.message}</p>
+                )}
+                <div className="flex justify-end mt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOptimize(`projects.${index}.description`)}
+                    disabled={optimizingField === `projects.${index}.description`}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-sm text-sm font-medium hover:bg-blue-100 transition-colors border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {optimizingField === `projects.${index}.description` ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-700"></div>
+                        Optimizing...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="w-4 h-4" />
+                        Optimize
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t.fields.hardSkills}
+                </label>
+                <input
+                  placeholder="React, TypeScript, Tailwind (comma separated)"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    if (val) setValue(`projects.${index}.technologies`, val.split(',').map(s => s.trim()));
+                  }}
+                />
+                <p className="text-xs text-gray-500 mt-1">Separate technologies with commas</p>
               </div>
             </div>
-            <p className="text-sm text-gray-500 mt-1">
-              Leave blank if you want a general Harvard-style resume without job-specific optimization
-            </p>
-          </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => appendProject({ name: '', description: '', technologies: [], link: '' })}
+            className="w-full py-2.5 px-4 border border-gray-900 text-gray-900 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors"
+          >
+            {t.form.addProject}
+          </button>
+        </div>
+      )}
+
+      {/* Section 6: Certifications */}
+      {currentSection === 6 && (
+        <div className="card space-y-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.sections.certifications}</h2>
+
+          {certificationFields.map((field, index) => (
+            <div key={field.id} className="p-4 border-2 border-gray-200 rounded-lg space-y-4">
+              <button
+                type="button"
+                onClick={() => removeCertification(index)}
+                className="float-right text-red-500 hover:text-red-700 text-sm font-medium"
+              >
+                {t.form.remove}
+              </button>
+
+              <h3 className="font-bold text-lg">{t.sections.certifications} #{index + 1}</h3>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name *
+                </label>
+                <input
+                  {...register(`certifications.${index}.name`)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="AWS Certified Solutions Architect"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t.fields.issuer} *
+                </label>
+                <input
+                  {...register(`certifications.${index}.issuer`)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Amazon Web Services"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t.fields.credentialDate} *
+                </label>
+                <input
+                  {...register(`certifications.${index}.date`)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="2024"
+                />
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => appendCertification({ name: '', issuer: '', date: '' })}
+            className="w-full py-2.5 px-4 border border-gray-900 text-gray-900 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors"
+          >
+            {t.form.addCertification}
+          </button>
+        </div>
+      )}
+
+      {/* Section 7: Languages */}
+      {currentSection === 7 && (
+        <div className="card space-y-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.sections.languages}</h2>
+
+          {languageFields.map((field, index) => (
+            <div key={field.id} className="p-4 border-2 border-gray-200 rounded-lg space-y-4">
+              <button
+                type="button"
+                onClick={() => removeLanguage(index)}
+                className="float-right text-red-500 hover:text-red-700 text-sm font-medium"
+              >
+                {t.form.remove}
+              </button>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t.fields.language} *
+                  </label>
+                  <input
+                    {...register(`languages.${index}.language`)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="English"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t.fields.proficiency} *
+                  </label>
+                  <select
+                    {...register(`languages.${index}.proficiency`)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select...</option>
+                    <option value="Native">Native</option>
+                    <option value="Fluent">Fluent</option>
+                    <option value="Advanced">Advanced</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Basic">Basic</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => appendLanguage({ language: '', proficiency: '' })}
+            className="w-full py-2.5 px-4 border border-gray-900 text-gray-900 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors"
+          >
+            {t.form.addLanguage}
+          </button>
+        </div>
+      )}
+
+      {/* Section 8: Job Description */}
+      {currentSection === 8 && (
+        <div className="card space-y-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{t.form.jobDesc}</h2>
+
+          {wantsJobOptimization === null ? (
+            <div className="text-center py-8 space-y-6">
+              <div className="mb-6">
+                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{t.jobDetails.title}</h3>
+                <p className="text-gray-500 max-w-md mx-auto">
+                  {t.jobDetails.question}
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4 max-w-xl mx-auto">
+                <button
+                  type="button"
+                  onClick={() => setWantsJobOptimization(true)}
+                  className="p-6 border-2 border-blue-100 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all text-left group"
+                >
+                  <span className="font-bold text-blue-700 block mb-1 group-hover:underline">
+                    {t.jobDetails.yes}
+                  </span>
+                  <span className="text-sm text-gray-500">
+                    Paste the job description and let AI tailor your resume with matching keywords.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWantsJobOptimization(false);
+                    setValue('jobDescription', ''); // Clear field
+                  }}
+                  className="p-6 border-2 border-gray-100 rounded-xl hover:border-gray-900 hover:bg-gray-50 transition-all text-left group"
+                >
+                  <span className="font-bold text-gray-900 block mb-1 group-hover:underline">
+                    {t.jobDetails.no}
+                  </span>
+                  <span className="text-sm text-gray-500">
+                    Create a general, high-quality resume suitable for multiple applications.
+                  </span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {wantsJobOptimization && (
+                <>
+                  <div className="flex justify-between items-center mb-4">
+                    <label className="block text-sm font-medium text-gray-700">
+                      {t.jobDetails.pasteLabel}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setWantsJobOptimization(null)}
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      Change Selection
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <textarea
+                      {...register('jobDescription')}
+                      rows={12}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pb-10"
+                      placeholder={t.fields.jobDescPlaceholder}
+                      autoFocus
+                    />
+                    <div className="absolute bottom-2 right-2">
+                      <VoiceInput onTranscript={(text) => handleVoiceInput('jobDescription', text)} />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {!wantsJobOptimization && (
+                <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50">
+                  <div className="max-w-md mx-auto space-y-4">
+                    <p className="text-gray-600 font-medium">
+                      You have selected to generate a <span className="text-gray-900 font-bold">General Resume</span>.
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Click "Generate Resume" below to create your optimized document.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setWantsJobOptimization(null)}
+                      className="text-sm text-blue-600 hover:underline mt-4 inline-block"
+                    >
+                      Change Selection
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -858,7 +1206,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
         ) : (
           <button
             type="submit"
-            disabled={isLoading || hardSkills.length === 0}
+            disabled={isLoading || hardSkills.length === 0 || (currentSection === 8 && wantsJobOptimization === null)}
             className="ml-auto px-8 py-2.5 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors shadow-sm"
           >
             {isLoading ? (

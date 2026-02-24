@@ -1,12 +1,15 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import { useLanguage } from '@/components/LanguageProvider';
-import { Download, Printer, RefreshCw } from 'lucide-react';
+import { Download, Printer, RefreshCw, Eye } from 'lucide-react';
+
+
 
 interface ResumeResultsProps {
   formattedResume: string;
+  improvedResume?: string; // New prop
   atsScore: number;
   matchedKeywords: string[];
   missingKeywords: string[];
@@ -17,6 +20,7 @@ interface ResumeResultsProps {
 
 export default function ResumeResults({
   formattedResume,
+  improvedResume,
   atsScore,
   matchedKeywords,
   missingKeywords,
@@ -26,6 +30,8 @@ export default function ResumeResults({
 }: ResumeResultsProps) {
   const { t } = useLanguage();
   const resumeRef = useRef<HTMLDivElement>(null);
+  const [showWatermarkPreview, setShowWatermarkPreview] = useState(false);
+
 
   const getScoreColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
@@ -51,18 +57,44 @@ export default function ResumeResults({
       });
 
       // Format resume text for PDF
-      const lines = formattedResume.split('\n');
+      const baseContent = (showWatermarkPreview && improvedResume) ? improvedResume : formattedResume;
+
+      const contentToPrint = showWatermarkPreview
+        ? baseContent + "\n\n--- SUGGESTIONS ---\n" + suggestions.map(s => `• ${s}`).join("\n")
+        : baseContent;
+
+      const lines = contentToPrint.split('\n');
       const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 25.4; // 1 inch
       const lineHeight = 5;
       let y = margin;
 
       pdf.setFont('helvetica');
 
+      // Watermark Logic
+      if (showWatermarkPreview) {
+        pdf.setTextColor(200, 200, 200);
+        pdf.setFontSize(50);
+        pdf.text("CVEngine PREVIEW", pageWidth / 2, pageHeight / 2, { align: 'center', angle: 45 });
+        pdf.setTextColor(0, 0, 0); // Reset color
+      }
+
+      pdf.setFontSize(10); // Reset size
+
       lines.forEach((line) => {
-        if (y > pdf.internal.pageSize.getHeight() - margin) {
+        if (y > pageHeight - margin) {
           pdf.addPage();
           y = margin;
+
+          // Add watermark to new pages too
+          if (showWatermarkPreview) {
+            pdf.setTextColor(200, 200, 200);
+            pdf.setFontSize(50);
+            pdf.text("CVEngine PREVIEW", pageWidth / 2, pageHeight / 2, { align: 'center', angle: 45 });
+            pdf.setTextColor(0, 0, 0);
+            pdf.setFontSize(10);
+          }
         }
 
         // Check if line is a header (all caps or starts with specific patterns)
@@ -86,7 +118,7 @@ export default function ResumeResults({
       });
 
       const currentYear = new Date().getFullYear();
-      const fileName = `${userName}, CV- ${currentYear}.pdf`;
+      const fileName = `${userName}, CV- ${currentYear}${showWatermarkPreview ? '-PREVIEW' : ''}.pdf`;
       pdf.save(fileName);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -102,9 +134,18 @@ export default function ResumeResults({
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Action Buttons */}
       <div className="no-print flex gap-4 justify-center flex-wrap pb-6 border-b border-gray-200">
+        <button onClick={() => setShowWatermarkPreview(!showWatermarkPreview)} className={`px-6 py-2.5 border rounded-sm font-medium text-sm transition-colors flex items-center gap-2 ${showWatermarkPreview ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>
+          <Eye className="w-4 h-4" />
+          <span>
+            {showWatermarkPreview
+              ? "Show Original"
+              : (improvedResume ? "Preview Optimized Version" : "Preview with Suggestions")
+            }
+          </span>
+        </button>
         <button onClick={downloadPDF} className="px-6 py-2.5 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium text-sm transition-colors shadow-sm flex items-center gap-2">
           <Download className="w-4 h-4" />
-          <span>{t.results.downloadPDF}</span>
+          <span>{t.results.downloadPDF} {showWatermarkPreview && "(Preview)"}</span>
         </button>
         <button onClick={printResume} className="px-6 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-sm hover:bg-gray-50 font-medium text-sm transition-colors flex items-center gap-2">
           <Printer className="w-4 h-4" />
@@ -119,7 +160,6 @@ export default function ResumeResults({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: ATS Analytics */}
         <div className="lg:col-span-1 space-y-6 no-print">
-          {/* ATS Score Card */}
           {/* ATS Score Card */}
           <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
             <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">{t.results.atsCompatibility}</h3>
@@ -195,10 +235,20 @@ export default function ResumeResults({
 
         {/* Right Column: Resume Preview */}
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-sm shadow-sm border border-gray-200">
+          <div className="bg-white rounded-sm shadow-sm border border-gray-200 relative overflow-hidden print-content">
+
+            {/* Watermark Overlay */}
+            {showWatermarkPreview && (
+              <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center overflow-hidden">
+                <div className="transform -rotate-45 text-gray-100 text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-bold whitespace-nowrap select-none opacity-50">
+                  {improvedResume ? "OPTIMIZED PREVIEW" : "CVEngine PREVIEW"}
+                </div>
+              </div>
+            )}
+
             <div
               ref={resumeRef}
-              className="p-16 font-serif bg-white"
+              className="p-6 md:p-12 lg:p-16 font-serif bg-white relative z-0"
               style={{
                 minHeight: '11in',
                 fontFamily: 'Georgia, Times New Roman, serif',
@@ -207,7 +257,23 @@ export default function ResumeResults({
                 color: '#000'
               }}
             >
-              <div className="whitespace-pre-wrap">{formattedResume}</div>
+              <div className="whitespace-pre-wrap">
+                {(showWatermarkPreview && improvedResume) ? improvedResume : formattedResume}
+              </div>
+
+              {showWatermarkPreview && (
+                <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-300">
+                  <h3 className="font-bold text-lg mb-4 text-gray-500 uppercase tracking-widest">AI Improvements & Suggestions</h3>
+                  <ul className="space-y-2">
+                    {suggestions.map((s, i) => (
+                      <li key={i} className="text-gray-600 text-sm flex gap-2">
+                        <span className="text-blue-500 font-bold">•</span>
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -216,18 +282,61 @@ export default function ResumeResults({
       {/* Print Styles */}
       <style jsx global>{`
         @media print {
-          body {
+          @page {
             margin: 0;
-            padding: 0;
+            size: auto;
           }
 
-          .no-print {
+          body {
+            background: white;
+          }
+
+          /* Hide everything by default */
+          body * {
+            visibility: hidden;
+            height: 0; /* Collapse height to avoid empty pages */
+            overflow: hidden; 
+          }
+
+          /* Explicitly hide header and footer from page.tsx */
+          header, footer {
+            display: none !important;
+          }
+          
+          /* Hide the sidebar/analytics column */
+          .lg\\:col-span-1 {
             display: none !important;
           }
 
-          @page {
-            size: A4;
-            margin: 1in;
+          /* Show the resume container and its children */
+          .print-content,
+          .print-content * {
+            visibility: visible !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+
+          /* Ensure no-print elements inside print-content are still hidden */
+          .print-content .no-print {
+            display: none !important;
+          }
+
+          /* Position the resume container */
+          .print-content {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+
+          /* Ensure text colors print correctly */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
         }
       `}</style>

@@ -33,6 +33,27 @@ export const skillsSchema = z.object({
   softSkills: z.array(z.string()).default([]),
 });
 
+// Project Schema
+export const projectSchema = z.object({
+  name: z.string().min(1, 'Project name is required'),
+  description: z.string().min(10, 'Description is required'),
+  technologies: z.array(z.string()).default([]),
+  link: z.string().url('Invalid URL').optional().or(z.literal('')),
+});
+
+// Certification Schema
+export const certificationSchema = z.object({
+  name: z.string().min(1, 'Certification name is required'),
+  issuer: z.string().min(1, 'Issuer is required'),
+  date: z.string().min(1, 'Date is required'),
+});
+
+// Language Schema
+export const languageSchema = z.object({
+  language: z.string().min(1, 'Language is required'),
+  proficiency: z.string().min(1, 'Proficiency is required'), // e.g. Native, Fluent, Intermediate
+});
+
 // Complete Resume Request Schema
 export const resumeRequestSchema = z.object({
   personalInfo: personalInfoSchema,
@@ -40,6 +61,9 @@ export const resumeRequestSchema = z.object({
   experience: z.array(workExperienceSchema).min(1, 'At least one work experience is required'),
   education: z.array(educationSchema).min(1, 'At least one education entry is required'),
   skills: skillsSchema,
+  projects: z.array(projectSchema).default([]).optional(),
+  certifications: z.array(certificationSchema).default([]).optional(),
+  languages: z.array(languageSchema).default([]).optional(),
   jobDescription: z.string().optional().nullable(),
 });
 
@@ -48,6 +72,9 @@ export type PersonalInfo = z.infer<typeof personalInfoSchema>;
 export type WorkExperience = z.infer<typeof workExperienceSchema>;
 export type Education = z.infer<typeof educationSchema>;
 export type Skills = z.infer<typeof skillsSchema>;
+export type Project = z.infer<typeof projectSchema>;
+export type Certification = z.infer<typeof certificationSchema>;
+export type Language = z.infer<typeof languageSchema>;
 export type ResumeRequest = z.infer<typeof resumeRequestSchema>;
 
 // API Response Schema

@@ -105,25 +105,66 @@ export interface ATSScoreResult {
   missingKeywords: string[];
 }
 
+/**
+ * Calculate basic quality score based on structure and content
+ * Max Score: 50
+ */
+function calculateQualityScore(resumeText: string): number {
+  let score = 0;
+  const lowerText = resumeText.toLowerCase();
+
+  // 1. Structure Checks (20 points)
+  if (lowerText.includes('professional summary') || lowerText.includes('summary')) score += 5;
+  if (lowerText.includes('experience') || lowerText.includes('work history')) score += 5;
+  if (lowerText.includes('education') || lowerText.includes('academic')) score += 5;
+  if (lowerText.includes('skills') || lowerText.includes('technologies')) score += 5;
+
+  // 2. Metrics & Impact (15 points)
+  // Look for numbers causing impact (%, $, +, x)
+  const metricMatches = resumeText.match(/\d+%|\$\d+|\d+x|\d+\+/g);
+  if (metricMatches) {
+    if (metricMatches.length > 5) score += 15;
+    else if (metricMatches.length > 2) score += 10;
+    else score += 5;
+  }
+
+  // 3. Length/Depth Check (15 points)
+  const wordCount = resumeText.trim().split(/\s+/).length;
+  if (wordCount > 400) score += 15;
+  else if (wordCount > 250) score += 10;
+  else if (wordCount > 150) score += 5;
+
+  return score;
+}
+
 export function calculateATSScore(
   jobKeywords: string[],
   resumeText: string,
   skills: string[]
 ): ATSScoreResult {
+  // Calculate Base Quality Score (0-50)
+  const qualityScore = calculateQualityScore(resumeText);
+  let finalScore = qualityScore;
+
+  const matchedKeywords: string[] = [];
+  const missingKeywords: string[] = [];
+
   if (jobKeywords.length === 0) {
-    // No job description provided - return neutral score
+    // No job description: Score is purely based on quality (Max 50) + slight boost for having skills
+    // We cap it at 60 to indicate "Average" at best without targeting.
+    // To get "Good" (70+), you MUST provide a Job Description.
+    finalScore = Math.min(60, qualityScore + (skills.length > 5 ? 10 : 0));
+
     return {
-      atsScore: 75,
+      atsScore: finalScore,
       matchedKeywords: [],
       missingKeywords: [],
     };
   }
 
+  // JD Provided: Calculate Keyword Match Score (0-50 points)
   const resumeLower = resumeText.toLowerCase();
   const skillsLower = skills.map(s => s.toLowerCase());
-
-  const matchedKeywords: string[] = [];
-  const missingKeywords: string[] = [];
 
   for (const keyword of jobKeywords) {
     const keywordLower = keyword.toLowerCase();
@@ -141,11 +182,22 @@ export function calculateATSScore(
     }
   }
 
-  // Calculate score
-  const score = Math.round((matchedKeywords.length / jobKeywords.length) * 100);
+  // Keyword Score = (Maatched / Total) * 50
+  const keywordMatchRatio = jobKeywords.length > 0 ? (matchedKeywords.length / jobKeywords.length) : 0;
+  const keywordScore = Math.round(keywordMatchRatio * 50);
+
+  // Final Score = Quality (Max 50) + Semantic/Keyword (Max 50)
+  // However, we heavily weight the keywords.
+  // Let's adjust: Quality (40%) + Keywords (60%)?
+  // User wants strictness.
+  // If we just add them: Max is 100.
+  // Example: 
+  // Quality=40 (Good resume), Keywords=10/20 (50% -> 25pts). Total = 65.
+  // This seems fair and strict.
+  finalScore = qualityScore + keywordScore;
 
   return {
-    atsScore: score,
+    atsScore: Math.min(100, finalScore),
     matchedKeywords,
     missingKeywords,
   };

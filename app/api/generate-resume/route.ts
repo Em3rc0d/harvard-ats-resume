@@ -15,22 +15,22 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
   try {
     // Get client IP for rate limiting
-    const ip = request.headers.get('x-forwarded-for') || 
-               request.headers.get('x-real-ip') || 
-               'unknown';
+    const ip = request.headers.get('x-forwarded-for') ||
+      request.headers.get('x-real-ip') ||
+      'unknown';
 
-    // Apply rate limiting (5 requests per hour)
-    const rateLimitResult = rateLimit(ip, 5, 60 * 60 * 1000);
+    // Apply rate limiting (50 requests per hour)
+    const rateLimitResult = await rateLimit(ip, 50, 60 * 60 * 1000);
     const rateLimitHeaders = getRateLimitHeaders(rateLimitResult);
 
     if (!rateLimitResult.success) {
       return NextResponse.json(
-        { 
+        {
           success: false,
           error: 'Rate limit exceeded. You can generate 5 resumes per hour. Please try again later.',
           retryAfter: new Date(rateLimitResult.reset).toISOString(),
         },
-        { 
+        {
           status: 429,
           headers: rateLimitHeaders,
         }
@@ -43,12 +43,12 @@ export async function POST(request: NextRequest) {
 
     if (!validationResult.success) {
       return NextResponse.json(
-        { 
+        {
           success: false,
           error: 'Invalid input data',
           details: validationResult.error.errors,
         },
-        { 
+        {
           status: 400,
           headers: rateLimitHeaders,
         }
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     const sanitizedData = sanitizeResumeData(data);
 
     // Step 1: Extract keywords from job description (if provided)
-    const jobKeywords = data.jobDescription 
+    const jobKeywords = data.jobDescription
       ? extractKeywords(data.jobDescription)
       : [];
 
@@ -70,11 +70,11 @@ export async function POST(request: NextRequest) {
 
     if (!geminiResult.success || !geminiResult.formattedResume) {
       return NextResponse.json(
-        { 
+        {
           success: false,
           error: geminiResult.error || 'Failed to generate resume',
         },
-        { 
+        {
           status: 500,
           headers: rateLimitHeaders,
         }
@@ -129,9 +129,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('API Error:', error);
-    
+
     return NextResponse.json(
-      { 
+      {
         success: false,
         error: 'An unexpected error occurred. Please try again.',
       },

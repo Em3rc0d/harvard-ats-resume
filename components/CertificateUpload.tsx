@@ -40,7 +40,9 @@ export default function CertificateUpload({
         if (typeof window !== 'undefined' && !pdfjsLib) {
             import('pdfjs-dist').then((pdfjs) => {
                 pdfjsLib = pdfjs;
-                pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+                // Use unpkg for the worker to match the installed version
+                // Note: v3+ uses .mjs for the worker script in many CDNs
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
             });
         }
     }, []);

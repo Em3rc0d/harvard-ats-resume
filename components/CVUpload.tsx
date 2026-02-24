@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { ResumeRequest } from '@/lib/schemas';
 import { useLanguage } from '@/components/LanguageProvider';
 import { Upload } from 'lucide-react';
+import mammoth from 'mammoth';
+import { jsPDF } from 'jspdf';
 
 interface CVUploadProps {
     onDataExtracted: (data: ResumeRequest) => void;
@@ -27,10 +29,50 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
         setIsUploading(true);
         setError(null);
 
-        const formData = new FormData();
-        formData.append('file', file);
-
         console.log(`[CVUpload] Uploading to: ${n8nUrl} with method: POST`);
+
+        let fileToUpload = file;
+
+        // Check for DOC/DOCX and convert to PDF if needed
+        if (file.name.match(/\.(doc|docx)$/i)) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.convertToHtml({ arrayBuffer });
+                const htmlContent = result.value;
+
+                // Create a temporary div to extract text content
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = htmlContent;
+                const textContent = tempDiv.innerText || tempDiv.textContent || "";
+
+                const pdf = new jsPDF();
+                const splitText = pdf.splitTextToSize(textContent, 180);
+
+                // Add text to PDF, handling page breaks automatically (basic implementation)
+                let y = 10;
+                splitText.forEach((line: string) => {
+                    if (y > 280) {
+                        pdf.addPage();
+                        y = 10;
+                    }
+                    pdf.text(line, 10, y);
+                    y += 10;
+                });
+
+                const pdfBlob = pdf.output('blob');
+
+                // Create a new File object from the blob
+                fileToUpload = new File([pdfBlob], file.name.replace(/\.(doc|docx)$/i, '.pdf'), { type: 'application/pdf' });
+                console.log('[CVUpload] Converted DOC/DOCX to PDF successfully.');
+            } catch (conversionError) {
+                console.warn('[CVUpload] Failed to convert DOC/DOCX to PDF, uploading original file.', conversionError);
+                // Fallback to original file
+                fileToUpload = file;
+            }
+        }
+
+        const formData = new FormData();
+        formData.append('file', fileToUpload);
 
         try {
             const response = await fetch(
@@ -74,20 +116,50 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
                     github: result.personalInfo?.github || '',
                 },
                 summary: result.summary || '',
-                experience: Array.isArray(result.experience) ? result.experience.map((exp: any) => ({
-                    company: exp.company || '',
-                    role: exp.role || '',
-                    startDate: exp.startDate || '',
-                    endDate: exp.endDate || '',
-                    description: exp.description || '',
-                    technologies: Array.isArray(exp.technologies) ? exp.technologies : [],
-                })) : [],
-                education: Array.isArray(result.education) ? result.education.map((edu: any) => ({
-                    institution: edu.institution || '',
-                    degree: edu.degree || '',
-                    startDate: edu.startDate || '',
-                    endDate: edu.endDate || '',
-                })) : [],
+                experience: Array.isArray(result.experience) ? result.experience.map((exp: any) => {
+                    const currentYear = new Date().getFullYear().toString();
+                    let startDate = exp.startDate;
+                    let endDate = exp.endDate;
+
+                    if (!startDate && !endDate) {
+                        startDate = currentYear;
+                        endDate = currentYear;
+                    } else if (startDate && !endDate) {
+                        endDate = startDate;
+                    } else if (!startDate && endDate) {
+                        startDate = endDate;
+                    }
+
+                    return {
+                        company: exp.company || '',
+                        role: exp.role || '',
+                        startDate: startDate || '',
+                        endDate: endDate || '',
+                        description: exp.description || '',
+                        technologies: Array.isArray(exp.technologies) ? exp.technologies : [],
+                    };
+                }) : [],
+                education: Array.isArray(result.education) ? result.education.map((edu: any) => {
+                    const currentYear = new Date().getFullYear().toString();
+                    let startDate = edu.startDate;
+                    let endDate = edu.endDate;
+
+                    if (!startDate && !endDate) {
+                        startDate = currentYear;
+                        endDate = currentYear;
+                    } else if (startDate && !endDate) {
+                        endDate = startDate;
+                    } else if (!startDate && endDate) {
+                        startDate = endDate;
+                    }
+
+                    return {
+                        institution: edu.institution || '',
+                        degree: edu.degree || '',
+                        startDate: startDate || '',
+                        endDate: endDate || '',
+                    };
+                }) : [],
                 skills: {
                     hardSkills: Array.isArray(result.skills?.hardSkills) ? result.skills.hardSkills : [],
                     softSkills: Array.isArray(result.skills?.softSkills) ? result.skills.softSkills : [],

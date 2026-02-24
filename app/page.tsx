@@ -19,6 +19,7 @@ export default function Home() {
     matchedKeywords: string[];
     missingKeywords: string[];
     suggestions: string[];
+    improvedResume?: string;
   } | null>(null);
 
   const [userName, setUserName] = useState<string>('Candidate');

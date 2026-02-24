@@ -48,6 +48,9 @@ export const translations = {
             remove: "Remove",
             step: "Step",
             of: "of",
+            addProject: "+ Add Project",
+            addCertification: "+ Add Certification",
+            addLanguage: "+ Add Language",
         },
         certificate: {
             clickToUpload: "Click to upload",
@@ -89,6 +92,12 @@ export const translations = {
             softSkills: "Soft Skills (Optional)",
             jobDescLabel: "Job Description",
             jobDescPlaceholder: "Paste the job description here...",
+            projectName: "Project Name",
+            projectLink: "Link (Optional)",
+            issuer: "Issuer/Organization",
+            credentialDate: "Date",
+            language: "Language",
+            proficiency: "Proficiency",
         },
         sections: {
             personal: "Personal Info",
@@ -96,7 +105,17 @@ export const translations = {
             experience: "Experience",
             education: "Education",
             skills: "Skills",
+            projects: "Projects",
+            certifications: "Certifications",
+            languages: "Languages",
             jobDesc: "Job Description (Optional)",
+        },
+        jobDetails: {
+            title: "Targeting a Specific Job?",
+            question: "Do you want to tailor this resume for a specific job application?",
+            yes: "Yes, Optimize for Job",
+            no: "No, General Resume",
+            pasteLabel: "Paste the Job Description below:",
         }
     },
     es: {
@@ -148,6 +167,9 @@ export const translations = {
             remove: "Eliminar",
             step: "Paso",
             of: "de",
+            addProject: "+ Añadir Proyecto",
+            addCertification: "+ Añadir Certificación",
+            addLanguage: "+ Añadir Idioma",
         },
         certificate: {
             clickToUpload: "Haz clic para subir",
@@ -189,6 +211,12 @@ export const translations = {
             softSkills: "Habilidades Blandas (Opcional)",
             jobDescLabel: "Descripción del Trabajo",
             jobDescPlaceholder: "Pega la descripción del trabajo aquí...",
+            projectName: "Nombre del Proyecto",
+            projectLink: "Enlace (Opcional)",
+            issuer: "Emisor/Organización",
+            credentialDate: "Fecha",
+            language: "Idioma",
+            proficiency: "Nivel",
         },
         sections: {
             personal: "Info Personal",
@@ -196,7 +224,17 @@ export const translations = {
             experience: "Experiencia",
             education: "Educación",
             skills: "Habilidades",
+            projects: "Proyectos",
+            certifications: "Certificaciones",
+            languages: "Idiomas",
             jobDesc: "Descripción del Trabajo (Opcional)",
+        },
+        jobDetails: {
+            title: "¿Apuntando a un Trabajo Específico?",
+            question: "¿Quieres adaptar este currículo para una solicitud de empleo específica?",
+            yes: "Sí, Optimizar para Trabajo",
+            no: "No, Currículo General",
+            pasteLabel: "Pega la Descripción del Trabajo abajo:",
         }
     },
     fr: {
@@ -297,6 +335,13 @@ export const translations = {
             education: "Éducation",
             skills: "Compétences",
             jobDesc: "Desc. Poste (Optionnel)",
+        },
+        jobDetails: {
+            title: "Ciblez-vous un Emploi Spécifique?",
+            question: "Voulez-vous adapter ce CV pour une demande d'emploi spécifique?",
+            yes: "Oui, Optimiser pour l'Emploi",
+            no: "Non, CV Général",
+            pasteLabel: "Collez la Description du Poste ci-dessous:",
         }
     },
     pt: {
@@ -397,6 +442,13 @@ export const translations = {
             education: "Educação",
             skills: "Habilidades",
             jobDesc: "Desc. Vaga (Opcional)",
+        },
+        jobDetails: {
+            title: "Visando um Emprego Específico?",
+            question: "Deseja adaptar este currículo para uma vaga específica?",
+            yes: "Sim, Otimizar para Vaga",
+            no: "Não, Currículo Geral",
+            pasteLabel: "Cole a Descrição da Vaga abaixo:",
         }
     }
 };
