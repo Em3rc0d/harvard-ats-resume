@@ -34,7 +34,7 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
         let fileToUpload = file;
 
         // Check for DOC/DOCX and convert to PDF if needed
-        if (file.name.match(/\.(doc|docx)$/i)) {
+        if (/\.(doc|docx)$/i.exec(file.name)) {
             try {
                 const arrayBuffer = await file.arrayBuffer();
                 const result = await mammoth.convertToHtml({ arrayBuffer });

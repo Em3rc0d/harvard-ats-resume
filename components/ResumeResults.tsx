@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import { useLanguage } from '@/components/LanguageProvider';
 import { Download, Printer, RefreshCw, Eye } from 'lucide-react';
@@ -137,10 +137,11 @@ export default function ResumeResults({
         <button onClick={() => setShowWatermarkPreview(!showWatermarkPreview)} className={`px-6 py-2.5 border rounded-sm font-medium text-sm transition-colors flex items-center gap-2 ${showWatermarkPreview ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>
           <Eye className="w-4 h-4" />
           <span>
-            {showWatermarkPreview
-              ? "Show Original"
-              : (improvedResume ? "Preview Optimized Version" : "Preview with Suggestions")
-            }
+            {(() => {
+              if (showWatermarkPreview) return "Show Original";
+              if (improvedResume) return "Preview Optimized Version";
+              return "Preview with Suggestions";
+            })()}
           </span>
         </button>
         <button onClick={downloadPDF} className="px-6 py-2.5 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium text-sm transition-colors shadow-sm flex items-center gap-2">
@@ -266,7 +267,7 @@ export default function ResumeResults({
                   <h3 className="font-bold text-lg mb-4 text-gray-500 uppercase tracking-widest">AI Improvements & Suggestions</h3>
                   <ul className="space-y-2">
                     {suggestions.map((s, i) => (
-                      <li key={i} className="text-gray-600 text-sm flex gap-2">
+                      <li key={`suggestion-${i}`} className="text-gray-600 text-sm flex gap-2">
                         <span className="text-blue-500 font-bold">•</span>
                         {s}
                       </li>
@@ -280,7 +281,7 @@ export default function ResumeResults({
       </div>
 
       {/* Print Styles */}
-      <style jsx global>{`
+      <style jsx global>{String.raw`
         @media print {
           @page {
             margin: 0;

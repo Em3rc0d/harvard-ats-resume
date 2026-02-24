@@ -128,7 +128,7 @@ function parseGeminiResponse(responseText: string): {
   const formattedResume = resumeMatch ? resumeMatch.trim() : responseText.trim();
 
   // Extract matched keywords
-  const keywordsMatch = responseText.match(/===\s*MATCHED KEYWORDS\s*===\s*([\s\S]*?)(?:===|$)/i);
+  const keywordsMatch = /===\s*MATCHED KEYWORDS\s*===\s*([\s\S]*?)(?:===|$)/i.exec(responseText);
   const matchedKeywordsText = keywordsMatch ? keywordsMatch[1].trim() : '';
   const matchedKeywords = matchedKeywordsText
     .split(',')
@@ -136,7 +136,7 @@ function parseGeminiResponse(responseText: string): {
     .filter(k => k.length > 0);
 
   // Extract suggestions - handle boundary with IMPROVED RESUME
-  const suggestionsMatch = responseText.match(/===\s*IMPROVEMENT SUGGESTIONS\s*===\s*([\s\S]*?)(?:===\s*IMPROVED RESUME\s*===|$)/i);
+  const suggestionsMatch = /===\s*IMPROVEMENT SUGGESTIONS\s*===\s*([\s\S]*?)(?:===\s*IMPROVED RESUME\s*===|$)/i.exec(responseText);
   const suggestionsText = suggestionsMatch ? suggestionsMatch[1].trim() : '';
   const suggestions = suggestionsText
     .split('\n')
@@ -149,7 +149,7 @@ function parseGeminiResponse(responseText: string): {
 
   // Clean up potential markdown code blocks
   if (improvedResumeRaw) {
-    improvedResumeRaw = improvedResumeRaw.replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
+    improvedResumeRaw = improvedResumeRaw.replace(/^```\w*\n/, '').replace(/\n```$/, '').trim();
   }
 
   // Fallback: If improved resume is overly short (e.g. just a placeholder), ignore it.
@@ -269,7 +269,7 @@ export function formatResumeFromData(data: ResumeRequest): string {
       // If it's already bulleted, keep it. If not, try to split.
       const points = exp.description.split('\n').map(p => p.trim()).filter(p => p.length > 0);
       points.forEach(point => {
-        const cleanPoint = point.replace(/^[•\-\*]\s*/, '');
+        const cleanPoint = point.replace(/^[•*-]\s*/, '');
         text += `• ${cleanPoint}\n`;
       });
       text += '\n'; // Add spacing between jobs
