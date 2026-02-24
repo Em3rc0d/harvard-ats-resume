@@ -27,7 +27,7 @@ export default function ResumeResults({
   suggestions,
   userName,
   onStartOver,
-}: ResumeResultsProps) {
+}: Readonly<ResumeResultsProps>) {
   const { t } = useLanguage();
   const resumeRef = useRef<HTMLDivElement>(null);
   const [showWatermarkPreview, setShowWatermarkPreview] = useState(false);
