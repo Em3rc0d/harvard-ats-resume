@@ -267,7 +267,7 @@ export default function ResumeResults({
                   <h3 className="font-bold text-lg mb-4 text-gray-500 uppercase tracking-widest">AI Improvements & Suggestions</h3>
                   <ul className="space-y-2">
                     {suggestions.map((s, i) => (
-                      <li key={`suggestion-${i}`} className="text-gray-600 text-sm flex gap-2">
+                      <li key={`preview-suggestion-${i}-${s.slice(0, 20)}`} className="text-gray-600 text-sm flex gap-2">
                         <span className="text-blue-500 font-bold">•</span>
                         {s}
                       </li>

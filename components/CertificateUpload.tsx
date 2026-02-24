@@ -16,10 +16,10 @@ interface ExtractedEducation {
 }
 
 interface CertificateUploadProps {
-    onDataExtracted: (data: ExtractedEducation) => void;
-    onBatchDataExtracted?: (data: ExtractedEducation[]) => void; // NEW: For batch upload
-    index?: number; // Add index to make each instance unique
-    allowMultiple?: boolean; // NEW: Allow multiple file selection
+    readonly onDataExtracted: (data: ExtractedEducation) => void;
+    readonly onBatchDataExtracted?: (data: ExtractedEducation[]) => void;
+    readonly index?: number;
+    readonly allowMultiple?: boolean;
 }
 
 export default function CertificateUpload({
@@ -37,7 +37,7 @@ export default function CertificateUpload({
 
     // Load PDF.js dynamically on client side only
     useEffect(() => {
-        if (typeof window !== 'undefined' && !pdfjsLib) {
+        if (typeof globalThis.window !== 'undefined' && !pdfjsLib) {
             import('pdfjs-dist').then((pdfjs) => {
                 pdfjsLib = pdfjs;
                 // Use unpkg for the worker to match the installed version
@@ -50,9 +50,9 @@ export default function CertificateUpload({
     const parseEducationData = (text: string): ExtractedEducation => {
         // Common patterns for education certificates
         const degreePatterns = [
-            /(?:awarded\s+to|conferred\s+upon|certify\s+that)\s+.*?(?:degree|diploma|certificate)\s+of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+            /(?:awarded\s+to|conferred\s+upon|certify\s+that)\s+[A-Z][a-z\s]+(?:degree|diploma|certificate)\s+of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
             /(?:Bachelor|Master|Doctor|Associate)(?:'s)?\s+of\s+[A-Z][a-z]+/i,
-            /(?:B\.?A\.?|B\.?S\.?|M\.?A\.?|M\.?S\.?|Ph\.?D\.?|M\.?B\.?A\.?)\s+(?:in\s+)?[A-Z][a-z]+/i
+            /\b(?:B\.?A\.?|B\.?S\.?|M\.?A\.?|M\.?S\.?|Ph\.?D\.?|M\.?B\.?A\.?)\s+(?:in\s+)?[A-Z][a-z]+/i
         ];
 
         const institutionPatterns = [
@@ -61,7 +61,7 @@ export default function CertificateUpload({
         ];
 
         const datePatterns = [
-            /(?:awarded|given|dated)\s+(?:on\s+)?((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})/i,
+            /(?:awarded|given|dated)\s+(?:on\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}/i,
             /(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?,?\s+\d{4})/i
         ];
 
@@ -84,7 +84,7 @@ export default function CertificateUpload({
 
         // Extract degree
         for (const pattern of degreePatterns) {
-            const match = text.match(pattern);
+            const match = pattern.exec(text);
             if (match) {
                 degree = match[0].trim(); // Use full match for degree type
                 break;
@@ -93,7 +93,7 @@ export default function CertificateUpload({
 
         // Extract institution
         for (const pattern of institutionPatterns) {
-            const match = text.match(pattern);
+            const match = pattern.exec(text);
             if (match) {
                 institution = match[0].trim();
                 break;
@@ -102,7 +102,7 @@ export default function CertificateUpload({
 
         // Extract date
         for (const pattern of datePatterns) {
-            const match = text.match(pattern);
+            const match = pattern.exec(text);
             if (match) {
                 graduationDate = match[1] || match[0];
                 break;
@@ -110,15 +110,15 @@ export default function CertificateUpload({
         }
 
         // Extract GPA
-        const gpaMatch = text.match(gpaPatterns[0]) || text.match(gpaPatterns[1]);
+        const gpaMatch = gpaPatterns[0].exec(text) || gpaPatterns[1].exec(text);
         if (gpaMatch) {
             gpa = gpaMatch[1];
         }
 
         // Extract honors
-        const honorsMatch = text.match(honorsPatterns[0]);
+        const honorsMatch = honorsPatterns[0].exec(text);
         if (honorsMatch) {
-            honors = honorsMatch[1];
+            honors = honorsMatch[0];
         }
 
         return {
