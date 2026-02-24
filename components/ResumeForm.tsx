@@ -220,6 +220,9 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
     }
   };
 
+  // Fix 1: Use RegExp.exec() instead of string.match() for efficiency and capture group access
+  const yearRegex = /\d{4}/;
+
   // Handle batch certificate upload
   const handleBatchCertificates = useCallback((certificates: Array<{
     degree: string;
@@ -235,7 +238,9 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
 
     // Add an education entry for each certificate
     certificates.forEach(cert => {
-      const year = cert.graduationDate.match(/\d{4}/)?.[0];
+      // Fix 1 applied: RegExp.exec() instead of string.match()
+      const yearMatch = yearRegex.exec(cert.graduationDate);
+      const year = yearMatch?.[0];
       const gradYear = year ? Number.parseInt(year, 10) : new Date().getFullYear();
       const startYear = gradYear - 4; // Assume 4-year degree
 
@@ -305,8 +310,9 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
     setValue(`education.${index}.institution`, data.institution, { shouldValidate: true });
     setValue(`education.${index}.degree`, data.degree, { shouldValidate: true });
 
-    // Parse graduation date to extract start and end dates
-    const year = data.graduationDate.match(/\d{4}/)?.[0];
+    // Fix 1 applied: RegExp.exec() instead of string.match()
+    const yearMatch = yearRegex.exec(data.graduationDate);
+    const year = yearMatch?.[0];
     if (year) {
       // Assume 4-year degree if only graduation year is found
       const gradYear = Number.parseInt(year, 10);
@@ -728,7 +734,8 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
               type="text"
               value={hardSkillsInput}
               onChange={(e) => setHardSkillsInput(e.target.value)}
-              onKeyPress={(e) => {
+              // Fix 2: onKeyPress is deprecated — replaced with onKeyDown
+              onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   if (hardSkillsInput.includes(',')) {
@@ -793,7 +800,8 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
                 type="text"
                 value={softSkillsInput}
                 onChange={(e) => setSoftSkillsInput(e.target.value)}
-                onKeyPress={(e) => {
+                // Fix 2: onKeyPress is deprecated — replaced with onKeyDown
+                onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     if (softSkillsInput.includes(',')) {
@@ -881,7 +889,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray.700 mb-1">
                   {t.fields.projectLink}
                 </label>
                 <input

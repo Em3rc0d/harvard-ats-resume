@@ -276,7 +276,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         }
     }, [allowMultiple, onBatchDataExtracted, onDataExtracted, processImage]);
 
-    const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    const handleDrop = useCallback((e: React.DragEvent<HTMLButtonElement>) => {
         e.preventDefault();
         const file = e.dataTransfer.files?.[0];
         if (file) {
@@ -293,24 +293,20 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         }
     }, [onDataExtracted]);
 
-    const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    const handleDragOver = useCallback((e: React.DragEvent<HTMLButtonElement>) => {
         e.preventDefault();
     }, []);
 
     return (
         <div className="space-y-4">
             {/* Upload Area */}
-            <div
+            <button
+                type="button"
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        globalThis.document.getElementById(`certificate-upload-${index}`)?.click();
-                    }
-                }}
-                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer bg-gray-50"
+                onClick={() => globalThis.document.getElementById(`certificate-upload-${index}`)?.click()}
+                disabled={isProcessing}
+                className="w-full border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label={t.certificate.uploadPrompt}
             >
                 <input
@@ -322,35 +318,33 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                     disabled={isProcessing}
                     multiple={allowMultiple}
                 />
-                <label htmlFor={`certificate-upload-${index}`} className="cursor-pointer">
-                    <span className="sr-only">Upload Certificate</span>
-                    <div className="space-y-2">
-                        <svg
-                            className="mx-auto h-12 w-12 text-gray-400"
-                            stroke="currentColor"
-                            fill="none"
-                            viewBox="0 0 48 48"
-                            aria-hidden="true"
-                        >
-                            <path
-                                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            />
-                        </svg>
-                        <div className="text-sm text-gray-600">
-                            <span className="font-semibold text-gray-900">{t.certificate.clickToUpload}</span> {t.certificate.dragDrop}
-                        </div>
-                        <p className="text-xs text-gray-500">
-                            {t.certificate.formats}{allowMultiple ? ` ${t.certificate.multipleAllowed}` : ''}
-                        </p>
-                        <p className="text-xs text-blue-600 font-medium mt-2">
-                            📜 {t.certificate.uploadPrompt}
-                        </p>
+                <span className="sr-only">Upload Certificate</span>
+                <div className="space-y-2">
+                    <svg
+                        className="mx-auto h-12 w-12 text-gray-400"
+                        stroke="currentColor"
+                        fill="none"
+                        viewBox="0 0 48 48"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    </svg>
+                    <div className="text-sm text-gray-600">
+                        <span className="font-semibold text-gray-900">{t.certificate.clickToUpload}</span> {t.certificate.dragDrop}
                     </div>
-                </label>
-            </div>
+                    <p className="text-xs text-gray-500">
+                        {t.certificate.formats}{allowMultiple ? ` ${t.certificate.multipleAllowed}` : ''}
+                    </p>
+                    <p className="text-xs text-blue-600 font-medium mt-2">
+                        📜 {t.certificate.uploadPrompt}
+                    </p>
+                </div>
+            </button>
 
             {/* Processing Status */}
             {isProcessing && (
