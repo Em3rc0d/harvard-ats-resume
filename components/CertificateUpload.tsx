@@ -38,7 +38,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
 
     // Load PDF.js dynamically on client side only
     useEffect(() => {
-        if (typeof globalThis !== 'undefined' && globalThis.window && !pdfjsLib) {
+        if (globalThis !== undefined && globalThis.window && !pdfjsLib) {
             import('pdfjs-dist').then((pdfjs) => {
                 pdfjsLib = pdfjs;
                 // Use unpkg for the worker to match the installed version
@@ -50,10 +50,11 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
 
     const parseEducationData = (text: string): ExtractedEducation => {
         // Common patterns for education certificates
+        const degreeKeywords = ['degree', 'diploma', 'certificate'];
         const degreePatterns = [
-            /\b(?:degree|diploma|certificate)\s+of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+            new RegExp(`(?:${degreeKeywords.join('|')})\\s+of\\s+([A-Z][a-z\\s]+)`, 'i'),
             /(?:Bachelor|Master|Doctor|Associate)(?:'s)?\s+of\s+[A-Z][a-z]+/i,
-            /\b(?:BA|BS|MA|MS|PhD|MBA)\s+(?:in\s+)?[A-Z][a-z]+/i
+            /\b(?:BA|BS|MA|MS|PhD|MBA)\b/i
         ];
 
         const institutionPatterns = [
@@ -62,8 +63,8 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         ];
 
         const datePatterns = [
-            /(?:awarded|given|dated)\s+(?:on\s+)?([A-Z][a-z]+\s+\d{1,2},?\s+\d{4})/i,
-            /(\d{1,2}\s+[A-Z][a-z]+\s+\d{4})/i
+            /(?:awarded|given|dated)\s+(?:on\s+)?(\w+\s+\d{1,2},?\s+\d{4})/i,
+            /(\d{1,2}\s+\w+\s+\d{4})/i
         ];
 
         const gpaPatterns = [
@@ -140,7 +141,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         const page = await pdf.getPage(1); // Get first page
 
-        const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better OCR
+        const viewport = page.getViewport({ scale: 2 }); // Higher scale for better OCR
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
 
@@ -225,63 +226,52 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         }
     };
 
+    const handleBatchProcessing = async (validFiles: File[]) => {
+        const results: ExtractedEducation[] = [];
+        for (let i = 0; i < validFiles.length; i++) {
+            try {
+                setProgress(Math.round((i / validFiles.length) * 100));
+                const educationData = await processImage(validFiles[i]);
+                results.push(educationData);
+            } catch (err) {
+                console.error(`Error processing ${validFiles[i].name}:`, err);
+            }
+        }
+        return results;
+    };
+
     const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        // Validate all files are images or PDFs
-        const validFiles: File[] = [];
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const isImage = file.type.startsWith('image/');
-            const isPdf = file.type === 'application/pdf';
-
-            if (isImage || isPdf) {
-                validFiles.push(file);
-            } else {
-                setError(`Skipping ${file.name} - only image files and PDFs are supported`);
-            }
-        }
+        const validFiles: File[] = Array.from(files).filter(file => {
+            const isValid = file.type.startsWith('image/') || file.type === 'application/pdf';
+            if (!isValid) setError(`Skipping ${file.name} - only image files and PDFs are supported`);
+            return isValid;
+        });
 
         if (validFiles.length === 0) {
             setError('Please upload at least one image file (PNG, JPG, etc.) or PDF');
             return;
         }
 
-        // If multiple files (allowMultiple=true) and batch callback exists
-        if (allowMultiple && onBatchDataExtracted) {
-            setIsProcessing(true);
-            setError(null);
-            setProgress(0);
+        setIsProcessing(true);
+        setError(null);
+        setProgress(0);
 
-            const results: ExtractedEducation[] = [];
-
-            for (let i = 0; i < validFiles.length; i++) {
-                try {
-                    setProgress(Math.round((i / validFiles.length) * 100));
-                    const educationData = await processImage(validFiles[i]);
-                    results.push(educationData);
-                } catch (err) {
-                    console.error(`Error processing ${validFiles[i].name}:`, err);
-                }
-            }
-
-            setProgress(100);
-            setIsProcessing(false);
-
-            if (results.length > 0) {
-                onBatchDataExtracted(results);
-            }
-        } else {
-            // Single file processing
-            try {
+        try {
+            if (allowMultiple && onBatchDataExtracted) {
+                const results = await handleBatchProcessing(validFiles);
+                if (results.length > 0) onBatchDataExtracted(results);
+            } else {
                 const educationData = await processImage(validFiles[0]);
                 onDataExtracted(educationData);
-            } catch (err) {
-                // Error handled in processImage
             }
+        } finally {
+            setProgress(100);
+            setIsProcessing(false);
         }
-    }, [allowMultiple, onBatchDataExtracted, onDataExtracted]);
+    }, [allowMultiple, onBatchDataExtracted, onDataExtracted, processImage]);
 
     const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
@@ -308,7 +298,11 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
             <div
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') document.getElementById(`certificate-upload-${index}`)?.click(); }}
                 className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer bg-gray-50"
+                aria-label={t.certificate.clickToUpload}
             >
                 <input
                     type="file"
@@ -320,6 +314,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                     multiple={allowMultiple}
                 />
                 <label htmlFor={`certificate-upload-${index}`} className="cursor-pointer">
+                    <span className="sr-only">{t.certificate.uploadPrompt}</span>
                     <div className="space-y-2">
                         <svg
                             className="mx-auto h-12 w-12 text-gray-400"
