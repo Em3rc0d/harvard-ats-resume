@@ -189,7 +189,7 @@ export default function ResumeResults({
               <div className="flex flex-wrap gap-2">
                 {matchedKeywords.slice(0, 15).map((keyword, index) => (
                   <span
-                    key={`matched-${index}-${keyword}`}
+                    key={`matched-${keyword.replace(/\s+/g, '-')}`}
                     className="px-2 py-1 bg-gray-100 text-gray-700 rounded-sm text-xs font-medium border border-gray-200"
                   >
                     {keyword}
@@ -207,7 +207,7 @@ export default function ResumeResults({
               <div className="flex flex-wrap gap-2">
                 {missingKeywords.slice(0, 15).map((keyword, index) => (
                   <span
-                    key={`missing-${index}-${keyword}`}
+                    key={`missing-${keyword.replace(/\s+/g, '-')}`}
                     className="px-2 py-1 bg-white text-gray-600 rounded-sm text-xs border border-gray-300 border-dashed"
                   >
                     {keyword}
@@ -224,7 +224,7 @@ export default function ResumeResults({
               </h3>
               <ul className="space-y-3">
                 {suggestions.map((suggestion, index) => (
-                  <li key={`suggestion-full-${index}-${suggestion.slice(0, 10)}`} className="text-sm text-gray-700 flex gap-3 items-start">
+                  <li key={`suggestion-full-${suggestion.substring(0, 30).replace(/\s+/g, '-')}`} className="text-sm text-gray-700 flex gap-3 items-start">
                     <span className="text-gray-400 font-medium text-xs mt-0.5">{index + 1}.</span>
                     <span className="leading-relaxed">{suggestion}</span>
                   </li>
@@ -266,8 +266,8 @@ export default function ResumeResults({
                 <div className="mt-12 pt-8 border-t-2 border-dashed border-gray-300">
                   <h3 className="font-bold text-lg mb-4 text-gray-500 uppercase tracking-widest">AI Improvements & Suggestions</h3>
                   <ul className="space-y-2">
-                    {suggestions.map((s, i) => (
-                      <li key={`preview-suggestion-${i}-${s.slice(0, 20)}`} className="text-gray-600 text-sm flex gap-2">
+                    {suggestions.map((s) => (
+                      <li key={`resume-preview-sug-${s.substring(0, 25).replace(/\s+/g, '-')}`} className="text-gray-600 text-sm flex gap-2">
                         <span className="text-blue-500 font-bold">•</span>
                         {s}
                       </li>
@@ -342,6 +342,6 @@ export default function ResumeResults({
           }
         }
       ` }} />
-    </div>
+    </div >
   );
 }

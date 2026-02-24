@@ -22,12 +22,13 @@ interface CertificateUploadProps {
     readonly allowMultiple?: boolean;
 }
 
-export default function CertificateUpload({
-    onDataExtracted,
-    onBatchDataExtracted,
-    index = 0,
-    allowMultiple = false
-}: CertificateUploadProps) {
+export default function CertificateUpload(props: Readonly<CertificateUploadProps>) {
+    const {
+        onDataExtracted,
+        onBatchDataExtracted,
+        index = 0,
+        allowMultiple = false
+    } = props;
     const { t } = useLanguage();
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -37,7 +38,7 @@ export default function CertificateUpload({
 
     // Load PDF.js dynamically on client side only
     useEffect(() => {
-        if (typeof globalThis.window !== 'undefined' && !pdfjsLib) {
+        if (typeof globalThis !== 'undefined' && globalThis.window && !pdfjsLib) {
             import('pdfjs-dist').then((pdfjs) => {
                 pdfjsLib = pdfjs;
                 // Use unpkg for the worker to match the installed version
@@ -50,9 +51,9 @@ export default function CertificateUpload({
     const parseEducationData = (text: string): ExtractedEducation => {
         // Common patterns for education certificates
         const degreePatterns = [
-            /(?:awarded\s+to|conferred\s+upon|certify\s+that)\s+[A-Z][a-z\s]+(?:degree|diploma|certificate)\s+of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+            /\b(?:degree|diploma|certificate)\s+of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
             /(?:Bachelor|Master|Doctor|Associate)(?:'s)?\s+of\s+[A-Z][a-z]+/i,
-            /\b(?:B\.?A\.?|B\.?S\.?|M\.?A\.?|M\.?S\.?|Ph\.?D\.?|M\.?B\.?A\.?)\s+(?:in\s+)?[A-Z][a-z]+/i
+            /\b(?:BA|BS|MA|MS|PhD|MBA)\s+(?:in\s+)?[A-Z][a-z]+/i
         ];
 
         const institutionPatterns = [
@@ -61,8 +62,8 @@ export default function CertificateUpload({
         ];
 
         const datePatterns = [
-            /(?:awarded|given|dated)\s+(?:on\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}/i,
-            /(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?,?\s+\d{4})/i
+            /(?:awarded|given|dated)\s+(?:on\s+)?([A-Z][a-z]+\s+\d{1,2},?\s+\d{4})/i,
+            /(\d{1,2}\s+[A-Z][a-z]+\s+\d{4})/i
         ];
 
         const gpaPatterns = [
