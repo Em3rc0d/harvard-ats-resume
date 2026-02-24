@@ -50,10 +50,11 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
 
     const parseEducationData = (text: string): ExtractedEducation => {
         // Common patterns for education certificates
-        const degreeKeywords = ['degree', 'diploma', 'certificate'];
         const degreePatterns = [
-            new RegExp(`(?:${degreeKeywords.join('|')})\\s+of\\s+([A-Z][a-z\\s]+)`, 'i'),
-            /(?:Bachelor|Master|Doctor|Associate)(?:'s)?\s+of\s+[A-Z][a-z]+/i,
+            /degree\s+of\s+([A-Z][a-z\s]+)/i,
+            /diploma\s+of\s+([A-Z][a-z\s]+)/i,
+            /certificate\s+of\s+([A-Z][a-z\s]+)/i,
+            /[BMD][a-z]+\s+of\s+[A-Z][a-z]+/i,
             /\b(?:BA|BS|MA|MS|PhD|MBA)\b/i
         ];
 
@@ -68,13 +69,13 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         ];
 
         const gpaPatterns = [
-            /GPA[:\s]+(\d\.\d{1,2})/i,
-            /Grade Point Average[:\s]+(\d\.\d{1,2})/i
+            /GPA:?\s+(\d\.\d+)/i,
+            /Grade Point Average:?\s+(\d\.\d+)/i
         ];
 
         const honorsPatterns = [
-            /(?:Summa|Magna)?\s+Cum\s+Laude/i,
-            /with\s+(?:highest\s+)?distinction/i,
+            /Cum\s+Laude/i,
+            /distinction/i,
             /Dean's\s+List/i
         ];
 
@@ -228,14 +229,16 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
 
     const handleBatchProcessing = async (validFiles: File[]) => {
         const results: ExtractedEducation[] = [];
-        for (let i = 0; i < validFiles.length; i++) {
+        let i = 0;
+        for (const file of validFiles) {
             try {
                 setProgress(Math.round((i / validFiles.length) * 100));
-                const educationData = await processImage(validFiles[i]);
+                const educationData = await processImage(file);
                 results.push(educationData);
             } catch (err) {
-                console.error(`Error processing ${validFiles[i].name}:`, err);
+                console.error(`Error processing ${file.name}:`, err);
             }
+            i++;
         }
         return results;
     };
@@ -284,7 +287,9 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                 setError('Please upload an image file (PNG, JPG, etc.) or PDF');
                 return;
             }
-            processImage(file).then(data => onDataExtracted(data));
+            processImage(file)
+                .then(data => onDataExtracted(data))
+                .catch(err => console.error('Drop processing error:', err));
         }
     }, [onDataExtracted]);
 
@@ -300,9 +305,13 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                 onDragOver={handleDragOver}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') document.getElementById(`certificate-upload-${index}`)?.click(); }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        globalThis.document.getElementById(`certificate-upload-${index}`)?.click();
+                    }
+                }}
                 className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer bg-gray-50"
-                aria-label={t.certificate.clickToUpload}
+                aria-label={t.certificate.uploadPrompt}
             >
                 <input
                     type="file"
@@ -314,7 +323,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                     multiple={allowMultiple}
                 />
                 <label htmlFor={`certificate-upload-${index}`} className="cursor-pointer">
-                    <span className="sr-only">{t.certificate.uploadPrompt}</span>
+                    <span className="sr-only">Upload Certificate</span>
                     <div className="space-y-2">
                         <svg
                             className="mx-auto h-12 w-12 text-gray-400"

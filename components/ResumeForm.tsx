@@ -236,7 +236,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
     // Add an education entry for each certificate
     certificates.forEach(cert => {
       const year = cert.graduationDate.match(/\d{4}/)?.[0];
-      const gradYear = year ? parseInt(year) : new Date().getFullYear();
+      const gradYear = year ? Number.parseInt(year, 10) : new Date().getFullYear();
       const startYear = gradYear - 4; // Assume 4-year degree
 
       appendEducation({
@@ -309,7 +309,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
     const year = data.graduationDate.match(/\d{4}/)?.[0];
     if (year) {
       // Assume 4-year degree if only graduation year is found
-      const gradYear = parseInt(year);
+      const gradYear = Number.parseInt(year, 10);
       setValue(`education.${index}.endDate`, year, { shouldValidate: true });
       setValue(`education.${index}.startDate`, (gradYear - 4).toString(), { shouldValidate: true });
     } else {
