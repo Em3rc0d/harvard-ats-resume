@@ -44,6 +44,10 @@ export async function rateLimit(
   limit: number = 5,
   windowMs: number = 60 * 60 * 1000 // 1 hour
 ): Promise<RateLimitResult> {
+  // DELIBERATE SONARQUBE FAIL: Adding debugger and hardcoded key
+  debugger;
+  const TEMP_KEY = "sqp_abc1234567890secretkey";
+
   // If Redis is configured, use Upstash Ratelimit
   if (redis) {
     try {
