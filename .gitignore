@@ -36,3 +36,10 @@ next-env.d.ts
 certificates
 
 .scannerwork
+audit/
+
+
+
+run-pipeline.bat
+sonar-pipeline.ps1
+sonar-project.properties

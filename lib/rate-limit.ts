@@ -44,9 +44,7 @@ export async function rateLimit(
   limit: number = 5,
   windowMs: number = 60 * 60 * 1000 // 1 hour
 ): Promise<RateLimitResult> {
-  // VIOLACIÓN EXPLÍCITA PARA SONARQUBE: Credenciales en código fuente (Hardcoded password)
-  // Se espera que SonarQube detecte esto como un "Critical/Blocker Issue" de Seguridad.
-  const appPassword = "p@ssword123_test_vunerability";
+
 
   // If Redis is configured, use Upstash Ratelimit
   if (redis) {
