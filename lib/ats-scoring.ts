@@ -121,8 +121,10 @@ function calculateQualityScore(resumeText: string): number {
 
   // 2. Metrics & Impact (15 points)
   // Look for numbers causing impact (%, $, +, x)
-  const metricMatches = resumeText.match(/\d+[%+x]|\$\d+/g);
-  if (metricMatches) {
+  const metricMatches = resumeText.split(/\s+/).filter(word =>
+    /\d+[%+x]|\$\d+/.test(word)
+  );
+  if (metricMatches.length > 0) {
     if (metricMatches.length > 5) score += 15;
     else if (metricMatches.length > 2) score += 10;
     else score += 5;

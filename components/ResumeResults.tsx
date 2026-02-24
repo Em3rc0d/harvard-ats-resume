@@ -189,7 +189,7 @@ export default function ResumeResults({
               <div className="flex flex-wrap gap-2">
                 {matchedKeywords.slice(0, 15).map((keyword, index) => (
                   <span
-                    key={index}
+                    key={`matched-${index}-${keyword}`}
                     className="px-2 py-1 bg-gray-100 text-gray-700 rounded-sm text-xs font-medium border border-gray-200"
                   >
                     {keyword}
@@ -207,7 +207,7 @@ export default function ResumeResults({
               <div className="flex flex-wrap gap-2">
                 {missingKeywords.slice(0, 15).map((keyword, index) => (
                   <span
-                    key={index}
+                    key={`missing-${index}-${keyword}`}
                     className="px-2 py-1 bg-white text-gray-600 rounded-sm text-xs border border-gray-300 border-dashed"
                   >
                     {keyword}
@@ -224,7 +224,7 @@ export default function ResumeResults({
               </h3>
               <ul className="space-y-3">
                 {suggestions.map((suggestion, index) => (
-                  <li key={index} className="text-sm text-gray-700 flex gap-3 items-start">
+                  <li key={`suggestion-full-${index}-${suggestion.slice(0, 10)}`} className="text-sm text-gray-700 flex gap-3 items-start">
                     <span className="text-gray-400 font-medium text-xs mt-0.5">{index + 1}.</span>
                     <span className="leading-relaxed">{suggestion}</span>
                   </li>
@@ -281,7 +281,8 @@ export default function ResumeResults({
       </div>
 
       {/* Print Styles */}
-      <style jsx global>{String.raw`
+      <style dangerouslySetInnerHTML={{
+        __html: String.raw`
         @media print {
           @page {
             margin: 0;
@@ -305,7 +306,7 @@ export default function ResumeResults({
           }
           
           /* Hide the sidebar/analytics column */
-          .lg\\:col-span-1 {
+          .lg\:col-span-1 {
             display: none !important;
           }
 
@@ -340,7 +341,7 @@ export default function ResumeResults({
             print-color-adjust: exact !important;
           }
         }
-      `}</style>
+      ` }} />
     </div>
   );
 }

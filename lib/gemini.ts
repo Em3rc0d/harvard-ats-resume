@@ -243,6 +243,63 @@ export function sanitizeResumeData(data: ResumeRequest): ResumeRequest {
 /**
  * Format structured resume data into Harvard-style text
  */
+/**
+ * Helper to format resume sections to reduce cognitive complexity
+ */
+function formatExperiences(experience: any[]): string {
+  if (!experience || experience.length === 0) return '';
+  let text = 'EXPERIENCE\n';
+  experience.forEach(exp => {
+    text += `${exp.company.toUpperCase()} — ${exp.role.toUpperCase()}\n`;
+    text += `${exp.startDate} - ${exp.endDate}\n`;
+    const points = exp.description.split('\n').map((p: string) => p.trim()).filter((p: string) => p.length > 0);
+    points.forEach((point: string) => {
+      const cleanPoint = point.replace(/^[•*-]\s*/, '');
+      text += `• ${cleanPoint}\n`;
+    });
+    text += '\n';
+  });
+  return text;
+}
+
+function formatProjects(projects: any[]): string {
+  if (!projects || projects.length === 0) return '';
+  let text = 'PROJECTS\n';
+  projects.forEach(proj => {
+    text += `${proj.name.toUpperCase()}\n`;
+    text += `${proj.description}\n`;
+    if (proj.technologies && proj.technologies.length > 0) {
+      text += `Technologies: ${proj.technologies.join(', ')}\n`;
+    }
+    text += '\n';
+  });
+  return text;
+}
+
+function formatEducation(education: any[]): string {
+  if (!education || education.length === 0) return '';
+  let text = 'EDUCATION\n';
+  education.forEach(edu => {
+    text += `${edu.institution}\n`;
+    text += `${edu.degree}, ${edu.startDate} - ${edu.endDate}\n\n`;
+  });
+  return text;
+}
+
+function formatSkills(skills: any): string {
+  let text = 'SKILLS\n';
+  if (skills.hardSkills?.length > 0) {
+    text += `Technical Skills: ${skills.hardSkills.join(', ')}\n`;
+  }
+  if (skills.softSkills?.length > 0) {
+    text += `Soft Skills: ${skills.softSkills.join(', ')}\n`;
+  }
+  return text + '\n';
+}
+
+/**
+ * Format structured resume data into Harvard-style text
+ */
 export function formatResumeFromData(data: ResumeRequest): string {
   let text = '';
 
@@ -259,68 +316,27 @@ export function formatResumeFromData(data: ResumeRequest): string {
   // Professional Summary
   text += `PROFESSIONAL SUMMARY\n${data.summary}\n\n`;
 
-  // Experience
-  if (data.experience && data.experience.length > 0) {
-    text += `EXPERIENCE\n`;
-    data.experience.forEach(exp => {
-      text += `${exp.company.toUpperCase()} — ${exp.role.toUpperCase()}\n`;
-      text += `${exp.startDate} - ${exp.endDate}\n`;
-      // Handle description points. If it's a block text, split by newlines or bullets.
-      // If it's already bulleted, keep it. If not, try to split.
-      const points = exp.description.split('\n').map(p => p.trim()).filter(p => p.length > 0);
-      points.forEach(point => {
-        const cleanPoint = point.replace(/^[•*-]\s*/, '');
-        text += `• ${cleanPoint}\n`;
-      });
-      text += '\n'; // Add spacing between jobs
-    });
-  }
-
-  // Projects (Optional)
-  if (data.projects && data.projects.length > 0) {
-    text += `PROJECTS\n`;
-    data.projects.forEach(proj => {
-      text += `${proj.name.toUpperCase()}\n`;
-      text += `${proj.description}\n`;
-      if (proj.technologies && proj.technologies.length > 0) {
-        text += `Technologies: ${proj.technologies.join(', ')}\n`;
-      }
-      text += '\n';
-    });
-  }
-
-  // Education
-  if (data.education && data.education.length > 0) {
-    text += `EDUCATION\n`;
-    data.education.forEach(edu => {
-      text += `${edu.institution}\n`;
-      text += `${edu.degree}, ${edu.startDate} - ${edu.endDate}\n\n`;
-    });
-  }
-
-  // Skills
-  text += `SKILLS\n`;
-  if (data.skills.hardSkills && data.skills.hardSkills.length > 0) {
-    text += `Technical Skills: ${data.skills.hardSkills.join(', ')}\n`;
-  }
-  if (data.skills.softSkills && data.skills.softSkills.length > 0) {
-    text += `Soft Skills: ${data.skills.softSkills.join(', ')}\n`;
-  }
-  text += '\n';
+  // Sections
+  text += formatExperiences(data.experience);
+  text += formatProjects(data.projects ?? []);
+  text += formatEducation(data.education);
+  text += formatSkills(data.skills);
 
   // Certifications
-  if (data.certifications && data.certifications.length > 0) {
+  const certifications = data.certifications;
+  if (certifications && certifications.length > 0) {
     text += `CERTIFICATIONS\n`;
-    data.certifications.forEach(cert => {
+    certifications.forEach(cert => {
       text += `${cert.name} — ${cert.issuer}, ${cert.date}\n`;
     });
     text += '\n';
   }
 
   // Languages
-  if (data.languages && data.languages.length > 0) {
+  const languages = data.languages;
+  if (languages && languages.length > 0) {
     text += `LANGUAGES\n`;
-    const langs = data.languages.map(l => `${l.language}: ${l.proficiency}`);
+    const langs = languages.map(l => `${l.language}: ${l.proficiency}`);
     text += `${langs.join(' | ')}\n`;
   }
 
