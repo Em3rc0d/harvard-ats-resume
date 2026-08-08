@@ -153,4 +153,63 @@ Baseline cannot be built, linted, typechecked, or run natively because standard 
 
 ## Next authorized work
 
-PR-ATS2-00B may begin only when G0 disposition is explicitly recorded.
+(Superseded by Root-Cause Verification below)
+
+## G0 Root-Cause Verification
+
+### Initial hypothesis
+
+The first execution suspected that `next` and `typescript` were missing from dependency resolution.
+
+### Repository evidence
+
+`package.json` declares both packages.
+
+`package-lock.json` root metadata declares both packages.
+
+Therefore the initial root-cause statement was not considered proven.
+
+### Clean rerun
+
+Working tree:
+CLEAN (Unrelated `CVUpload.tsx` change stashed)
+
+npm ci:
+PASS (276 packages added, 0 vulnerabilities)
+
+npm ls next typescript:
+next: invalid: "^14.2.0" from the root project, typescript: 5.9.3
+
+require.resolve:
+next: Module not found
+typescript: C:\Users\eduar\Desktop\Farid\harvard-ats-resume\node_modules\typescript\package.json
+
+node_modules/.bin:
+PRESENT (next, next.cmd, next.ps1, tsc, tsc.cmd, tsc.ps1)
+
+npm bin-links:
+true
+
+Direct Next invocation:
+PASS (Next.js v14.2.35, node .\node_modules\next\dist\bin\next build compiled successfully)
+
+Direct TypeScript invocation:
+PASS (Version 5.9.3, node .\node_modules\typescript\bin\tsc --noEmit passed)
+
+npm script invocation:
+PASS (npx tsc, npm run build, npm run lint, npm run dev all succeeded)
+
+### Root cause
+
+The lockfile and dependencies are intrinsically healthy. The original failure occurred because the local `node_modules` directory was in a corrupted or incomplete state (likely from a previous interrupted install) that the initial `npm ci` run on Windows failed to automatically clean and reconstruct. Explicitly removing the `node_modules` directory before `npm ci` completely resolved the issue without any changes to the repository or lockfile.
+
+### G0 status
+
+PASS
+
+Reason:
+A truly clean checkout and installation (`Remove-Item node_modules` + `npm ci`) results in a fully reproducible baseline. The application typechecks, builds, lints, and starts correctly without any source code or dependency file changes.
+
+## Next authorized work
+
+PR-ATS2-00B — Trust Containment

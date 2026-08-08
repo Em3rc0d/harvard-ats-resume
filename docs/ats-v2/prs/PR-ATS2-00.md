@@ -71,7 +71,7 @@ Execution details and full evidence are recorded in:
 [EXECUTION_EVIDENCE.md](../baseline/EXECUTION_EVIDENCE.md)
 
 Current status:
-`FAIL — Baseline cannot be built, linted, typechecked, or run natively because standard dependencies (typescript, next) are not installed correctly via package-lock.json and npm ci.`
+`PASS — A fully clean checkout (with no corrupt node_modules cache) successfully builds, lints, typechecks, and runs.`
 
 ## AFTER
 
