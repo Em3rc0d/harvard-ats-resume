@@ -175,7 +175,10 @@ Working tree:
 CLEAN (Unrelated `CVUpload.tsx` change stashed)
 
 npm ci:
-PASS (276 packages added, 0 vulnerabilities)
+PASS
+
+added 358 packages, and audited 359 packages
+0 vulnerabilities
 
 npm ls next typescript:
 next: invalid: "^14.2.0" from the root project, typescript: 5.9.3
@@ -199,9 +202,20 @@ PASS (Version 5.9.3, node .\node_modules\typescript\bin\tsc --noEmit passed)
 npm script invocation:
 PASS (npx tsc, npm run build, npm run lint, npm run dev all succeeded)
 
-### Root cause
+### Verified root-cause boundary
 
-The lockfile and dependencies are intrinsically healthy. The original failure occurred because the local `node_modules` directory was in a corrupted or incomplete state (likely from a previous interrupted install) that the initial `npm ci` run on Windows failed to automatically clean and reconstruct. Explicitly removing the `node_modules` directory before `npm ci` completely resolved the issue without any changes to the repository or lockfile.
+The repository dependency declarations and lockfile are sufficient to
+reproduce a working installation.
+
+The first execution operated on an inconsistent pre-existing local
+node_modules state.
+
+Explicitly deleting node_modules and running npm ci restored a
+working baseline without modifying package.json, package-lock.json,
+or application source.
+
+The exact initiating cause of the inconsistent node_modules state
+was not proven and is therefore intentionally left unspecified.
 
 ### G0 status
 

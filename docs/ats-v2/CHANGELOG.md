@@ -11,7 +11,7 @@ Repository prototype existed without a durable ATS v2 migration record.
 - characterization cases defined
 - executable baseline evidence created
 - tests/checks executed (`npm ci` passed after `node_modules` cleanup; `npx tsc --noEmit`, `npm run build`, `npm run lint`, `npm run dev` all passed)
-- failures discovered: Initial execution failures were caused by a corrupt local `node_modules` cache on Windows, not by invalid repository dependencies.
+- failures discovered: Initial executable-resolution failures were isolated to the local pre-existing node_modules state. A clean dependency reconstruction restored a fully working baseline without repository changes. The exact initiating cause was not established.
 - scope/non-goals recorded
 - G0 evidence requirements formalized
 
@@ -19,7 +19,7 @@ Repository prototype existed without a durable ATS v2 migration record.
 No production behavior is intentionally changed by PR-ATS2-00.
 
 Gate status:
-`G0 REPRODUCIBLE_BASELINE — PASS (Repository successfully builds, lints, typechecks, and runs after a pristine clean install)`
+`G0 REPRODUCIBLE_BASELINE — PASS`
 
 Next authorized iteration after G0:
 `PR-ATS2-00B — Trust Containment`.

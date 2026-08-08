@@ -71,7 +71,7 @@ Execution details and full evidence are recorded in:
 [EXECUTION_EVIDENCE.md](../baseline/EXECUTION_EVIDENCE.md)
 
 Current status:
-`PASS — A fully clean checkout (with no corrupt node_modules cache) successfully builds, lints, typechecks, and runs.`
+`PASS — After explicit clean dependency reconstruction, the repository successfully typechecks, builds, lints, and starts without source or dependency-file changes.`
 
 ## AFTER
 
