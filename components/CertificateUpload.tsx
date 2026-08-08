@@ -38,7 +38,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
 
     // Load PDF.js dynamically on client side only
     useEffect(() => {
-        if (typeof globalThis !== 'undefined' && globalThis.window && !pdfjsLib) {
+        if (globalThis !== undefined && globalThis.window && !pdfjsLib) {
             import('pdfjs-dist').then((pdfjs) => {
                 pdfjsLib = pdfjs;
                 // Use unpkg for the worker to match the installed version
@@ -51,9 +51,11 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
     const parseEducationData = (text: string): ExtractedEducation => {
         // Common patterns for education certificates
         const degreePatterns = [
-            /\b(?:degree|diploma|certificate)\s+of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
-            /(?:Bachelor|Master|Doctor|Associate)(?:'s)?\s+of\s+[A-Z][a-z]+/i,
-            /\b(?:BA|BS|MA|MS|PhD|MBA)\s+(?:in\s+)?[A-Z][a-z]+/i
+            /degree\s+of\s+([A-Z][a-z\s]+)/i,
+            /diploma\s+of\s+([A-Z][a-z\s]+)/i,
+            /certificate\s+of\s+([A-Z][a-z\s]+)/i,
+            /[BMD][a-z]+\s+of\s+[A-Z][a-z]+/i,
+            /\b(?:BA|BS|MA|MS|PhD|MBA)\b/i
         ];
 
         const institutionPatterns = [
@@ -62,18 +64,18 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         ];
 
         const datePatterns = [
-            /(?:awarded|given|dated)\s+(?:on\s+)?([A-Z][a-z]+\s+\d{1,2},?\s+\d{4})/i,
-            /(\d{1,2}\s+[A-Z][a-z]+\s+\d{4})/i
+            /(?:awarded|given|dated)\s+(?:on\s+)?(\w+\s+\d{1,2},?\s+\d{4})/i,
+            /(\d{1,2}\s+\w+\s+\d{4})/i
         ];
 
         const gpaPatterns = [
-            /GPA[:\s]+(\d\.\d{1,2})/i,
-            /Grade Point Average[:\s]+(\d\.\d{1,2})/i
+            /GPA:?\s+(\d\.\d+)/i,
+            /Grade Point Average:?\s+(\d\.\d+)/i
         ];
 
         const honorsPatterns = [
-            /(?:Summa|Magna)?\s+Cum\s+Laude/i,
-            /with\s+(?:highest\s+)?distinction/i,
+            /Cum\s+Laude/i,
+            /distinction/i,
             /Dean's\s+List/i
         ];
 
@@ -140,7 +142,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         const page = await pdf.getPage(1); // Get first page
 
-        const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better OCR
+        const viewport = page.getViewport({ scale: 2 }); // Higher scale for better OCR
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
 
@@ -225,65 +227,56 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         }
     };
 
+    const handleBatchProcessing = async (validFiles: File[]) => {
+        const results: ExtractedEducation[] = [];
+        let i = 0;
+        for (const file of validFiles) {
+            try {
+                setProgress(Math.round((i / validFiles.length) * 100));
+                const educationData = await processImage(file);
+                results.push(educationData);
+            } catch (err) {
+                console.error(`Error processing ${file.name}:`, err);
+            }
+            i++;
+        }
+        return results;
+    };
+
     const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        // Validate all files are images or PDFs
-        const validFiles: File[] = [];
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const isImage = file.type.startsWith('image/');
-            const isPdf = file.type === 'application/pdf';
-
-            if (isImage || isPdf) {
-                validFiles.push(file);
-            } else {
-                setError(`Skipping ${file.name} - only image files and PDFs are supported`);
-            }
-        }
+        const validFiles: File[] = Array.from(files).filter(file => {
+            const isValid = file.type.startsWith('image/') || file.type === 'application/pdf';
+            if (!isValid) setError(`Skipping ${file.name} - only image files and PDFs are supported`);
+            return isValid;
+        });
 
         if (validFiles.length === 0) {
             setError('Please upload at least one image file (PNG, JPG, etc.) or PDF');
             return;
         }
 
-        // If multiple files (allowMultiple=true) and batch callback exists
-        if (allowMultiple && onBatchDataExtracted) {
-            setIsProcessing(true);
-            setError(null);
-            setProgress(0);
+        setIsProcessing(true);
+        setError(null);
+        setProgress(0);
 
-            const results: ExtractedEducation[] = [];
-
-            for (let i = 0; i < validFiles.length; i++) {
-                try {
-                    setProgress(Math.round((i / validFiles.length) * 100));
-                    const educationData = await processImage(validFiles[i]);
-                    results.push(educationData);
-                } catch (err) {
-                    console.error(`Error processing ${validFiles[i].name}:`, err);
-                }
-            }
-
-            setProgress(100);
-            setIsProcessing(false);
-
-            if (results.length > 0) {
-                onBatchDataExtracted(results);
-            }
-        } else {
-            // Single file processing
-            try {
+        try {
+            if (allowMultiple && onBatchDataExtracted) {
+                const results = await handleBatchProcessing(validFiles);
+                if (results.length > 0) onBatchDataExtracted(results);
+            } else {
                 const educationData = await processImage(validFiles[0]);
                 onDataExtracted(educationData);
-            } catch (err) {
-                // Error handled in processImage
             }
+        } finally {
+            setProgress(100);
+            setIsProcessing(false);
         }
-    }, [allowMultiple, onBatchDataExtracted, onDataExtracted]);
+    }, [allowMultiple, onBatchDataExtracted, onDataExtracted, processImage]);
 
-    const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    const handleDrop = useCallback((e: React.DragEvent<HTMLButtonElement>) => {
         e.preventDefault();
         const file = e.dataTransfer.files?.[0];
         if (file) {
@@ -294,21 +287,27 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                 setError('Please upload an image file (PNG, JPG, etc.) or PDF');
                 return;
             }
-            processImage(file).then(data => onDataExtracted(data));
+            processImage(file)
+                .then(data => onDataExtracted(data))
+                .catch(err => console.error('Drop processing error:', err));
         }
     }, [onDataExtracted]);
 
-    const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    const handleDragOver = useCallback((e: React.DragEvent<HTMLButtonElement>) => {
         e.preventDefault();
     }, []);
 
     return (
         <div className="space-y-4">
             {/* Upload Area */}
-            <div
+            <button
+                type="button"
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
-                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer bg-gray-50"
+                onClick={() => globalThis.document.getElementById(`certificate-upload-${index}`)?.click()}
+                disabled={isProcessing}
+                className="w-full border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={t.certificate.uploadPrompt}
             >
                 <input
                     type="file"
@@ -319,34 +318,33 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                     disabled={isProcessing}
                     multiple={allowMultiple}
                 />
-                <label htmlFor={`certificate-upload-${index}`} className="cursor-pointer">
-                    <div className="space-y-2">
-                        <svg
-                            className="mx-auto h-12 w-12 text-gray-400"
-                            stroke="currentColor"
-                            fill="none"
-                            viewBox="0 0 48 48"
-                            aria-hidden="true"
-                        >
-                            <path
-                                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            />
-                        </svg>
-                        <div className="text-sm text-gray-600">
-                            <span className="font-semibold text-gray-900">{t.certificate.clickToUpload}</span> {t.certificate.dragDrop}
-                        </div>
-                        <p className="text-xs text-gray-500">
-                            {t.certificate.formats}{allowMultiple ? ` ${t.certificate.multipleAllowed}` : ''}
-                        </p>
-                        <p className="text-xs text-blue-600 font-medium mt-2">
-                            📜 {t.certificate.uploadPrompt}
-                        </p>
+                <span className="sr-only">Upload Certificate</span>
+                <div className="space-y-2">
+                    <svg
+                        className="mx-auto h-12 w-12 text-gray-400"
+                        stroke="currentColor"
+                        fill="none"
+                        viewBox="0 0 48 48"
+                        aria-hidden="true"
+                    >
+                        <path
+                            d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    </svg>
+                    <div className="text-sm text-gray-600">
+                        <span className="font-semibold text-gray-900">{t.certificate.clickToUpload}</span> {t.certificate.dragDrop}
                     </div>
-                </label>
-            </div>
+                    <p className="text-xs text-gray-500">
+                        {t.certificate.formats}{allowMultiple ? ` ${t.certificate.multipleAllowed}` : ''}
+                    </p>
+                    <p className="text-xs text-blue-600 font-medium mt-2">
+                        📜 {t.certificate.uploadPrompt}
+                    </p>
+                </div>
+            </button>
 
             {/* Processing Status */}
             {isProcessing && (

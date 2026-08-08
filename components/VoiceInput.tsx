@@ -9,28 +9,29 @@ interface VoiceInputProps {
     onListeningChange?: (isListening: boolean) => void;
 }
 
-export default function VoiceInput({
-    onTranscript,
-    className = '',
-    isListening: externalIsListening,
-    onListeningChange
-}: VoiceInputProps) {
+export default function VoiceInput(props: Readonly<VoiceInputProps>) {
+    const {
+        onTranscript,
+        className = '',
+        isListening: externalIsListening,
+        onListeningChange
+    } = props;
     const [internalIsListening, setInternalIsListening] = useState(false);
     const [isSupported, setIsSupported] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const recognitionRef = useRef<any>(null);
 
-    const isListening = typeof externalIsListening !== 'undefined' ? externalIsListening : internalIsListening;
+    const isListening = externalIsListening === undefined ? internalIsListening : externalIsListening;
 
     const handleIsListeningChange = useCallback((value: boolean) => {
-        if (typeof externalIsListening === 'undefined') {
+        if (externalIsListening === undefined) {
             setInternalIsListening(value);
         }
         onListeningChange?.(value);
     }, [externalIsListening, onListeningChange]);
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
+        if (globalThis.window !== undefined) {
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
             if (SpeechRecognition) {
                 setIsSupported(true);

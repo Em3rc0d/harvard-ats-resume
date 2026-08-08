@@ -127,21 +127,27 @@ function parseGeminiResponse(responseText: string): {
   const resumeMatch = responseText.split(/===\s*MATCHED KEYWORDS\s*===/i)[0];
   const formattedResume = resumeMatch ? resumeMatch.trim() : responseText.trim();
 
-  // Extract matched keywords
-  const keywordsMatch = /===\s*MATCHED KEYWORDS\s*===\s*([\s\S]*?)(?:===|$)/i.exec(responseText);
-  const matchedKeywordsText = keywordsMatch ? keywordsMatch[1].trim() : '';
-  const matchedKeywords = matchedKeywordsText
-    .split(',')
-    .map(k => k.trim())
-    .filter(k => k.length > 0);
+  // Extract MATCHED KEYWORDS
+  let matchedKeywords: string[] = [];
+  const keywordsParts = responseText.split(/===\s*MATCHED KEYWORDS\s*===/i);
+  if (keywordsParts.length > 1) {
+    const afterKeywords = keywordsParts[1].split(/===/)[0];
+    matchedKeywords = afterKeywords
+      .split(',')
+      .map(k => k.trim())
+      .filter(k => k.length > 0);
+  }
 
-  // Extract suggestions - handle boundary with IMPROVED RESUME
-  const suggestionsMatch = /===\s*IMPROVEMENT SUGGESTIONS\s*===\s*([\s\S]*?)(?:===\s*IMPROVED RESUME\s*===|$)/i.exec(responseText);
-  const suggestionsText = suggestionsMatch ? suggestionsMatch[1].trim() : '';
-  const suggestions = suggestionsText
-    .split('\n')
-    .map(s => s.replace(/^\d+\.\s*/, '').trim())
-    .filter(s => s.length > 0);
+  // Extract IMPROVEMENT SUGGESTIONS
+  let suggestions: string[] = [];
+  const suggestionsParts = responseText.split(/===\s*IMPROVEMENT SUGGESTIONS\s*===/i);
+  if (suggestionsParts.length > 1) {
+    const afterSuggestions = suggestionsParts[1].split(/===\s*IMPROVED RESUME\s*===/i)[0].split(/===/)[0];
+    suggestions = afterSuggestions
+      .split('\n')
+      .map(s => s.replace(/^\d+\.\s*/, '').trim())
+      .filter(s => s.length > 0);
+  }
 
   // Extract Improved Resume
   const improvedResumeMatch = responseText.split(/===\s*IMPROVED RESUME\s*===/i);

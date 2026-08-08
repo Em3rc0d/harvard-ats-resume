@@ -27,7 +27,7 @@ export default function ResumeResults({
   suggestions,
   userName,
   onStartOver,
-}: ResumeResultsProps) {
+}: Readonly<ResumeResultsProps>) {
   const { t } = useLanguage();
   const resumeRef = useRef<HTMLDivElement>(null);
   const [showWatermarkPreview, setShowWatermarkPreview] = useState(false);
@@ -44,6 +44,13 @@ export default function ResumeResults({
     if (score >= 70) return t.results.good;
     if (score >= 50) return t.results.fair;
     return t.results.needsImprovement;
+  };
+
+  // Fix 1: Extract nested ternary into a readable helper function
+  const getPreviewButtonLabel = () => {
+    if (showWatermarkPreview) return "Show Original";
+    if (improvedResume) return "Preview Optimized Version";
+    return "Preview with Suggestions";
   };
 
   const downloadPDF = () => {
@@ -136,13 +143,8 @@ export default function ResumeResults({
       <div className="no-print flex gap-4 justify-center flex-wrap pb-6 border-b border-gray-200">
         <button onClick={() => setShowWatermarkPreview(!showWatermarkPreview)} className={`px-6 py-2.5 border rounded-sm font-medium text-sm transition-colors flex items-center gap-2 ${showWatermarkPreview ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>
           <Eye className="w-4 h-4" />
-          <span>
-            {(() => {
-              if (showWatermarkPreview) return "Show Original";
-              if (improvedResume) return "Preview Optimized Version";
-              return "Preview with Suggestions";
-            })()}
-          </span>
+          {/* Fix 1 applied: use extracted helper instead of nested ternary */}
+          <span>{getPreviewButtonLabel()}</span>
         </button>
         <button onClick={downloadPDF} className="px-6 py-2.5 bg-gray-900 text-white rounded-sm hover:bg-gray-800 font-medium text-sm transition-colors shadow-sm flex items-center gap-2">
           <Download className="w-4 h-4" />
@@ -174,7 +176,11 @@ export default function ResumeResults({
             </div>
             <div className="mt-4 bg-gray-100 rounded-full h-1 overflow-hidden">
               <div
-                className={`h-full ${atsScore >= 85 ? 'bg-gray-800' : atsScore >= 70 ? 'bg-gray-600' : 'bg-gray-400'}`}
+                className={`h-full ${(() => {
+                  if (atsScore >= 85) return 'bg-gray-800';
+                  if (atsScore >= 70) return 'bg-gray-600';
+                  return 'bg-gray-400';
+                })()}`}
                 style={{ width: `${atsScore}%` }}
               />
             </div>
@@ -187,9 +193,10 @@ export default function ResumeResults({
                 {t.results.matchedKeywords}
               </h3>
               <div className="flex flex-wrap gap-2">
-                {matchedKeywords.slice(0, 15).map((keyword, index) => (
+                {matchedKeywords.slice(0, 15).map((keyword) => (
                   <span
-                    key={`matched-${keyword.replace(/\s+/g, '-')}`}
+                    // Fix 2: replaceAll ensures all spaces are replaced, not just the first
+                    key={`matched-${keyword.replaceAll(/\s+/g, '-')}`}
                     className="px-2 py-1 bg-gray-100 text-gray-700 rounded-sm text-xs font-medium border border-gray-200"
                   >
                     {keyword}
@@ -205,9 +212,10 @@ export default function ResumeResults({
                 {t.results.missingKeywords}
               </h3>
               <div className="flex flex-wrap gap-2">
-                {missingKeywords.slice(0, 15).map((keyword, index) => (
+                {missingKeywords.slice(0, 15).map((keyword) => (
                   <span
-                    key={`missing-${keyword.replace(/\s+/g, '-')}`}
+                    // Fix 2: replaceAll ensures all spaces are replaced, not just the first
+                    key={`missing-${keyword.replaceAll(/\s+/g, '-')}`}
                     className="px-2 py-1 bg-white text-gray-600 rounded-sm text-xs border border-gray-300 border-dashed"
                   >
                     {keyword}
@@ -224,7 +232,8 @@ export default function ResumeResults({
               </h3>
               <ul className="space-y-3">
                 {suggestions.map((suggestion, index) => (
-                  <li key={`suggestion-full-${suggestion.substring(0, 30).replace(/\s+/g, '-')}`} className="text-sm text-gray-700 flex gap-3 items-start">
+                  // Fix 2: replaceAll ensures all spaces in suggestion prefix are replaced
+                  <li key={`suggestion-full-${suggestion.substring(0, 30).replaceAll(/\s+/g, '-')}`} className="text-sm text-gray-700 flex gap-3 items-start">
                     <span className="text-gray-400 font-medium text-xs mt-0.5">{index + 1}.</span>
                     <span className="leading-relaxed">{suggestion}</span>
                   </li>
@@ -267,7 +276,8 @@ export default function ResumeResults({
                   <h3 className="font-bold text-lg mb-4 text-gray-500 uppercase tracking-widest">AI Improvements & Suggestions</h3>
                   <ul className="space-y-2">
                     {suggestions.map((s) => (
-                      <li key={`resume-preview-sug-${s.substring(0, 25).replace(/\s+/g, '-')}`} className="text-gray-600 text-sm flex gap-2">
+                      // Fix 2: replaceAll ensures all spaces in suggestion prefix are replaced
+                      <li key={`resume-preview-sug-${s.substring(0, 25).replaceAll(/\s+/g, '-')}`} className="text-gray-600 text-sm flex gap-2">
                         <span className="text-blue-500 font-bold">•</span>
                         {s}
                       </li>
