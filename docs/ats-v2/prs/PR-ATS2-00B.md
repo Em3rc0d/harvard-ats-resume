@@ -27,8 +27,19 @@ The following paths were verified to no longer fabricate data:
 
 ## AFTER
 
-No automatic data fabrication occurs anywhere in the resume building flow. Trust containment is officially secured. Any missing data must be explicitly populated by the user.
+All identified deterministic fabrication paths and explicit LLM
+fabrication instructions in the scoped flows were removed.
+
+This gate does not claim that a probabilistic LLM can never hallucinate.
+A stronger guarantee requires the later GroundingValidator architecture.
 
 ## Gate Status
-`G0 REPRODUCIBLE_BASELINE — PASS` (Inherited from PR-ATS2-00)
+
 `G1 TRUST_CONTAINMENT — PASS`
+
+Scope:
+- explicit metric-invention instruction removed
+- explicit project-invention instruction removed
+- CV date synthesis removed
+- certificate start-date inference removed
+- unsupported placeholders prohibited from Improved Resume

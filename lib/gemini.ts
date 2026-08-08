@@ -102,13 +102,24 @@ Soft Skills: [Comma-separated list of soft skills]
 
 === IMPROVED RESUME ===
 [Review the original resume data. Then, RE-WRITE the entire resume below.
-CRITICAL INSTRUCTION: This version MUST IMPLEMENT the structural and phrasing "IMPROVEMENT SUGGESTIONS" you listed above, BUT YOU MUST NEVER FABRICATE DATA.
-- NEVER invent metrics. If you suggested adding metrics, leave placeholders (e.g. "Increased by [X]%") or just rewrite the sentence powerfully without metrics.
-- NEVER invent projects. Only use projects explicitly provided by the user.
-- If you suggested reformatting -> Apply that new format here.
-- If you suggested consolidating education -> Group certifications to save space.
 
-This serves as the "Applied Suggestions" version so the user can see exactly what you mean without fabricated facts.]
+CRITICAL TRUTH RULE:
+
+Apply only improvements that can be implemented using facts already
+present in the supplied candidate data.
+
+Never invent or infer metrics, percentages, money, dates, team sizes,
+employers, titles, projects, certifications, technologies,
+responsibilities, ownership, scope, or achievements.
+
+If an improvement requires a factual detail that is not present,
+do not insert it and do not add a placeholder. Keep the resume wording
+fact-preserving and request the missing verified information only in
+IMPROVEMENT SUGGESTIONS.
+
+Job-description facts are requirements, not candidate facts.
+Never transfer them into the candidate resume unless independently
+supported by candidate data.]
 `;
 
   return prompt;

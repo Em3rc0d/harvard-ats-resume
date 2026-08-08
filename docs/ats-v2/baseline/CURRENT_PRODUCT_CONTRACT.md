@@ -41,10 +41,10 @@ Formatted resume text, matched/missing keyword information, suggestions, score p
 
 These are recorded only; they are intentionally not fixed in PR-ATS2-00:
 
-- ~~documentation promises no fabrication while the current AI prompt contains contradictory behavior~~ *(Fixed in PR-ATS2-00B)*
+- documentation promises no fabrication while the current AI prompt contains contradictory behavior
 - current ATS score semantics differ between README and implementation
-- ~~CV import can infer missing dates~~ *(Fixed in PR-ATS2-00B)*
-- ~~certificate flow can infer education duration~~ *(Fixed in PR-ATS2-00B)*
+- CV import can infer missing dates
+- certificate flow can infer education duration
 - multilingual UI coverage is broader than the matching engine
 - request-limit documentation and implementation are inconsistent
 - current README claims production readiness while automated QA/CI is not established

@@ -100,7 +100,7 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
                 setIsUploading(false);
                 return;
             }
-//
+
             // Map the result to our schema
             // Note: This mapping assumes the webhook returns data in a structure somewhat compatible
             // or that we can map it. Since we don't know the exact response structure,

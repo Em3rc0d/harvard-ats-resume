@@ -32,13 +32,25 @@ The ATS v1 prototype contained logic that violated strict factual reporting:
 - CV import fabricated missing dates or assumed `currentYear`.
 - Certificate parsing assumed a 4-year degree to fabricate a start date.
 
+
 ### DURING
 - Removed `INVENT` directives from `lib/gemini.ts` and replaced with strict non-fabrication rules.
 - Modified `components/CVUpload.tsx` to stop guessing missing dates.
 - Modified `components/ResumeForm.tsx` to stop inferring a 4-year degree start date.
 
 ### AFTER
-The product requires the user to provide factual missing data. No system fabrication occurs.
+All identified deterministic fabrication paths and explicit LLM
+fabrication instructions in the scoped flows were removed.
 
-Gate status:
+This gate does not claim that a probabilistic LLM can never hallucinate.
+A stronger guarantee requires the later GroundingValidator architecture.
+
+Gate wording:
 `G1 TRUST_CONTAINMENT — PASS`
+
+Scope:
+- explicit metric-invention instruction removed
+- explicit project-invention instruction removed
+- CV date synthesis removed
+- certificate start-date inference removed
+- unsupported placeholders prohibited from Improved Resume
