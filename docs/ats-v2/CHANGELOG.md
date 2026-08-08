@@ -23,3 +23,22 @@ Gate status:
 
 Next authorized iteration after G0:
 `PR-ATS2-00B — Trust Containment`.
+
+## PR-ATS2-00B — Trust Containment
+
+### BEFORE
+The ATS v1 prototype contained logic that violated strict factual reporting:
+- Gemini prompt instructed the LLM to invent metrics and projects.
+- CV import fabricated missing dates or assumed `currentYear`.
+- Certificate parsing assumed a 4-year degree to fabricate a start date.
+
+### DURING
+- Removed `INVENT` directives from `lib/gemini.ts` and replaced with strict non-fabrication rules.
+- Modified `components/CVUpload.tsx` to stop guessing missing dates.
+- Modified `components/ResumeForm.tsx` to stop inferring a 4-year degree start date.
+
+### AFTER
+The product requires the user to provide factual missing data. No system fabrication occurs.
+
+Gate status:
+`G1 TRUST_CONTAINMENT — PASS`

@@ -102,13 +102,13 @@ Soft Skills: [Comma-separated list of soft skills]
 
 === IMPROVED RESUME ===
 [Review the original resume data. Then, RE-WRITE the entire resume below.
-CRITICAL INSTRUCTION: This version MUST IMPLEMENT ALL the "IMPROVEMENT SUGGESTIONS" you listed above.
-- If you suggested adding metrics -> INVENT realistic metrics (e.g. "Increased by 20%") in the bullet points.
-- If you suggested adding a project -> INVENT a realistic project title and description based on their skills.
+CRITICAL INSTRUCTION: This version MUST IMPLEMENT the structural and phrasing "IMPROVEMENT SUGGESTIONS" you listed above, BUT YOU MUST NEVER FABRICATE DATA.
+- NEVER invent metrics. If you suggested adding metrics, leave placeholders (e.g. "Increased by [X]%") or just rewrite the sentence powerfully without metrics.
+- NEVER invent projects. Only use projects explicitly provided by the user.
 - If you suggested reformatting -> Apply that new format here.
 - If you suggested consolidating education -> Group certifications to save space.
 
-This serves as the "Applied Suggestions" version so the user can see exactly what you mean.]
+This serves as the "Applied Suggestions" version so the user can see exactly what you mean without fabricated facts.]
 `;
 
   return prompt;

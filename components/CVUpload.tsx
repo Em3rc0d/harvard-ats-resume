@@ -100,7 +100,7 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
                 setIsUploading(false);
                 return;
             }
-
+//
             // Map the result to our schema
             // Note: This mapping assumes the webhook returns data in a structure somewhat compatible
             // or that we can map it. Since we don't know the exact response structure,
@@ -117,47 +117,27 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
                 },
                 summary: result.summary || '',
                 experience: Array.isArray(result.experience) ? result.experience.map((exp: any) => {
-                    const currentYear = new Date().getFullYear().toString();
-                    let startDate = exp.startDate;
-                    let endDate = exp.endDate;
-
-                    if (!startDate && !endDate) {
-                        startDate = currentYear;
-                        endDate = currentYear;
-                    } else if (startDate && !endDate) {
-                        endDate = startDate;
-                    } else if (!startDate && endDate) {
-                        startDate = endDate;
-                    }
+                    const startDate = exp.startDate || '';
+                    const endDate = exp.endDate || '';
 
                     return {
                         company: exp.company || '',
                         role: exp.role || '',
-                        startDate: startDate || '',
-                        endDate: endDate || '',
+                        startDate: startDate,
+                        endDate: endDate,
                         description: exp.description || '',
                         technologies: Array.isArray(exp.technologies) ? exp.technologies : [],
                     };
                 }) : [],
                 education: Array.isArray(result.education) ? result.education.map((edu: any) => {
-                    const currentYear = new Date().getFullYear().toString();
-                    let startDate = edu.startDate;
-                    let endDate = edu.endDate;
-
-                    if (!startDate && !endDate) {
-                        startDate = currentYear;
-                        endDate = currentYear;
-                    } else if (startDate && !endDate) {
-                        endDate = startDate;
-                    } else if (!startDate && endDate) {
-                        startDate = endDate;
-                    }
+                    const startDate = edu.startDate || '';
+                    const endDate = edu.endDate || '';
 
                     return {
                         institution: edu.institution || '',
                         degree: edu.degree || '',
-                        startDate: startDate || '',
-                        endDate: endDate || '',
+                        startDate: startDate,
+                        endDate: endDate,
                     };
                 }) : [],
                 skills: {

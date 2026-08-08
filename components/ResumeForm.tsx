@@ -241,13 +241,11 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
       // Fix 1 applied: RegExp.exec() instead of string.match()
       const yearMatch = yearRegex.exec(cert.graduationDate);
       const year = yearMatch?.[0];
-      const gradYear = year ? Number.parseInt(year, 10) : new Date().getFullYear();
-      const startYear = gradYear - 4; // Assume 4-year degree
 
       appendEducation({
         institution: cert.institution,
         degree: cert.degree,
-        startDate: startYear.toString(),
+        startDate: '',
         endDate: year || cert.graduationDate,
       });
     });
@@ -314,12 +312,11 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
     const yearMatch = yearRegex.exec(data.graduationDate);
     const year = yearMatch?.[0];
     if (year) {
-      // Assume 4-year degree if only graduation year is found
-      const gradYear = Number.parseInt(year, 10);
       setValue(`education.${index}.endDate`, year, { shouldValidate: true });
-      setValue(`education.${index}.startDate`, (gradYear - 4).toString(), { shouldValidate: true });
+      setValue(`education.${index}.startDate`, '', { shouldValidate: true });
     } else {
       setValue(`education.${index}.endDate`, data.graduationDate, { shouldValidate: true });
+      setValue(`education.${index}.startDate`, '', { shouldValidate: true });
     }
   }, [setValue]);
 
