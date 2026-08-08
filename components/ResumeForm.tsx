@@ -611,7 +611,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
               🚀 Quick Start: Upload All Certificates at Once
             </h3>
             <p className="text-sm text-blue-700 mb-4">
-              Select multiple certificate images and we'll automatically create separate education entries for each one!
+              Select multiple certificate images and we&apos;ll automatically create separate education entries for each one!
             </p>
             <CertificateUpload
               onDataExtracted={() => { }}
@@ -1173,7 +1173,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
                       You have selected to generate a <span className="text-gray-900 font-bold">General Resume</span>.
                     </p>
                     <p className="text-sm text-gray-500">
-                      Click "Generate Resume" below to create your optimized document.
+                      Click &quot;Generate Resume&quot; below to create your optimized document.
                     </p>
                     <button
                       type="button"

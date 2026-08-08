@@ -54,3 +54,25 @@ Scope:
 - CV date synthesis removed
 - certificate start-date inference removed
 - unsupported placeholders prohibited from Improved Resume
+
+## PR-ATS2-01 — Platform Health
+
+### BEFORE
+- Package scripts were inconsistent, next was floated (`^14.2.0`), and ESLint was unconfigured.
+- No CI pipeline existed for automated PR regression testing.
+- `.env.example` lacked required webhook secrets for integrations.
+- Legacy SonarQube scripts cluttered the repository root.
+- The UI language selector and components advertised support for French, Portuguese, and Spanish despite the ATS engine primarily supporting English.
+
+### DURING
+- Updated `package.json` to lock `next` to `14.2.35`, update `@google/generative-ai`, add a `typecheck` script, and install ESLint correctly.
+- Configured GitHub Actions `.github/workflows/ci.yml`.
+- Synced `.env.example` to document `NEXT_PUBLIC_N8N_*` keys.
+- Removed legacy build tooling files (`sonar-pipeline.ps1`, `run-pipeline.bat`, `sonar-project.properties`).
+- Resolved the multilingual UI contradiction by restricting `lib/translations.ts` and the UI to English only, completely removing `LanguageSwitcher.tsx`.
+
+### AFTER
+The repository is stabilized with automated CI/QA tests, clean dependency boundaries, fully documented environment variables, and a UI language contract that strictly matches the engine.
+
+Gate wording:
+`G2 PLATFORM_HEALTH — PASS`
