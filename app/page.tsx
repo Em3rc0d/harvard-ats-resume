@@ -6,6 +6,7 @@ import ResumeResults from '@/components/ResumeResults';
 import CVUpload from '@/components/CVUpload';
 import { ResumeRequest } from '@/lib/schemas';
 import { useLanguage } from '@/components/LanguageProvider';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { Upload, FileSignature, AlertCircle } from 'lucide-react';
 
 export default function Home() {
@@ -90,6 +91,7 @@ export default function Home() {
               <span>{t.nav.ai}</span>
               <span>{t.nav.opensource}</span>
             </nav>
+            <LanguageSwitcher />
           </div>
         </div>
       </header>

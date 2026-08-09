@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { ResumeRequest } from './schemas';
 
 const getGeminiClient = () => {
@@ -6,7 +6,7 @@ const getGeminiClient = () => {
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not configured');
   }
-  return new GoogleGenerativeAI(apiKey);
+  return new GoogleGenAI({ apiKey });
 };
 
 // System prompt as specified in requirements
@@ -193,15 +193,6 @@ export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
 }> {
   try {
     const genAI = getGeminiClient();
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 8192,
-      },
-    });
 
     // Construct full prompt
     const fullPrompt = `${SYSTEM_PROMPT}\n\n${constructUserPrompt(data)}`;
@@ -212,12 +203,20 @@ export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
     });
 
     const result = await Promise.race([
-      model.generateContent(fullPrompt),
+      genAI.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: fullPrompt,
+        config: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 8192,
+        },
+      }),
       timeoutPromise,
     ]);
 
-    const response = await result.response;
-    const text = response.text();
+    const text = result.text || '';
 
     // Parse the response
     const parsed = parseGeminiResponse(text);

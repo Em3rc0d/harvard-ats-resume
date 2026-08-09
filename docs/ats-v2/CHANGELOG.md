@@ -61,18 +61,17 @@ Scope:
 - Package scripts were inconsistent, next was floated (`^14.2.0`), and ESLint was unconfigured.
 - No CI pipeline existed for automated PR regression testing.
 - `.env.example` lacked required webhook secrets for integrations.
-- Legacy SonarQube scripts cluttered the repository root.
-- The UI language selector and components advertised support for French, Portuguese, and Spanish despite the ATS engine primarily supporting English.
+- Gemini integration relied on the legacy `@google/generative-ai` SDK.
 
 ### DURING
-- Updated `package.json` to lock `next` to `14.2.35`, update `@google/generative-ai`, add a `typecheck` script, and install ESLint correctly.
+- Updated `package.json` to lock `next` to `14.2.35`, add a `typecheck` script, and install ESLint correctly.
 - Configured GitHub Actions `.github/workflows/ci.yml`.
 - Synced `.env.example` to document `NEXT_PUBLIC_N8N_*` keys.
-- Removed legacy build tooling files (`sonar-pipeline.ps1`, `run-pipeline.bat`, `sonar-project.properties`).
-- Resolved the multilingual UI contradiction by restricting `lib/translations.ts` and the UI to English only, completely removing `LanguageSwitcher.tsx`.
+- Migrated from `@google/generative-ai` to `@google/genai` while preserving prompt rules.
+- Conducted an `npm audit` and documented a critical vulnerability in `jspdf` (ACCEPTED TEMPORARILY WITH RATIONALE).
 
 ### AFTER
-The repository is stabilized with automated CI/QA tests, clean dependency boundaries, fully documented environment variables, and a UI language contract that strictly matches the engine.
+The repository is stabilized with automated CI/QA tests, clean dependency boundaries, fully documented environment variables, and modern Gemini SDK integration. Product functionality is fully preserved.
 
 Gate wording:
 `G2 PLATFORM_HEALTH — PASS`

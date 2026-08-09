@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { translations } from '@/lib/translations';
 
-type Language = 'en';
+type Language = 'en' | 'es' | 'fr' | 'pt';
 type Translations = typeof translations.en;
 
 interface LanguageContextType {
@@ -21,7 +21,7 @@ export function LanguageProvider({ children }: Readonly<{ children: ReactNode }>
     useEffect(() => {
         // Load saved language from localStorage if available
         const saved = localStorage.getItem('language') as Language;
-        if (saved && ['en'].includes(saved)) {
+        if (saved && ['en', 'es', 'fr', 'pt'].includes(saved)) {
             setLanguage(saved);
         }
     }, []);
