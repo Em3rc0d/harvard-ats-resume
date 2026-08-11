@@ -21,6 +21,7 @@
     "tests/ats2/career-vault.test.ts",
     "tests/ats2/resume-provenance-identity.test.ts",
     "tests/ats2/product-evaluation.test.ts",
+    "tests/ats2/explainability-presenter.test.ts",
     "lib/domain/**/*.ts",
     "lib/application/import/**/*.ts",
     "lib/application/legacy/LegacyResumeAdapter.ts",
