@@ -9,6 +9,12 @@ import { validateGeneratedResumeGrounding } from '@/lib/application/grounding/Gr
 import { evaluateGeneratedResumeSemanticGrounding } from '@/lib/application/grounding/SemanticEntailmentEvaluator';
 import { analyzeJobDescription } from '@/lib/application/job/JobIntelligenceEngine';
 import { matchJobToCandidate } from '@/lib/application/matching/JobMatchEngine';
+import { composeApprovedResumeVersion } from '@/lib/application/resume/ResumeCompositionService';
+import {
+  GEMINI_RESUME_CONTRACT_VERSION,
+  GEMINI_RESUME_MODEL,
+  GEMINI_RESUME_PROVIDER,
+} from '@/lib/infrastructure/ai/GeminiResumeProvider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -193,6 +199,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Layer 3: runtime materialization. Only output that passed both grounding
+    // gates may become a ResumeVersion. Every material generated claim must be
+    // linked back to existing candidate assertions through a complete manifest.
+    let resumeComposition;
+    try {
+      resumeComposition = composeApprovedResumeVersion({
+        formattedResume: geminiResult.formattedResume,
+        candidateProfileId: truthContext.candidateProfile.id,
+        assertions: truthContext.assertions,
+        targetedJobDescriptionId: jobIntelligence?.jobDescription.id,
+        targetJobDescription: jobIntelligence?.jobDescription.sourceText,
+        matchReportId: jobMatch?.report.id,
+        generation: {
+          provider: GEMINI_RESUME_PROVIDER,
+          model: GEMINI_RESUME_MODEL,
+          contractVersion: GEMINI_RESUME_CONTRACT_VERSION,
+        },
+        createdAt: capturedAt,
+      });
+    } catch (compositionError) {
+      console.error('Resume composition traceability error:', compositionError);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'ATS v2 approved the generated wording but could not establish complete claim provenance. No resume version was emitted.',
+          composition: {
+            status: 'UNTRACEABLE',
+          },
+        },
+        {
+          status: 422,
+          headers: {
+            ...rateLimitHeaders,
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        }
+      );
+    }
+
     const allSkills = [
       ...sanitizedData.skills.hardSkills,
       ...sanitizedData.skills.softSkills,
@@ -244,6 +289,10 @@ export async function POST(request: NextRequest) {
           missingKeywords: atsScoreResult.missingKeywords,
           suggestions: allSuggestions.slice(0, 10),
           jobMatch: explainableJobMatch,
+          resumeVersion: resumeComposition.version,
+          resumeManifest: resumeComposition.manifest,
+          resumeClaims: resumeComposition.claims,
+          resumePersistence: resumeComposition.persistence,
         },
       },
       {

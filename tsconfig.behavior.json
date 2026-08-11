@@ -17,6 +17,7 @@
     "tests/ats2/behavior.test.ts",
     "tests/ats2/semantic-entailment.test.ts",
     "tests/ats2/match-benchmark.test.ts",
+    "tests/ats2/resume-versioning.test.ts",
     "lib/domain/**/*.ts",
     "lib/application/import/**/*.ts",
     "lib/application/legacy/LegacyResumeAdapter.ts",
@@ -24,6 +25,7 @@
     "lib/application/grounding/SemanticEntailmentEvaluator.ts",
     "lib/application/job/JobIntelligenceEngine.ts",
     "lib/application/matching/JobMatchEngine.ts",
+    "lib/application/resume/ResumeCompositionService.ts",
     "lib/schemas.ts"
   ]
 }

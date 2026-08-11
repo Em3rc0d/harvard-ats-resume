@@ -274,6 +274,83 @@ Resume import is now a server-side provenance boundary. The system can distingui
 Gate wording:
 `G8 TRUSTED_IMPORT — PASS (SOURCE PROVENANCE), INDEPENDENT VERIFICATION NOT CLAIMED`
 
+## PR-ATS2-09 — Semantic Grounding & Entailment Evaluation
+
+### BEFORE
+Deterministic grounding protected explicit facts, but wording could still preserve nouns/entities while escalating responsibility, ownership, design authority, architecture authority, scope, or impact.
+
+### DURING
+- Added `SemanticEntailmentEvaluator` after deterministic grounding and before scoring/output.
+- Evaluated high-risk wording only against existing candidate `CareerAssertion`s.
+- Added EN/ES adversarial coverage for responsibility, ownership, design, architecture, scope/scale, and impact-strength escalation.
+- Preserved deterministic grounding as the authoritative hard blocker.
+- Blocked suspect semantic inflation with HTTP 422 and candidate-confirmation guidance.
+
+### AFTER
+High-risk semantic drift has an executable conservative guard. This does not claim universal natural-language entailment or zero hallucinations.
+
+Gate wording:
+`G9 SEMANTIC_GROUNDING_EVALUATED — PASS (HIGH-RISK SEMANTIC DRIFT), UNIVERSAL ENTAILMENT NOT CLAIMED`
+
+Merged PR: `#10`.
+
+## PR-ATS2-10 — Job Match Benchmarking & Calibration
+
+### BEFORE
+Job Match v2 was functional and explainable, but its reliability had not been measured against an explicit labeled benchmark.
+
+### DURING
+- Built an initial 32-case EN controlled corpus and measured a 70% exact-status baseline with two false MATCH outcomes and 17 total mismatches.
+- Corrected only failures demonstrated by the benchmark: short-skill extraction, skill-tenure double counting, responsibility-authority false positives, degree-level matching, language/location matching, and related scoring distortion.
+- Expanded the corpus to 42 cases with 10 Spanish cases.
+- Corrected the Spanish `ingeniería` ambiguity discovered by the expanded corpus.
+- Preserved the distinction between controlled engineering calibration and real-world statistical validation.
+
+### AFTER
+The final controlled corpus produced 42/42 correct cases, 40/40 correct status checks, zero false MATCH, and zero false GAP within the labeled EN/ES corpus.
+
+Gate wording:
+`G10 CONTROLLED_MATCH_CALIBRATION — PASS (42-CASE EN/ES LABELED CORPUS), REAL-WORLD CALIBRATION NOT YET CLAIMED`
+
+Merged PR: `#11`.
+
+## PR-ATS2-11 — Runtime Resume Composition & Versioning
+
+### BEFORE
+`ResumeVersion` and `ResumeManifest` existed as domain structures, but successful generated resume text was not materialized into them in the production request path.
+
+### DURING
+- Added `ResumeCompositionService` after deterministic and semantic grounding.
+- Bound exact approved rendered resume text to SHA-256 content identity.
+- Bound targeted versions to a SHA-256 snapshot of the target Job Description.
+- Added deterministic version identity from content + target snapshot.
+- Added generation provider/model/contract metadata and MatchReport reference to `ResumeVersion`.
+- Registered material generated lines as `ResumeClaim`s only when they can be traced to existing candidate assertions.
+- Preserved multi-assertion provenance through `ResumeManifest` and existing `INV-006` validation.
+- Made untraceable approved wording fail closed with HTTP 422 rather than emitting a version.
+- Exposed `resumeVersion`, `resumeManifest`, `resumeClaims`, and explicit `EPHEMERAL_RUNTIME` persistence status in successful API responses.
+- Added six dedicated versioning regressions, including deterministic identity, target-sensitive identity, multi-assertion provenance, no-contact-line summary preservation, and untraceable-wording refusal.
+
+### VALIDATION
+The first CI attempt exposed an old roundtrip fixture that did not satisfy the strengthened `ResumeVersion` contract. The fixture was migrated; the production contract was not weakened.
+
+A post-green review then hardened presentation-line detection and added a regression for resumes without a contact line.
+
+Final executable validation on head `7d4d918f820ee73a51fb4185f2bb590b43c31bcb`, GitHub Actions run `31536867968`:
+- `npm ci` PASS
+- lint PASS
+- typecheck PASS
+- behavior tests PASS (`32/32`)
+- G10 benchmark remained PASS (`42/42` controlled cases)
+- build PASS
+- Vercel preview READY
+
+### AFTER
+A successful generated resume is now a content-addressed runtime `ResumeVersion` with complete generated-claim provenance back to candidate assertions. Durable persistence is deliberately not claimed.
+
+Gate wording:
+`G11 RUNTIME_RESUME_VERSIONING — PASS (CONTENT-ADDRESSED + FULL CLAIM PROVENANCE), PERSISTENCE NOT YET CLAIMED`
+
 ## Current Migration Position
 
 ```text
@@ -284,12 +361,16 @@ G3  DOMAIN_FOUNDATION              PASS
 G4  CANDIDATE_TRUTH_BOUNDARY       PASS
 G5  STRUCTURED_AI                  PASS
 G6  GROUNDING_FOUNDATION           PASS + AUDIT HARDENED
-    SEMANTIC_ENTAILMENT            NOT YET
 G7  JOB_MATCH_FOUNDATION           PASS + AUDIT HARDENED
-    CALIBRATED_MATCH_RELIABILITY   NOT YET
 G7H AUDIT_HARDENING                PASS
 G8  TRUSTED_IMPORT                 PASS / SOURCE PROVENANCE
     INDEPENDENT_VERIFICATION       NOT CLAIMED
+G9  SEMANTIC_GROUNDING_EVALUATED   PASS / HIGH-RISK SEMANTIC DRIFT
+    UNIVERSAL_ENTAILMENT           NOT CLAIMED
+G10 CONTROLLED_MATCH_CALIBRATION   PASS / 42-CASE EN/ES CORPUS
+    REAL_WORLD_CALIBRATION         NOT CLAIMED
+G11 RUNTIME_RESUME_VERSIONING      PASS / CONTENT-ADDRESSED PROVENANCE
+    DURABLE_PERSISTENCE            NOT YET
 ```
 
-The next architectural priority is semantic grounding evaluation/entailment, followed by match benchmarking/calibration and then runtime resume composition/versioning. Privacy/security boundaries, persistence/Career Vault, explainability UX, observability, and pilot validation remain downstream work. The legacy keyword score remains intentionally visible until the product UI is migrated to separate Resume Quality, Parseability, and Job Match concepts.
+The next architectural priority is durable persistence / Career Vault, followed by explainability UX and legacy-score migration, privacy/security hardening, observability, real-world calibration, and pilot validation. The legacy keyword `atsScore` remains intentionally visible until the product UI is migrated to separate Resume Quality, Parseability, and Job Match concepts.
