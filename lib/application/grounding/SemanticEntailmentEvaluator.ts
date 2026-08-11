@@ -107,8 +107,8 @@ const ARCHITECTURE_TERMS = new Set([
 ].map(normalizeToken));
 
 const SCOPE_QUALIFIERS = new Set([
-  'enterprise-wide', 'enterprise', 'company-wide', 'organization-wide', 'global',
-  'large-scale', 'large', 'scalable', 'distributed', 'mission-critical',
+  'enterprise-wide', 'enterprise-scale', 'enterprise', 'company-wide', 'organization-wide',
+  'global', 'large-scale', 'large', 'scalable', 'distributed', 'mission-critical',
   'production-grade', 'high-performance', 'high-availability', 'fault-tolerant',
   'cross-functional', 'end-to-end', 'strategic',
   'empresarial', 'corporativo', 'global', 'gran-escala', 'escalable', 'distribuido',
