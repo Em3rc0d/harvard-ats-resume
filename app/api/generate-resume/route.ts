@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resumeRequestSchema } from '@/lib/schemas';
+import { resumeImportContextSchema } from '@/lib/application/import/ResumeImportProvider';
 import { generateResumeWithGemini, sanitizeResumeData } from '@/lib/gemini';
 import { extractKeywords, calculateATSScore, generateSuggestions } from '@/lib/ats-scoring';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
@@ -11,10 +12,16 @@ import { matchJobToCandidate } from '@/lib/application/matching/JobMatchEngine';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const resumeGenerationInputSchema = resumeRequestSchema.extend({
+  sourceContext: resumeImportContextSchema.optional(),
+});
+
 /**
  * POST /api/generate-resume
  *
- * Main endpoint for generating ATS-optimized Harvard-style resumes
+ * Main endpoint for generating ATS-optimized Harvard-style resumes.
+ * Import provenance is accepted separately from candidate facts and is never
+ * forwarded to the LLM or treated as Job Description content.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validationResult = resumeRequestSchema.safeParse(body);
+    const validationResult = resumeGenerationInputSchema.safeParse(body);
 
     if (!validationResult.success) {
       return NextResponse.json(
@@ -56,25 +63,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = validationResult.data;
-    const sanitizedData = sanitizeResumeData(data);
+    const { sourceContext, ...resumeData } = validationResult.data;
+    const sanitizedData = sanitizeResumeData(resumeData);
     const requestProjectionKey = `request:${Date.now()}`;
     const capturedAt = new Date().toISOString();
-    const sourceOrigin = request.headers.get('x-ats-candidate-source');
-    const sourceKind = sourceOrigin === 'resume_upload' ? 'RESUME_UPLOAD' : 'CANDIDATE_PROVIDED';
-    const sourceLabel = sourceKind === 'RESUME_UPLOAD'
-      ? 'Resume upload extracted and reviewed by candidate'
-      : 'Manual resume form reviewed by candidate';
 
     // ATS v2 candidate-truth boundary. Job requirements are structurally
-    // excluded from evidence/claims by LegacyResumeAdapter. Legacy form data
-    // is candidate-asserted, not promoted to independently VERIFIED_FACT.
+    // excluded from evidence/claims. Imported source provenance is consumed
+    // only by the truth projection and is never sent to Gemini.
     const truthContext = buildLegacyTruthContext(sanitizedData, {
       projectionKey: requestProjectionKey,
       capturedAt,
-      sourceKind,
-      sourceLabel,
       truthClass: 'CANDIDATE_ASSERTED',
+      sourceContext,
     });
 
     if (truthContext.claims.length === 0) {
@@ -108,8 +109,8 @@ export async function POST(request: NextRequest) {
 
     // Legacy keyword analysis remains temporarily for UI compatibility while
     // JobMatch v2 is exposed as a separate explainable report.
-    const jobKeywords = data.jobDescription
-      ? extractKeywords(data.jobDescription)
+    const jobKeywords = sanitizedData.jobDescription
+      ? extractKeywords(sanitizedData.jobDescription)
       : [];
 
     const geminiResult = await generateResumeWithGemini(sanitizedData);
@@ -157,8 +158,8 @@ export async function POST(request: NextRequest) {
     }
 
     const allSkills = [
-      ...data.skills.hardSkills,
-      ...data.skills.softSkills,
+      ...sanitizedData.skills.hardSkills,
+      ...sanitizedData.skills.softSkills,
     ];
 
     const atsScoreResult = calculateATSScore(
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest) {
     const suggestions = generateSuggestions(
       atsScoreResult.atsScore,
       atsScoreResult.missingKeywords,
-      data.experience
+      sanitizedData.experience
     );
 
     const allSuggestions = [
