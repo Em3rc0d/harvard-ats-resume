@@ -12,6 +12,8 @@ ATS v2 had trust-containment and platform-health gates, but no explicit domain l
 - Separated `CareerAssertion` from `ResumeClaim` so resume wording links back to evidence-backed assertions.
 - Added `ResumeVersion` and `ResumeManifest` provenance structures.
 - Added deterministic validators and a roundtrip fixture.
+- Hardened `INV-006` after review so `ResumeManifest` must preserve the complete assertion provenance of each referenced `ResumeClaim`, not merely a valid subset.
+- Added a negative regression fixture proving that a two-assertion claim cannot be represented by a one-assertion manifest entry.
 
 ## AFTER
 
@@ -24,7 +26,7 @@ The codebase now has a modular-monolith domain foundation for ATS v2. Product be
 - `INV-003`: `ResumeClaim` must reference at least one `CareerAssertion`.
 - `INV-004`: `JobRequirement` derives from `JobDescription`, never `CandidateProfile`.
 - `INV-005`: `RequirementMatch` connects existing `JobRequirement` and `CareerAssertion` identifiers but cannot create candidate facts.
-- `INV-006`: `ResumeManifest` preserves provenance from each `ResumeClaim` to its `CareerAssertion` identifiers.
+- `INV-006`: `ResumeManifest` preserves the complete provenance from each `ResumeClaim` to all of its `CareerAssertion` identifiers.
 
 ## VERIFICATION
 
@@ -53,6 +55,16 @@ It validates that the assertion statement survives the provenance roundtrip and 
 MATCH INFERENCE != CANDIDATE FACT
 ```
 
+It also contains an explicit negative regression case:
+
+```text
+ResumeClaim provenance:    [A, B]
+ResumeManifest provenance: [A]
+Expected:                  INV-006 failure
+```
+
+This prevents partial provenance from being silently accepted.
+
 ## DEBT
 
 - No persistence adapters exist yet.
@@ -71,9 +83,10 @@ PASS requires:
 - assertion provenance represented
 - requirement match represented
 - resume claim linked to assertion
-- manifest provenance represented
+- manifest provenance represented completely
 - domain invariants validated
-- roundtrip fixture validated
+- positive roundtrip fixture validated
+- partial-provenance regression rejected
 - lint PASS
 - typecheck PASS
 - build PASS
