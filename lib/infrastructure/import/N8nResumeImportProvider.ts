@@ -253,9 +253,13 @@ export class N8nResumeImportProvider implements ResumeImportProvider {
 
     try {
       const formData = new FormData();
+      const blobBytes = file.bytes.buffer.slice(
+        file.bytes.byteOffset,
+        file.bytes.byteOffset + file.bytes.byteLength,
+      ) as ArrayBuffer;
       formData.append(
         'file',
-        new Blob([file.bytes], { type: file.mimeType }),
+        new Blob([blobBytes], { type: file.mimeType }),
         file.originalFileName,
       );
 
