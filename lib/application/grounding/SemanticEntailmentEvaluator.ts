@@ -97,7 +97,7 @@ const OWNERSHIP_TERMS = new Set([
 ].map(normalizeToken));
 
 const DESIGN_TERMS = new Set([
-  'designed', 'design', 'modeled', 'modelled', 'modeled', 'designed',
+  'designed', 'design', 'modeled', 'modelled',
   'diseñe', 'disene', 'diseñar', 'disenar', 'modele', 'modelar',
 ].map(normalizeToken));
 
@@ -148,10 +148,7 @@ function tokens(value: string): Set<string> {
 }
 
 function hasAnyToken(valueTokens: ReadonlySet<string>, terms: ReadonlySet<string>): boolean {
-  for (const term of terms) {
-    if (valueTokens.has(term)) return true;
-  }
-  return false;
+  return Array.from(terms).some((term) => valueTokens.has(term));
 }
 
 function termsPresent(valueTokens: ReadonlySet<string>, terms: ReadonlySet<string>): string[] {
@@ -167,7 +164,6 @@ function isNarrativeClaim(line: string): boolean {
   if (!normalized || SECTION_HEADINGS.has(normalized)) return false;
   if (trimmed === trimmed.toUpperCase() && /[A-ZÀ-Ý]/.test(trimmed)) return false;
 
-  // Contact/header and compact label-value lines are handled by deterministic grounding.
   if (/^[^:]{1,24}:\s*\S/.test(trimmed) && !/^[-•*]/.test(trimmed)) return false;
   return true;
 }
@@ -378,9 +374,7 @@ export function evaluateGeneratedResumeSemanticGrounding(
 
   const status: SemanticGroundingStatus = issues.length === 0
     ? 'APPROVED'
-    : issues.some((issue) => issue.verdict === 'NOT_ENTAILED')
-      ? 'NEEDS_USER_CONFIRMATION'
-      : 'NEEDS_USER_CONFIRMATION';
+    : 'NEEDS_USER_CONFIRMATION';
 
   return {
     status,
