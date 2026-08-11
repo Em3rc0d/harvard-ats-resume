@@ -48,16 +48,19 @@ export function validateResumeManifest(
       return false;
     }
 
+    const manifestAssertionIds = new Set(entry.assertionIds);
+
     return (
       entry.assertionIds.length === 0 ||
-      entry.assertionIds.some((assertionId) => !claim.assertionIds.includes(assertionId))
+      entry.assertionIds.length !== claim.assertionIds.length ||
+      claim.assertionIds.some((assertionId) => !manifestAssertionIds.has(assertionId))
     );
   });
 
   if (mismatchedProvenance) {
     return fail(
       'INV-006',
-      `ResumeManifest must preserve provenance from each ResumeClaim to assertion(s): ${mismatchedProvenance.claimId}.`,
+      `ResumeManifest must preserve the complete provenance from each ResumeClaim to its CareerAssertions: ${mismatchedProvenance.claimId}.`,
     );
   }
 
