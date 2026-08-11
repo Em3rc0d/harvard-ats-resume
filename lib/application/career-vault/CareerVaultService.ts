@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   validateResumeManifest,
   type CandidateProfile,
@@ -19,6 +20,7 @@ import {
   type CareerVaultSnapshot,
   type PersistedJobAnalysis,
   type PersistedMatchEvaluation,
+  type PersistedResumeDocument,
 } from './CareerVaultRepository';
 
 export class CareerVaultIntegrityError extends Error {
@@ -37,6 +39,7 @@ export interface PersistCareerVaultInput {
   readonly jobIntelligence?: JobIntelligenceResult;
   readonly jobMatch?: JobMatchResult;
   readonly resumeComposition: RuntimeResumeComposition;
+  readonly renderedResume: string;
   readonly persistedAt?: string;
 }
 
@@ -47,6 +50,10 @@ const TEMPORAL_KEYS = new Set([
   'generatedAt',
   'updatedAt',
 ]);
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
+}
 
 function semanticValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(semanticValue);
@@ -126,6 +133,7 @@ export function validateCareerVaultSnapshot(snapshot: CareerVaultSnapshot): void
   requireUnique(snapshot.resumeClaims.map((item) => item.id), 'ResumeClaim collection');
   requireUnique(snapshot.resumeVersions.map((item) => item.id), 'ResumeVersion collection');
   requireUnique(snapshot.resumeManifests.map((item) => item.id), 'ResumeManifest collection');
+  requireUnique(snapshot.resumeDocuments.map((item) => item.resumeVersionId), 'Resume document collection');
 
   const sourceIds = new Set(snapshot.sources.map((item) => item.id));
   const evidenceIds = new Set(snapshot.evidence.map((item) => item.id));
@@ -135,6 +143,7 @@ export function validateCareerVaultSnapshot(snapshot: CareerVaultSnapshot): void
   const matchReportIds = new Set(snapshot.matchReports.map((item) => item.id));
   const claimIds = new Set(snapshot.resumeClaims.map((item) => item.id));
   const versionIds = new Set(snapshot.resumeVersions.map((item) => item.id));
+  const versionsById = new Map(snapshot.resumeVersions.map((item) => [item.id, item]));
   const claimsById = new Map(snapshot.resumeClaims.map((item) => [item.id, item]));
 
   snapshot.sources.forEach((source) => {
@@ -249,6 +258,28 @@ export function validateCareerVaultSnapshot(snapshot: CareerVaultSnapshot): void
       );
     }
   });
+
+  snapshot.resumeDocuments.forEach((document) => {
+    const version = versionsById.get(document.resumeVersionId);
+    requireReference(
+      Boolean(version),
+      `Persisted resume document references unknown ResumeVersion ${document.resumeVersionId}.`,
+    );
+    const calculatedHash = sha256(document.content);
+    requireReference(
+      calculatedHash === document.contentSha256,
+      `Persisted resume document ${document.resumeVersionId} content hash does not match its content.`,
+    );
+    requireReference(
+      document.contentSha256 === version!.contentSha256,
+      `Persisted resume document ${document.resumeVersionId} does not match ResumeVersion contentSha256.`,
+    );
+  });
+
+  snapshot.resumeVersions.forEach((version) => requireReference(
+    snapshot.resumeDocuments.some((document) => document.resumeVersionId === version.id),
+    `ResumeVersion ${version.id} has no durable rendered resume document.`,
+  ));
 }
 
 function buildSnapshot(
@@ -258,6 +289,13 @@ function buildSnapshot(
 ): CareerVaultSnapshot {
   if (existing && existing.candidate.id !== input.candidate.id) {
     throw new CareerVaultIntegrityError('Cannot merge different candidates into one Career Vault.');
+  }
+
+  const renderedSha256 = sha256(input.renderedResume);
+  if (renderedSha256 !== input.resumeComposition.version.contentSha256) {
+    throw new CareerVaultIntegrityError(
+      'Rendered resume content does not match the ResumeVersion contentSha256.',
+    );
   }
 
   const jobAnalyses: PersistedJobAnalysis[] = input.jobIntelligence
@@ -275,6 +313,12 @@ function buildSnapshot(
         engineVersion: JOB_MATCH_PERSISTENCE_VERSION,
       }]
     : [];
+  const resumeDocuments: PersistedResumeDocument[] = [{
+    resumeVersionId: input.resumeComposition.version.id,
+    mediaType: 'text/plain',
+    content: input.renderedResume,
+    contentSha256: renderedSha256,
+  }];
 
   const snapshot: CareerVaultSnapshot = {
     schemaVersion: CAREER_VAULT_SCHEMA_VERSION,
@@ -332,6 +376,12 @@ function buildSnapshot(
       (item) => item.id,
       'ResumeManifest',
     ),
+    resumeDocuments: mergeImmutableByKey(
+      existing?.resumeDocuments ?? [],
+      resumeDocuments,
+      (item) => item.resumeVersionId,
+      'Rendered resume document',
+    ),
     revision: (existing?.revision ?? 0) + 1,
     createdAt: existing?.createdAt ?? persistedAt,
     updatedAt: persistedAt,
@@ -374,6 +424,10 @@ export async function persistCareerVault(
   requireReference(
     reloaded.resumeManifests.some((item) => item.id === input.resumeComposition.manifest.id),
     'Career Vault verification could not find the persisted ResumeManifest.',
+  );
+  requireReference(
+    reloaded.resumeDocuments.some((item) => item.resumeVersionId === input.resumeComposition.version.id),
+    'Career Vault verification could not find the persisted rendered resume document.',
   );
 
   return reloaded;
