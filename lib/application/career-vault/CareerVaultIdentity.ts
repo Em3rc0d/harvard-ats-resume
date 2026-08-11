@@ -11,10 +11,7 @@ function sha256(value: string): string {
 }
 
 function stableValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(stableValue);
-  }
-
+  if (Array.isArray(value)) return value.map(stableValue);
   if (value && typeof value === 'object') {
     return Object.keys(value as Record<string, unknown>)
       .sort()
@@ -23,7 +20,6 @@ function stableValue(value: unknown): unknown {
         return result;
       }, {});
   }
-
   return value;
 }
 
@@ -41,24 +37,32 @@ export interface CareerVaultIdentity {
 }
 
 /**
- * Establishes stable server-side identities without placing raw email or Job
- * Description content into domain identifiers or Redis keys.
+ * Establishes stable server-side identities from an opaque browser-held vault
+ * capability. Raw capability values, email, and Job Description content never
+ * appear in domain IDs or Redis keys.
  *
- * Email is used only as the best available logical-candidate key in the legacy
- * unauthenticated product. It is NOT an authentication mechanism; a later auth
- * boundary must replace/alias this identity without weakening provenance.
+ * This capability is intentionally narrower than authentication: possession is
+ * enough to continue writing the same vault, but there is still no public vault
+ * read API and no identity/account claim in G12. A later auth gate must replace
+ * or bind this capability to an authenticated principal.
  */
 export function deriveCareerVaultIdentity(
   data: ResumeRequest,
+  careerVaultId: string,
   sourceContext?: ResumeImportContext,
 ): CareerVaultIdentity {
-  const normalizedEmail = data.personalInfo.email.trim().toLowerCase();
-  const candidateIdentitySha = sha256(normalizedEmail);
+  const normalizedVaultId = careerVaultId.trim().toLowerCase();
+  if (!normalizedVaultId) {
+    throw new Error('Career Vault identity requires an opaque careerVaultId.');
+  }
+
+  const vaultIdentitySha = sha256(normalizedVaultId);
   const candidateProfileId = domainId(
     'CandidateProfile',
-    `candidate:email-sha256:${candidateIdentitySha.slice(0, 32)}`,
+    `candidate:vault-sha256:${vaultIdentitySha.slice(0, 32)}`,
   );
 
+  const normalizedEmail = data.personalInfo.email.trim().toLowerCase();
   const { jobDescription: _jobDescription, ...candidateData } = data;
   const canonicalCandidateData = {
     ...candidateData,
