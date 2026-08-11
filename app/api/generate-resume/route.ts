@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { resumeRequestSchema } from '@/lib/schemas';
 import { resumeImportContextSchema } from '@/lib/application/import/ResumeImportProvider';
 import { generateResumeWithGemini, sanitizeResumeData } from '@/lib/gemini';
@@ -10,6 +11,13 @@ import { evaluateGeneratedResumeSemanticGrounding } from '@/lib/application/grou
 import { analyzeJobDescription } from '@/lib/application/job/JobIntelligenceEngine';
 import { matchJobToCandidate } from '@/lib/application/matching/JobMatchEngine';
 import { composeApprovedResumeVersion } from '@/lib/application/resume/ResumeCompositionService';
+import { deriveCareerVaultIdentity } from '@/lib/application/career-vault/CareerVaultIdentity';
+import {
+  CareerVaultIntegrityError,
+  persistCareerVault,
+} from '@/lib/application/career-vault/CareerVaultService';
+import { CareerVaultUnavailableError } from '@/lib/application/career-vault/CareerVaultRepository';
+import { createCareerVaultRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashCareerVaultRepository';
 import {
   GEMINI_RESUME_CONTRACT_VERSION,
   GEMINI_RESUME_MODEL,
@@ -21,6 +29,7 @@ export const dynamic = 'force-dynamic';
 
 const resumeGenerationInputSchema = resumeRequestSchema.extend({
   sourceContext: resumeImportContextSchema.optional(),
+  careerVaultId: z.string().uuid('Career Vault identity must be an opaque UUID capability.'),
 });
 
 /**
@@ -70,16 +79,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { sourceContext, ...resumeData } = validationResult.data;
+    const { sourceContext, careerVaultId, ...resumeData } = validationResult.data;
     const sanitizedData = sanitizeResumeData(resumeData);
-    const requestProjectionKey = `request:${Date.now()}`;
     const capturedAt = new Date().toISOString();
+    const vaultIdentity = deriveCareerVaultIdentity(sanitizedData, careerVaultId, sourceContext);
 
-    // ATS v2 candidate-truth boundary. Job requirements are structurally
-    // excluded from evidence/claims. Imported source provenance is consumed
-    // only by the truth projection and is never sent to Gemini.
+    // G12 requires durable persistence. Unlike rate limiting, Career Vault must
+    // never silently fall back to process memory because a successful response
+    // is now a durability claim.
+    let careerVaultRepository;
+    try {
+      careerVaultRepository = createCareerVaultRepositoryFromEnv();
+    } catch (storageError) {
+      if (storageError instanceof CareerVaultUnavailableError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Career Vault storage is not configured. Resume generation is unavailable because ATS v2 cannot make a false durability claim.',
+            persistence: { status: 'UNAVAILABLE' },
+          },
+          {
+            status: 503,
+            headers: {
+              ...rateLimitHeaders,
+              'Cache-Control': 'no-store, max-age=0',
+            },
+          }
+        );
+      }
+      throw storageError;
+    }
+
+    // ATS v2 candidate-truth boundary. Candidate identity comes from an opaque
+    // browser-held capability; truth-snapshot identity comes from candidate data.
+    // Raw vault capability, email, and Job Description content never enter IDs.
     const truthContext = buildLegacyTruthContext(sanitizedData, {
-      projectionKey: requestProjectionKey,
+      projectionKey: vaultIdentity.candidateProjectionKey,
+      candidateProfileId: vaultIdentity.candidateProfileId,
       capturedAt,
       truthClass: 'CANDIDATE_ASSERTED',
       sourceContext,
@@ -98,18 +134,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Job truth is analyzed independently from candidate truth. The matching
-    // engine can only connect existing JobRequirements to CareerAssertions.
+    // Job truth receives its own stable source/engine-version identity, separate
+    // from candidate truth. The matching engine only connects existing domain IDs.
     const jobIntelligence = sanitizedData.jobDescription?.trim()
       ? analyzeJobDescription(sanitizedData.jobDescription, {
-          projectionKey: requestProjectionKey,
+          projectionKey: vaultIdentity.jobProjectionKey!,
           capturedAt,
         })
       : undefined;
 
     const jobMatch = jobIntelligence && jobIntelligence.requirements.length > 0
       ? matchJobToCandidate(jobIntelligence, truthContext.assertions, {
-          projectionKey: requestProjectionKey,
+          projectionKey: vaultIdentity.matchProjectionKey!,
           generatedAt: capturedAt,
         })
       : undefined;
@@ -279,6 +315,44 @@ export async function POST(request: NextRequest) {
         }
       : undefined;
 
+    // Layer 4: durable persistence. The full graph is written atomically as one
+    // Career Vault snapshot and reloaded/validated before an HTTP 200 can exist.
+    let careerVault;
+    try {
+      careerVault = await persistCareerVault({
+        repository: careerVaultRepository,
+        candidate: truthContext.candidateProfile,
+        sources: truthContext.sources,
+        evidence: truthContext.evidence,
+        assertions: truthContext.assertions,
+        jobIntelligence,
+        jobMatch,
+        resumeComposition,
+        persistedAt: capturedAt,
+      });
+    } catch (persistenceError) {
+      console.error('Career Vault persistence error:', persistenceError);
+      const integrityFailure = persistenceError instanceof CareerVaultIntegrityError;
+      return NextResponse.json(
+        {
+          success: false,
+          error: integrityFailure
+            ? 'ATS v2 refused to persist a Career Vault graph that failed provenance integrity validation.'
+            : 'Career Vault storage could not durably commit and verify this resume version. No durability claim was emitted.',
+          persistence: {
+            status: integrityFailure ? 'INTEGRITY_REJECTED' : 'FAILED',
+          },
+        },
+        {
+          status: integrityFailure ? 500 : 503,
+          headers: {
+            ...rateLimitHeaders,
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        }
+      );
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -292,7 +366,14 @@ export async function POST(request: NextRequest) {
           resumeVersion: resumeComposition.version,
           resumeManifest: resumeComposition.manifest,
           resumeClaims: resumeComposition.claims,
-          resumePersistence: resumeComposition.persistence,
+          resumePersistence: 'DURABLE_CAREER_VAULT',
+          careerVault: {
+            schemaVersion: careerVault.schemaVersion,
+            candidateProfileId: careerVault.candidate.id,
+            revision: careerVault.revision,
+            createdAt: careerVault.createdAt,
+            updatedAt: careerVault.updatedAt,
+          },
         },
       },
       {

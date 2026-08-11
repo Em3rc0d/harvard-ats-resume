@@ -10,6 +10,27 @@ import { useLanguage } from '@/components/LanguageProvider';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { Upload, FileSignature, AlertCircle } from 'lucide-react';
 
+const CAREER_VAULT_STORAGE_KEY = 'ats2:career-vault-id';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+let volatileCareerVaultId: string | undefined;
+
+function getOrCreateCareerVaultId(): string {
+  try {
+    const existing = window.localStorage.getItem(CAREER_VAULT_STORAGE_KEY);
+    if (existing && UUID_PATTERN.test(existing)) return existing;
+
+    const created = window.crypto.randomUUID();
+    window.localStorage.setItem(CAREER_VAULT_STORAGE_KEY, created);
+    return created;
+  } catch {
+    // Storage may be unavailable in privacy-restricted browser contexts. Keep a
+    // stable opaque capability for this page lifetime rather than falling back
+    // to an email-derived identity.
+    volatileCareerVaultId ??= window.crypto.randomUUID();
+    return volatileCareerVaultId;
+  }
+}
+
 export default function Home() {
   const { t } = useLanguage();
   const [isLoading, setIsLoading] = useState(false);
@@ -56,6 +77,7 @@ export default function Home() {
         body: JSON.stringify({
           ...data,
           sourceContext: importContext,
+          careerVaultId: getOrCreateCareerVaultId(),
         }),
       });
 
