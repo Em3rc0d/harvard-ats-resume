@@ -60,8 +60,15 @@ export function deriveCareerVaultIdentity(
   );
 
   const { jobDescription: _jobDescription, ...candidateData } = data;
+  const canonicalCandidateData = {
+    ...candidateData,
+    personalInfo: {
+      ...candidateData.personalInfo,
+      email: normalizedEmail,
+    },
+  };
   const candidateSnapshotSha256 = sha256(stableJson({
-    candidateData,
+    candidateData: canonicalCandidateData,
     sourceDocumentSha256: sourceContext?.receipt.sha256 ?? null,
     sourceReceiptId: sourceContext?.receipt.receiptId ?? null,
   }));
