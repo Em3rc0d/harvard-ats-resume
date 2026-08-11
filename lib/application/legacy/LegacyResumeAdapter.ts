@@ -1,4 +1,5 @@
 import type { ResumeRequest } from '../../schemas';
+import type { ResumeImportContext } from '../import/ResumeImportProvider';
 import {
   createCandidateProfile,
   createCareerAssertion,
@@ -28,11 +29,13 @@ export interface LegacyResumeProjectionOptions {
   readonly sourceKind?: CareerSourceKind;
   readonly sourceLabel?: string;
   readonly truthClass?: TruthClass;
+  readonly sourceContext?: ResumeImportContext;
 }
 
 export interface LegacyResumeDomainProjection {
   readonly candidateProfile: CandidateProfile;
   readonly source: CareerSource;
+  readonly sources: readonly CareerSource[];
   readonly evidence: readonly CareerEvidence[];
   readonly assertions: readonly CareerAssertion[];
 }
@@ -42,9 +45,14 @@ export interface LegacyTruthContext extends LegacyResumeDomainProjection {
   readonly claims: readonly ResumeClaim[];
 }
 
+interface EvidencePart {
+  readonly fieldPath: string;
+  readonly excerpt: string;
+}
+
 interface AssertionSeed {
   readonly statement: string;
-  readonly evidenceExcerpt: string;
+  readonly evidenceParts: readonly EvidencePart[];
 }
 
 const SAFE_KEY = /^[A-Za-z0-9][A-Za-z0-9:_-]*$/;
@@ -57,93 +65,132 @@ function requireSafeProjectionKey(value: string): string {
   return value;
 }
 
+function part(fieldPath: string, excerpt: string): EvidencePart {
+  return { fieldPath, excerpt: excerpt.trim() };
+}
+
 function collectAssertionSeeds(data: ResumeRequest): AssertionSeed[] {
   const seeds: AssertionSeed[] = [
     {
       statement: `Professional summary: ${data.summary}`,
-      evidenceExcerpt: data.summary,
+      evidenceParts: [part('summary', data.summary)],
     },
     {
       statement: `Candidate location: ${data.personalInfo.location}.`,
-      evidenceExcerpt: `Location: ${data.personalInfo.location}`,
+      evidenceParts: [part('personalInfo.location', data.personalInfo.location)],
     },
   ];
 
-  data.experience.forEach((experience) => {
+  data.experience.forEach((experience, index) => {
+    const prefix = `experience[${index}]`;
     seeds.push({
       statement: `Worked at ${experience.company} as ${experience.role} from ${experience.startDate} to ${experience.endDate}. ${experience.description}`,
-      evidenceExcerpt: `${experience.company} | ${experience.role} | ${experience.startDate} - ${experience.endDate} | ${experience.description}`,
+      evidenceParts: [
+        part(`${prefix}.company`, experience.company),
+        part(`${prefix}.role`, experience.role),
+        part(`${prefix}.startDate`, experience.startDate),
+        part(`${prefix}.endDate`, experience.endDate),
+        part(`${prefix}.description`, experience.description),
+      ],
     });
 
-    experience.technologies.forEach((technology) => {
+    experience.technologies.forEach((technology, techIndex) => {
       seeds.push({
         statement: `Used ${technology} at ${experience.company} while serving as ${experience.role}.`,
-        evidenceExcerpt: `${experience.company} | technology: ${technology}`,
+        evidenceParts: [
+          part(`${prefix}.technologies[${techIndex}]`, technology),
+          part(`${prefix}.company`, experience.company),
+          part(`${prefix}.role`, experience.role),
+        ],
       });
     });
   });
 
-  data.education.forEach((education) => {
+  data.education.forEach((education, index) => {
+    const prefix = `education[${index}]`;
     seeds.push({
       statement: `Studied ${education.degree} at ${education.institution} from ${education.startDate} to ${education.endDate}.`,
-      evidenceExcerpt: `${education.institution} | ${education.degree} | ${education.startDate} - ${education.endDate}`,
+      evidenceParts: [
+        part(`${prefix}.institution`, education.institution),
+        part(`${prefix}.degree`, education.degree),
+        part(`${prefix}.startDate`, education.startDate),
+        part(`${prefix}.endDate`, education.endDate),
+      ],
     });
   });
 
-  data.skills.hardSkills.forEach((skill) => {
+  data.skills.hardSkills.forEach((skill, index) => {
     seeds.push({
       statement: `Technical skill: ${skill}.`,
-      evidenceExcerpt: `Technical skill: ${skill}`,
+      evidenceParts: [part(`skills.hardSkills[${index}]`, skill)],
     });
   });
 
-  data.skills.softSkills.forEach((skill) => {
+  data.skills.softSkills.forEach((skill, index) => {
     seeds.push({
       statement: `Soft skill: ${skill}.`,
-      evidenceExcerpt: `Soft skill: ${skill}`,
+      evidenceParts: [part(`skills.softSkills[${index}]`, skill)],
     });
   });
 
-  (data.projects ?? []).forEach((project) => {
+  (data.projects ?? []).forEach((project, index) => {
+    const prefix = `projects[${index}]`;
     seeds.push({
       statement: `Project ${project.name}: ${project.description}`,
-      evidenceExcerpt: `${project.name} | ${project.description}`,
+      evidenceParts: [
+        part(`${prefix}.name`, project.name),
+        part(`${prefix}.description`, project.description),
+      ],
     });
 
-    project.technologies.forEach((technology) => {
+    project.technologies.forEach((technology, techIndex) => {
       seeds.push({
         statement: `Used ${technology} on project ${project.name}.`,
-        evidenceExcerpt: `${project.name} | technology: ${technology}`,
+        evidenceParts: [
+          part(`${prefix}.technologies[${techIndex}]`, technology),
+          part(`${prefix}.name`, project.name),
+        ],
       });
     });
   });
 
-  (data.certifications ?? []).forEach((certification) => {
+  (data.certifications ?? []).forEach((certification, index) => {
+    const prefix = `certifications[${index}]`;
     seeds.push({
       statement: `Certification ${certification.name}, issued by ${certification.issuer}, dated ${certification.date}.`,
-      evidenceExcerpt: `${certification.name} | ${certification.issuer} | ${certification.date}`,
+      evidenceParts: [
+        part(`${prefix}.name`, certification.name),
+        part(`${prefix}.issuer`, certification.issuer),
+        part(`${prefix}.date`, certification.date),
+      ],
     });
   });
 
-  (data.languages ?? []).forEach((language) => {
+  (data.languages ?? []).forEach((language, index) => {
+    const prefix = `languages[${index}]`;
     seeds.push({
       statement: `Language ${language.language} proficiency: ${language.proficiency}.`,
-      evidenceExcerpt: `${language.language} | ${language.proficiency}`,
+      evidenceParts: [
+        part(`${prefix}.language`, language.language),
+        part(`${prefix}.proficiency`, language.proficiency),
+      ],
     });
   });
 
   return seeds;
 }
 
+function normalized(value: string): string {
+  return value.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 /**
- * Converts the current v1 ResumeRequest DTO into ATS v2 candidate truth.
+ * Converts the current ResumeRequest DTO into ATS v2 candidate truth.
  *
- * Deliberately ignored input: jobDescription.
- * Job requirements are external truth and MUST NOT become candidate evidence.
- *
- * Legacy DTO values are candidate-asserted, not independently verified facts.
- * Trusted import can later promote claims only when source-level evidence has
- * been retained and verified.
+ * Job Description is deliberately absent from candidate evidence. When a
+ * trusted import context exists, unchanged fields remain linked to the upload;
+ * edits/additions are supported by a separate MANUAL_REVIEW source instead.
+ * Import extraction can never promote a value to VERIFIED_FACT.
  */
 export function projectLegacyResumeRequest(
   data: ResumeRequest,
@@ -153,13 +200,10 @@ export function projectLegacyResumeRequest(
   const capturedAt = options.capturedAt ?? new Date().toISOString();
   const candidateProfileId =
     options.candidateProfileId ?? domainId('CandidateProfile', `candidate:${projectionKey}`);
-  const sourceKind = options.sourceKind ?? 'CANDIDATE_PROVIDED';
-  const sourceLabel = options.sourceLabel ?? 'Legacy resume form reviewed by candidate';
-  const truthClass = options.truthClass ?? 'CANDIDATE_ASSERTED';
-  const sourceId: CareerSourceId = domainId(
-    'CareerSource',
-    `source:${projectionKey}:${sourceKind.toLowerCase()}`,
-  );
+  const sourceContext = options.sourceContext;
+  const truthClass: TruthClass = sourceContext
+    ? 'CANDIDATE_ASSERTED'
+    : options.truthClass ?? 'CANDIDATE_ASSERTED';
 
   const candidateProfile = createCandidateProfile({
     id: candidateProfileId,
@@ -167,58 +211,162 @@ export function projectLegacyResumeRequest(
     createdAt: capturedAt,
   });
 
-  const source = createCareerSource({
-    id: sourceId,
-    candidateProfileId,
-    kind: sourceKind,
-    label: sourceLabel,
-    capturedAt,
-  });
+  const sources: CareerSource[] = [];
+  let primarySource: CareerSource;
+  let reviewSource: CareerSource | undefined;
 
-  const seeds = collectAssertionSeeds(data);
-  const evidence: CareerEvidence[] = [];
-  const assertions: CareerAssertion[] = [];
-
-  seeds.forEach((seed, index) => {
-    const ordinal = String(index + 1).padStart(3, '0');
-    const evidenceId: CareerEvidenceId = domainId(
-      'CareerEvidence',
-      `evidence:${projectionKey}:${ordinal}`,
-    );
-
-    const careerEvidence = createCareerEvidence({
-      id: evidenceId,
-      sourceId,
-      excerpt: seed.evidenceExcerpt,
-      observedAt: capturedAt,
+  if (sourceContext) {
+    const receipt = sourceContext.receipt;
+    primarySource = createCareerSource({
+      id: domainId('CareerSource', `source:${projectionKey}:resume-upload`),
+      candidateProfileId,
+      kind: 'RESUME_UPLOAD',
+      label: `Resume upload: ${receipt.originalFileName}`,
+      capturedAt: receipt.capturedAt,
+      document: {
+        receiptId: receipt.receiptId,
+        originalFileName: receipt.originalFileName,
+        mimeType: receipt.mimeType,
+        byteSize: receipt.byteSize,
+        sha256: receipt.sha256,
+        importer: receipt.importer,
+        importerVersion: receipt.importerVersion,
+      },
     });
+    reviewSource = createCareerSource({
+      id: domainId('CareerSource', `source:${projectionKey}:candidate-review`),
+      candidateProfileId,
+      kind: 'MANUAL_REVIEW',
+      label: 'Candidate review of imported resume',
+      capturedAt,
+    });
+    sources.push(primarySource, reviewSource);
+  } else {
+    const sourceKind = options.sourceKind ?? 'CANDIDATE_PROVIDED';
+    primarySource = createCareerSource({
+      id: domainId('CareerSource', `source:${projectionKey}:${sourceKind.toLowerCase()}`),
+      candidateProfileId,
+      kind: sourceKind,
+      label: options.sourceLabel ?? 'Legacy resume form reviewed by candidate',
+      capturedAt,
+    });
+    sources.push(primarySource);
+  }
 
-    const assertion = createCareerAssertion({
+  const importedByPath = new Map(
+    (sourceContext?.evidenceMap ?? []).map((item) => [item.fieldPath, item]),
+  );
+  const evidence: CareerEvidence[] = [];
+  const supportEvidenceByPath = new Map<string, CareerEvidence>();
+
+  const createEvidence = (input: Omit<CareerEvidence, 'id'>): CareerEvidence => {
+    const ordinal = String(evidence.length + 1).padStart(3, '0');
+    const item = createCareerEvidence({
+      id: domainId('CareerEvidence', `evidence:${projectionKey}:${ordinal}`),
+      ...input,
+    });
+    evidence.push(item);
+    return item;
+  };
+
+  const supportEvidenceFor = (evidencePart: EvidencePart): CareerEvidence => {
+    const cached = supportEvidenceByPath.get(evidencePart.fieldPath);
+    if (cached) return cached;
+
+    const imported = importedByPath.get(evidencePart.fieldPath);
+
+    if (sourceContext && imported) {
+      const unchanged = normalized(imported.excerpt) === normalized(evidencePart.excerpt);
+      const importedEvidence = createEvidence({
+        sourceId: primarySource.id,
+        excerpt: imported.excerpt,
+        observedAt: sourceContext.receipt.capturedAt,
+        locator: imported.locator,
+        confidence: imported.confidence,
+        reviewState: unchanged ? 'CANDIDATE_CONFIRMED' : 'UNREVIEWED_EXTRACTION',
+      });
+
+      if (unchanged) {
+        supportEvidenceByPath.set(evidencePart.fieldPath, importedEvidence);
+        return importedEvidence;
+      }
+
+      const editedEvidence = createEvidence({
+        sourceId: reviewSource!.id,
+        excerpt: evidencePart.excerpt,
+        observedAt: capturedAt,
+        locator: {
+          scope: 'EXTRACTION_OUTPUT',
+          granularity: 'FIELD',
+          fieldPath: evidencePart.fieldPath,
+        },
+        reviewState: 'CANDIDATE_EDITED',
+      });
+      supportEvidenceByPath.set(evidencePart.fieldPath, editedEvidence);
+      return editedEvidence;
+    }
+
+    if (sourceContext) {
+      const addedEvidence = createEvidence({
+        sourceId: reviewSource!.id,
+        excerpt: evidencePart.excerpt,
+        observedAt: capturedAt,
+        locator: {
+          scope: 'EXTRACTION_OUTPUT',
+          granularity: 'FIELD',
+          fieldPath: evidencePart.fieldPath,
+        },
+        reviewState: 'CANDIDATE_ADDED',
+      });
+      supportEvidenceByPath.set(evidencePart.fieldPath, addedEvidence);
+      return addedEvidence;
+    }
+
+    const manualEvidence = createEvidence({
+      sourceId: primarySource.id,
+      excerpt: evidencePart.excerpt,
+      observedAt: capturedAt,
+      reviewState: 'CANDIDATE_CONFIRMED',
+    });
+    supportEvidenceByPath.set(evidencePart.fieldPath, manualEvidence);
+    return manualEvidence;
+  };
+
+  const assertions: CareerAssertion[] = collectAssertionSeeds(data).map((seed, index) => {
+    const supportingEvidence = seed.evidenceParts
+      .filter((item) => item.excerpt.length > 0)
+      .map(supportEvidenceFor);
+    const evidenceIds: CareerEvidenceId[] = supportingEvidence.map((item) => item.id);
+    const sourceIds: CareerSourceId[] = Array.from(
+      new Set(supportingEvidence.map((item) => item.sourceId)),
+    );
+    const ordinal = String(index + 1).padStart(3, '0');
+
+    return createCareerAssertion({
       id: domainId('CareerAssertion', `assertion:${projectionKey}:${ordinal}`),
       candidateProfileId,
       statement: seed.statement,
       truthClass,
-      evidenceIds: [evidenceId],
-      sourceIds: [sourceId],
+      evidenceIds,
+      sourceIds,
       derivedFromAssertionIds: [],
       createdAt: capturedAt,
     });
-
-    evidence.push(careerEvidence);
-    assertions.push(assertion);
   });
 
   return {
     candidateProfile,
-    source,
+    source: primarySource,
+    sources,
     evidence,
     assertions,
   };
 }
 
 /**
- * Builds the first ATS v2 truth boundary around the legacy request.
- * Every canonical resume claim is backed by exactly one candidate assertion.
+ * Builds the ATS v2 truth boundary around the current request contract.
+ * Every canonical resume claim is backed by candidate assertions whose source
+ * provenance is preserved when a trusted import receipt is available.
  */
 export function buildLegacyTruthContext(
   data: ResumeRequest,

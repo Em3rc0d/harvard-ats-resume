@@ -235,6 +235,45 @@ The audited foundations now have executable regression coverage for the specific
 Gate wording:
 `G7H AUDIT_HARDENING — PASS`
 
+## PR-ATS2-08 — Trusted Import & Source Provenance
+
+### BEFORE
+Resume uploads were sent directly from browser code to a `NEXT_PUBLIC_N8N_RESUME_URL` webhook. The extractor returned a legacy DTO without a durable document receipt, source locator, importer version, or field-level review lineage. Upload extraction and candidate edits therefore collapsed into the same logical source.
+
+### DURING
+- Added a typed `ResumeImportProvider` boundary and server-side `N8nResumeImportProvider`.
+- Added `/api/import-resume`; browser code now uploads only to the application server.
+- Replaced the public resume webhook configuration with server-only `N8N_RESUME_URL`.
+- Added upload validation for PDF/DOC/DOCX, MIME/extension consistency, non-empty files, and a 10 MB size limit.
+- Added SHA-256 source receipts containing original file name, MIME type, byte size, capture time, importer, and importer version.
+- Added evidence locators that distinguish source-document locations from extractor-output field locations and preserve optional confidence.
+- Removed Job Description from the import output contract entirely.
+- Carried `sourceContext` separately from candidate facts into generation so provenance is not sent to Gemini.
+- Extended `CareerSource` with source-document receipt metadata.
+- Extended `CareerEvidence` with locator, confidence, and candidate-review lineage.
+- Preserved unchanged imported fields as `RESUME_UPLOAD` / `CANDIDATE_CONFIRMED` evidence.
+- Preserved the original extraction when a user edits a field, while the resulting assertion is supported by separate `MANUAL_REVIEW` / `CANDIDATE_EDITED` evidence.
+- Marked candidate-added values as `MANUAL_REVIEW` / `CANDIDATE_ADDED`.
+- Forced imported assertions to remain `CANDIDATE_ASSERTED`; import extraction cannot promote them to `VERIFIED_FACT`.
+- Added behavioral regressions for receipt hashing, JD exclusion, MIME rejection, unchanged provenance, edited provenance, added provenance, and absence of browser webhook access.
+
+### VALIDATION
+The first remote CI attempt correctly caught a `BlobPart` type incompatibility in the Node upload adapter. The upload buffer conversion was corrected and the entire pipeline was rerun.
+
+GitHub Actions run `31456827117` on corrected head `4bf3e3778257618bf6c2ba57c03ee135f23cb71d` passed:
+- `npm ci`
+- lint
+- typecheck
+- behavior tests
+- build
+- Vercel
+
+### AFTER
+Resume import is now a server-side provenance boundary. The system can distinguish uploaded-source evidence from candidate edits/additions and retain a cryptographic receipt for the original document. This does not claim independent real-world verification of career claims.
+
+Gate wording:
+`G8 TRUSTED_IMPORT — PASS (SOURCE PROVENANCE), INDEPENDENT VERIFICATION NOT CLAIMED`
+
 ## Current Migration Position
 
 ```text
@@ -243,13 +282,14 @@ G1  TRUST_CONTAINMENT              PASS
 G2  PLATFORM_HEALTH                PASS / ACCEPTED SECURITY DEBT
 G3  DOMAIN_FOUNDATION              PASS
 G4  CANDIDATE_TRUTH_BOUNDARY       PASS
-    TRUSTED_SOURCE_EVIDENCE        NOT YET
 G5  STRUCTURED_AI                  PASS
 G6  GROUNDING_FOUNDATION           PASS + AUDIT HARDENED
     SEMANTIC_ENTAILMENT            NOT YET
 G7  JOB_MATCH_FOUNDATION           PASS + AUDIT HARDENED
     CALIBRATED_MATCH_RELIABILITY   NOT YET
 G7H AUDIT_HARDENING                PASS
+G8  TRUSTED_IMPORT                 PASS / SOURCE PROVENANCE
+    INDEPENDENT_VERIFICATION       NOT CLAIMED
 ```
 
-The next architectural work can proceed from a more honest baseline. Priority should remain trusted import/source provenance, semantic grounding evaluation, match benchmarking/calibration, resume version composition/rendering, privacy/security boundaries, persistence/Career Vault, explainability UX, observability, and pilot validation. The legacy keyword score remains intentionally visible until the product UI is migrated to separate Resume Quality, Parseability, and Job Match concepts.
+The next architectural priority is semantic grounding evaluation/entailment, followed by match benchmarking/calibration and then runtime resume composition/versioning. Privacy/security boundaries, persistence/Career Vault, explainability UX, observability, and pilot validation remain downstream work. The legacy keyword score remains intentionally visible until the product UI is migrated to separate Resume Quality, Parseability, and Job Match concepts.

@@ -4,12 +4,11 @@ import { useState } from 'react';
 import ResumeForm from '@/components/ResumeForm';
 import ResumeResults from '@/components/ResumeResults';
 import CVUpload from '@/components/CVUpload';
-import { ResumeRequest } from '@/lib/schemas';
+import type { ResumeRequest } from '@/lib/schemas';
+import type { ResumeImportContext } from '@/lib/application/import/ResumeImportProvider';
 import { useLanguage } from '@/components/LanguageProvider';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { Upload, FileSignature, AlertCircle } from 'lucide-react';
-
-type CandidateSourceOrigin = 'manual_form' | 'resume_upload';
 
 export default function Home() {
   const { t } = useLanguage();
@@ -28,17 +27,18 @@ export default function Home() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [initialResumeData, setInitialResumeData] = useState<ResumeRequest | undefined>(undefined);
-  const [candidateSourceOrigin, setCandidateSourceOrigin] = useState<CandidateSourceOrigin>('manual_form');
+  const [importContext, setImportContext] = useState<ResumeImportContext | undefined>(undefined);
 
-  const handleCVData = (data: ResumeRequest) => {
+  const handleCVData = (data: ResumeRequest, sourceContext: ResumeImportContext) => {
     setInitialResumeData(data);
-    setCandidateSourceOrigin('resume_upload');
+    setImportContext(sourceContext);
     setHasStarted(true);
     setIsUploading(false);
   };
 
   const handleManualStart = () => {
-    setCandidateSourceOrigin('manual_form');
+    setInitialResumeData(undefined);
+    setImportContext(undefined);
     setHasStarted(true);
   };
 
@@ -52,9 +52,11 @@ export default function Home() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-ats-candidate-source': candidateSourceOrigin,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          sourceContext: importContext,
+        }),
       });
 
       const result = await response.json();
@@ -81,7 +83,7 @@ export default function Home() {
     setError(null);
     setHasStarted(false);
     setInitialResumeData(undefined);
-    setCandidateSourceOrigin('manual_form');
+    setImportContext(undefined);
   };
 
   return (

@@ -1,157 +1,69 @@
 'use client';
 
 import { useState } from 'react';
-import { ResumeRequest } from '@/lib/schemas';
+import type { ResumeRequest } from '@/lib/schemas';
+import type { ResumeImportContext } from '@/lib/application/import/ResumeImportProvider';
 import { useLanguage } from '@/components/LanguageProvider';
 import { Upload } from 'lucide-react';
-import mammoth from 'mammoth';
-import { jsPDF } from 'jspdf';
 
 interface CVUploadProps {
-    onDataExtracted: (data: ResumeRequest) => void;
+    onDataExtracted: (data: ResumeRequest, sourceContext: ResumeImportContext) => void;
     onCancel: () => void;
+}
+
+interface ImportResponse {
+    success: boolean;
+    data?: {
+        resume: Omit<ResumeRequest, 'jobDescription'>;
+        context: ResumeImportContext;
+    };
+    error?: string;
 }
 
 export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploadProps>) {
     const { t } = useLanguage();
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const n8nUrl = process.env.NEXT_PUBLIC_N8N_RESUME_URL;
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (!n8nUrl) {
-            setError('System configuration error: Upload URL is missing.');
-            return;
-        }
-
         setIsUploading(true);
         setError(null);
 
-        console.log(`[CVUpload] Uploading to: ${n8nUrl} with method: POST`);
-
-        let fileToUpload = file;
-
-        // Check for DOC/DOCX and convert to PDF if needed
-        if (/\.(doc|docx)$/i.exec(file.name)) {
-            try {
-                const arrayBuffer = await file.arrayBuffer();
-                const result = await mammoth.convertToHtml({ arrayBuffer });
-                const htmlContent = result.value;
-
-                // Create a temporary div to extract text content
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = htmlContent;
-                const textContent = tempDiv.innerText || tempDiv.textContent || "";
-
-                const pdf = new jsPDF();
-                const splitText = pdf.splitTextToSize(textContent, 180);
-
-                // Add text to PDF, handling page breaks automatically (basic implementation)
-                let y = 10;
-                splitText.forEach((line: string) => {
-                    if (y > 280) {
-                        pdf.addPage();
-                        y = 10;
-                    }
-                    pdf.text(line, 10, y);
-                    y += 10;
-                });
-
-                const pdfBlob = pdf.output('blob');
-
-                // Create a new File object from the blob
-                fileToUpload = new File([pdfBlob], file.name.replace(/\.(doc|docx)$/i, '.pdf'), { type: 'application/pdf' });
-                console.log('[CVUpload] Converted DOC/DOCX to PDF successfully.');
-            } catch (conversionError) {
-                console.warn('[CVUpload] Failed to convert DOC/DOCX to PDF, uploading original file.', conversionError);
-                // Fallback to original file
-                fileToUpload = file;
-            }
-        }
-
         const formData = new FormData();
-        formData.append('file', fileToUpload);
+        formData.append('file', file);
 
         try {
-            const response = await fetch(
-                n8nUrl,
-                {
-                    method: 'POST',
-                    body: formData,
-                }
-            );
+            // The browser talks only to our server boundary. The external n8n
+            // webhook and its credentials/configuration remain server-side.
+            const response = await fetch('/api/import-resume', {
+                method: 'POST',
+                body: formData,
+            });
 
-            if (!response.ok) {
-                throw new Error('Failed to upload file');
+            const result = await response.json() as ImportResponse;
+
+            if (!response.ok || !result.success || !result.data) {
+                throw new Error(result.error || 'Failed to import resume');
             }
 
-            const rawResponse = await response.json();
-
-            // n8n often returns an array of items, we only need the first one
-            const result = Array.isArray(rawResponse) ? rawResponse[0] : rawResponse;
-
-            // Check if n8n returned a "Workflow was started" message instead of data
-            if (result.message === 'Workflow was started' && !result.personalInfo) {
-                const errorMsg = 'The n8n webhook returned "Workflow was started" instead of the resume data. Please configure your n8n workflow to "Respond to Webhook" with the data.';
-                console.error(errorMsg);
-                setError(errorMsg);
-                setIsUploading(false);
-                return;
-            }
-
-            // Map the result to our schema
-            // Note: This mapping assumes the webhook returns data in a structure somewhat compatible
-            // or that we can map it. Since we don't know the exact response structure,
-            // we'll try to map common fields and provide defaults.
-            // Empty strings are used as fallbacks to ensure Zod schema compliance for optional fields,
-            // allowing the user to fill them in the UI if the extraction was incomplete.
+            // Resume import never supplies Job Description truth. The target
+            // job remains a separate user-controlled input after review.
             const mappedData: ResumeRequest = {
-                personalInfo: {
-                    fullName: result.personalInfo?.fullName || '',
-                    email: result.personalInfo?.email || '',
-                    location: result.personalInfo?.location || '',
-                    linkedin: result.personalInfo?.linkedin || '',
-                    github: result.personalInfo?.github || '',
-                },
-                summary: result.summary || '',
-                experience: Array.isArray(result.experience) ? result.experience.map((exp: any) => {
-                    const startDate = exp.startDate || '';
-                    const endDate = exp.endDate || '';
-
-                    return {
-                        company: exp.company || '',
-                        role: exp.role || '',
-                        startDate: startDate,
-                        endDate: endDate,
-                        description: exp.description || '',
-                        technologies: Array.isArray(exp.technologies) ? exp.technologies : [],
-                    };
-                }) : [],
-                education: Array.isArray(result.education) ? result.education.map((edu: any) => {
-                    const startDate = edu.startDate || '';
-                    const endDate = edu.endDate || '';
-
-                    return {
-                        institution: edu.institution || '',
-                        degree: edu.degree || '',
-                        startDate: startDate,
-                        endDate: endDate,
-                    };
-                }) : [],
-                skills: {
-                    hardSkills: Array.isArray(result.skills?.hardSkills) ? result.skills.hardSkills : [],
-                    softSkills: Array.isArray(result.skills?.softSkills) ? result.skills.softSkills : [],
-                },
-                jobDescription: result.jobDescription || '',
+                ...result.data.resume,
+                jobDescription: '',
             };
 
-            onDataExtracted(mappedData);
-
+            onDataExtracted(mappedData, result.data.context);
         } catch (err) {
             console.error('Upload error:', err);
-            setError('Failed to extract information from CV. Please try again or fill manually.');
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : 'Failed to extract information from CV. Please try again or fill manually.',
+            );
         } finally {
             setIsUploading(false);
         }
