@@ -94,3 +94,16 @@ test('table-like formatting reduces structural parseability without changing can
   assert.ok(tableLike.atsParseability.score < clean.atsParseability.score);
   assert.equal(tableLike.resumeQuality.score, clean.resumeQuality.score);
 });
+
+test('accented Spanish action verbs are recognized after evaluator normalization', () => {
+  const spanishCandidate = candidate();
+  spanishCandidate.experience[0] = {
+    ...spanishCandidate.experience[0],
+    description: 'Automaticé procesos internos con TypeScript para reducir tareas manuales repetitivas.',
+  };
+  const evaluation = evaluateProductResume(spanishCandidate, RENDERED);
+  const actionCheck = evaluation.resumeQuality.checks.find((check) => check.id === 'quality-action-language');
+
+  assert.ok(actionCheck);
+  assert.equal(actionCheck.status, 'PASS');
+});
