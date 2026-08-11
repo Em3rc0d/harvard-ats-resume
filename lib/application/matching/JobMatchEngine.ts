@@ -81,6 +81,28 @@ function lexicalOverlap(requirement: string, assertion: string): number {
   return overlap / requirementTokens.size;
 }
 
+function extractYear(value: string): number | undefined {
+  const match = value.match(/\b(19|20)\d{2}\b/);
+  if (match) return Number(match[0]);
+
+  if (/\b(present|current|actual|presente|today|hoy)\b/i.test(value)) {
+    return new Date().getFullYear();
+  }
+
+  return undefined;
+}
+
+function experienceDurationYears(assertion: CareerAssertion): number | undefined {
+  const match = assertion.statement.match(/\bfrom\s+(.+?)\s+to\s+(.+?)\./i);
+  if (!match) return undefined;
+
+  const startYear = extractYear(match[1]);
+  const endYear = extractYear(match[2]);
+  if (startYear === undefined || endYear === undefined || endYear < startYear) return undefined;
+
+  return endYear - startYear;
+}
+
 function skillMatch(
   requirement: JobRequirement,
   assertions: readonly CareerAssertion[],
@@ -93,6 +115,68 @@ function skillMatch(
   return assertions.filter((assertion) =>
     concepts.some((concept) => containsConcept(assertion.statement, concept)),
   );
+}
+
+function linkedExperienceAssertions(
+  skillAssertions: readonly CareerAssertion[],
+  allAssertions: readonly CareerAssertion[],
+  concept: string,
+): CareerAssertion[] {
+  const companies = skillAssertions
+    .map((assertion) => assertion.statement.match(/\bused\s+.+?\s+at\s+(.+?)\s+while serving as\b/i)?.[1]?.trim())
+    .filter((company): company is string => Boolean(company));
+
+  return allAssertions.filter((assertion) => {
+    if (!/\bworked at\b/i.test(assertion.statement)) return false;
+    if (containsConcept(assertion.statement, concept)) return true;
+    return companies.some((company) => normalize(assertion.statement).includes(`worked at ${normalize(company)} as`));
+  });
+}
+
+function applyMinimumYearsToSkill(
+  requirement: JobRequirement,
+  skillAssertions: readonly CareerAssertion[],
+  allAssertions: readonly CareerAssertion[],
+): { status: RequirementMatchStatus; assertions: readonly CareerAssertion[]; rationale: string } {
+  const minimumYears = requirement.minimumYears;
+  const concept = requirement.canonicalConcept ?? 'required skill';
+
+  if (minimumYears === undefined) {
+    return {
+      status: 'MATCH',
+      assertions: skillAssertions,
+      rationale: `Candidate evidence explicitly supports ${concept}.`,
+    };
+  }
+
+  const experienceAssertions = linkedExperienceAssertions(skillAssertions, allAssertions, concept);
+  const durations = experienceAssertions
+    .map((assertion) => ({ assertion, years: experienceDurationYears(assertion) }))
+    .filter((item): item is { assertion: CareerAssertion; years: number } => item.years !== undefined);
+  const sufficient = durations.filter((item) => item.years >= minimumYears);
+
+  if (sufficient.length > 0) {
+    return {
+      status: 'MATCH',
+      assertions: [...skillAssertions, ...sufficient.map((item) => item.assertion)],
+      rationale: `Candidate evidence supports ${concept} and at least ${minimumYears} years in a linked experience period.`,
+    };
+  }
+
+  if (durations.length > 0) {
+    const maxYears = Math.max(...durations.map((item) => item.years));
+    return {
+      status: 'GAP',
+      assertions: skillAssertions,
+      rationale: `Candidate evidence supports ${concept}, but the longest linked documented period is ${maxYears} years versus ${minimumYears} required.`,
+    };
+  }
+
+  return {
+    status: 'POTENTIAL_MATCH',
+    assertions: skillAssertions,
+    rationale: `Candidate evidence supports ${concept}, but the required ${minimumYears}-year tenure is not evidenced by a parseable linked date range.`,
+  };
 }
 
 function lexicalMatches(
@@ -111,6 +195,50 @@ function lexicalMatches(
   return { exact, potential };
 }
 
+function applyMinimumYearsToLexical(
+  requirement: JobRequirement,
+  candidates: readonly CareerAssertion[],
+  defaultStatus: RequirementMatchStatus,
+): { status: RequirementMatchStatus; assertions: readonly CareerAssertion[]; rationale: string } {
+  if (requirement.minimumYears === undefined) {
+    return {
+      status: defaultStatus,
+      assertions: candidates,
+      rationale: defaultStatus === 'MATCH'
+        ? 'Candidate assertions provide strong lexical evidence for this requirement.'
+        : 'Candidate assertions partially overlap this requirement; human review may confirm the relationship.',
+    };
+  }
+
+  const durations = candidates
+    .map((assertion) => ({ assertion, years: experienceDurationYears(assertion) }))
+    .filter((item): item is { assertion: CareerAssertion; years: number } => item.years !== undefined);
+  const sufficient = durations.filter((item) => item.years >= requirement.minimumYears!);
+
+  if (sufficient.length > 0) {
+    return {
+      status: defaultStatus,
+      assertions: sufficient.map((item) => item.assertion),
+      rationale: `Candidate assertions support the requirement and document at least ${requirement.minimumYears} years in a relevant experience period.`,
+    };
+  }
+
+  if (durations.length > 0) {
+    const maxYears = Math.max(...durations.map((item) => item.years));
+    return {
+      status: 'GAP',
+      assertions: candidates,
+      rationale: `Relevant candidate evidence documents at most ${maxYears} years versus ${requirement.minimumYears} required.`,
+    };
+  }
+
+  return {
+    status: 'POTENTIAL_MATCH',
+    assertions: candidates,
+    rationale: `Candidate assertions overlap this requirement, but the required ${requirement.minimumYears}-year duration is not evidenced by a parseable date range.`,
+  };
+}
+
 function classifyMatch(
   requirement: JobRequirement,
   assertions: readonly CareerAssertion[],
@@ -118,11 +246,7 @@ function classifyMatch(
   if (requirement.kind === 'SKILL' && requirement.canonicalConcept) {
     const matches = skillMatch(requirement, assertions);
     if (matches.length > 0) {
-      return {
-        status: 'MATCH',
-        assertions: matches,
-        rationale: `Candidate evidence explicitly supports ${requirement.canonicalConcept}.`,
-      };
+      return applyMinimumYearsToSkill(requirement, matches, assertions);
     }
 
     return {
@@ -134,26 +258,18 @@ function classifyMatch(
 
   const lexical = lexicalMatches(requirement, assertions);
   if (lexical.exact.length > 0) {
-    return {
-      status: 'MATCH',
-      assertions: lexical.exact,
-      rationale: 'Candidate assertions provide strong lexical evidence for this requirement.',
-    };
+    return applyMinimumYearsToLexical(requirement, lexical.exact, 'MATCH');
   }
 
   if (lexical.potential.length > 0) {
-    return {
-      status: 'POTENTIAL_MATCH',
-      assertions: lexical.potential,
-      rationale: 'Candidate assertions partially overlap this requirement; human review may confirm the relationship.',
-    };
+    return applyMinimumYearsToLexical(requirement, lexical.potential, 'POTENTIAL_MATCH');
   }
 
-  if (requirement.kind === 'WORK_AUTHORIZATION' && requirement.necessity === 'REQUIRED') {
+  if (requirement.kind === 'WORK_AUTHORIZATION') {
     return {
-      status: 'BLOCKER',
+      status: 'UNKNOWN',
       assertions: [],
-      rationale: 'Required work-authorization evidence is not present in candidate assertions.',
+      rationale: 'Work-authorization evidence is not present. Absence of evidence is not treated as a blocker or negative candidate fact.',
     };
   }
 
