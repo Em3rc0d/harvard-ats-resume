@@ -191,6 +191,15 @@ function supportingAssertions(
     .map((item) => item.assertion);
 }
 
+function assertionProvenanceHash(assertions: readonly CareerAssertion[]): string {
+  return sha256(
+    assertions
+      .map((assertion) => assertion.id)
+      .sort()
+      .join('|'),
+  );
+}
+
 function createGeneratedClaims(
   formattedResume: string,
   assertions: readonly CareerAssertion[],
@@ -211,9 +220,10 @@ function createGeneratedClaims(
       throw new Error(`Resume composition cannot trace approved wording to candidate assertions: ${wording}`);
     }
 
+    const provenanceIdentity = assertionProvenanceHash(support).slice(0, 12);
     const claimId = domainId(
       'ResumeClaim',
-      `generated-claim:${contentSha256.slice(0, 16)}:${String(index + 1).padStart(3, '0')}`,
+      `generated-claim:${contentSha256.slice(0, 16)}:${provenanceIdentity}:${String(index + 1).padStart(3, '0')}`,
     );
 
     ledger = registerResumeClaim(ledger, {
@@ -226,12 +236,20 @@ function createGeneratedClaims(
   return Array.from(ledger.claimsById.values());
 }
 
+function claimProvenanceHash(claims: readonly ResumeClaim[]): string {
+  return sha256(
+    claims
+      .map((claim) => `${claim.id}:${[...claim.assertionIds].sort().join(',')}`)
+      .join('|'),
+  );
+}
+
 /**
- * Materializes an already-grounded generated resume into a content-addressed
- * runtime ResumeVersion and full provenance manifest. This function does not
- * decide whether model output is truthful; callers must run deterministic and
- * semantic grounding first. It refuses to version any material generated line
- * that cannot be traced back to candidate CareerAssertions.
+ * Materializes an already-grounded generated resume into a content-addressed,
+ * provenance-sensitive runtime ResumeVersion and full provenance manifest.
+ * Callers must run deterministic and semantic grounding first. The exact same
+ * content/target can receive a distinct logical version when its supporting
+ * CareerAssertion provenance changes, preventing history from being overwritten.
  */
 export function composeApprovedResumeVersion(
   input: ResumeCompositionInput,
@@ -255,11 +273,12 @@ export function composeApprovedResumeVersion(
     ? sha256(input.targetJobDescription)
     : undefined;
   const targetIdentity = targetJobDescriptionSha256?.slice(0, 16) ?? 'general';
+  const claims = createGeneratedClaims(input.formattedResume, input.assertions, contentSha256);
+  const provenanceIdentity = claimProvenanceHash(claims).slice(0, 16);
   const versionId = domainId(
     'ResumeVersion',
-    `resume-version:${contentSha256.slice(0, 24)}:${targetIdentity}`,
+    `resume-version:${contentSha256.slice(0, 24)}:${targetIdentity}:${provenanceIdentity}`,
   );
-  const claims = createGeneratedClaims(input.formattedResume, input.assertions, contentSha256);
   const claimIds: ResumeClaimId[] = claims.map((claim) => claim.id);
   const claimsById = new Map(claims.map((claim) => [claim.id, claim]));
 
@@ -276,7 +295,10 @@ export function composeApprovedResumeVersion(
   });
 
   const manifest = createResumeManifest({
-    id: domainId('ResumeManifest', `resume-manifest:${contentSha256.slice(0, 24)}:${targetIdentity}`),
+    id: domainId(
+      'ResumeManifest',
+      `resume-manifest:${contentSha256.slice(0, 24)}:${targetIdentity}:${provenanceIdentity}`,
+    ),
     resumeVersionId: version.id,
     entries: claims.map((claim) => ({
       claimId: claim.id,
