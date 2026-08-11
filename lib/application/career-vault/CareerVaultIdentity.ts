@@ -60,6 +60,7 @@ export function deriveCareerVaultIdentity(
   const candidateSnapshotSha256 = sha256(stableJson({
     candidateData,
     sourceDocumentSha256: sourceContext?.receipt.sha256 ?? null,
+    sourceReceiptId: sourceContext?.receipt.receiptId ?? null,
   }));
   const candidateProjectionKey = `candidate-snapshot:${candidateSnapshotSha256.slice(0, 24)}`;
 
