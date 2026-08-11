@@ -4,17 +4,15 @@ import {
   type CareerAssertion,
   type CareerEvidence,
   type CareerSource,
-  type JobDescription,
-  type JobRequirement,
-  type MatchReport,
-  type ResumeClaim,
-  type ResumeManifest,
-  type ResumeVersion,
 } from '../../domain';
 import type { JobIntelligenceResult } from '../job/JobIntelligenceEngine';
 import type { JobMatchResult } from '../matching/JobMatchEngine';
 import type { RuntimeResumeComposition } from '../resume/ResumeCompositionService';
-import { stableJson } from './CareerVaultIdentity';
+import {
+  JOB_INTELLIGENCE_PERSISTENCE_VERSION,
+  JOB_MATCH_PERSISTENCE_VERSION,
+  stableJson,
+} from './CareerVaultIdentity';
 import {
   CAREER_VAULT_SCHEMA_VERSION,
   type CareerVaultRepository,
@@ -170,10 +168,13 @@ export function validateCareerVaultSnapshot(snapshot: CareerVaultSnapshot): void
     `JobRequirement ${requirement.id} references unknown JobDescription.`,
   ));
 
-  snapshot.jobAnalyses.forEach((analysis) => requireReference(
-    jobIds.has(analysis.jobDescriptionId),
-    `Persisted job analysis references unknown JobDescription ${analysis.jobDescriptionId}.`,
-  ));
+  snapshot.jobAnalyses.forEach((analysis) => {
+    requireReference(
+      jobIds.has(analysis.jobDescriptionId),
+      `Persisted job analysis references unknown JobDescription ${analysis.jobDescriptionId}.`,
+    );
+    requireReference(Boolean(analysis.analyzerVersion), 'Persisted job analysis requires analyzerVersion.');
+  });
 
   snapshot.matchReports.forEach((report) => {
     requireReference(
@@ -196,10 +197,13 @@ export function validateCareerVaultSnapshot(snapshot: CareerVaultSnapshot): void
     });
   });
 
-  snapshot.matchEvaluations.forEach((evaluation) => requireReference(
-    matchReportIds.has(evaluation.matchReportId),
-    `Persisted match evaluation references unknown MatchReport ${evaluation.matchReportId}.`,
-  ));
+  snapshot.matchEvaluations.forEach((evaluation) => {
+    requireReference(
+      matchReportIds.has(evaluation.matchReportId),
+      `Persisted match evaluation references unknown MatchReport ${evaluation.matchReportId}.`,
+    );
+    requireReference(Boolean(evaluation.engineVersion), 'Persisted match evaluation requires engineVersion.');
+  });
 
   snapshot.resumeClaims.forEach((claim) => claim.assertionIds.forEach((id) => requireReference(
     assertionIds.has(id),
@@ -260,6 +264,7 @@ function buildSnapshot(
     ? [{
         jobDescriptionId: input.jobIntelligence.jobDescription.id,
         language: input.jobIntelligence.language,
+        analyzerVersion: JOB_INTELLIGENCE_PERSISTENCE_VERSION,
       }]
     : [];
   const matchEvaluations: PersistedMatchEvaluation[] = input.jobMatch
@@ -267,6 +272,7 @@ function buildSnapshot(
         matchReportId: input.jobMatch.report.id,
         score: input.jobMatch.score,
         breakdown: input.jobMatch.breakdown,
+        engineVersion: JOB_MATCH_PERSISTENCE_VERSION,
       }]
     : [];
 
@@ -293,7 +299,7 @@ function buildSnapshot(
     jobAnalyses: mergeImmutableByKey(
       existing?.jobAnalyses ?? [],
       jobAnalyses,
-      (item) => item.jobDescriptionId,
+      (item) => `${item.jobDescriptionId}:${item.analyzerVersion}`,
       'Job analysis',
     ),
     matchReports: mergeImmutableByKey(
@@ -305,7 +311,7 @@ function buildSnapshot(
     matchEvaluations: mergeImmutableByKey(
       existing?.matchEvaluations ?? [],
       matchEvaluations,
-      (item) => item.matchReportId,
+      (item) => `${item.matchReportId}:${item.engineVersion}`,
       'Match evaluation',
     ),
     resumeClaims: mergeImmutableByKey(
