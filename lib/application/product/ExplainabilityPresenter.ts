@@ -47,7 +47,7 @@ function byNecessity(
 export function summarizeJobMatch(jobMatch?: ExplainableJobMatchView): ExplainabilitySummary | null {
   if (!jobMatch) return null;
 
-  const statusCounts: RequirementStatusCounts = {
+  const statusCounts: Record<ExplainableRequirementStatus, number> = {
     MATCH: 0,
     POTENTIAL_MATCH: 0,
     GAP: 0,
