@@ -162,13 +162,17 @@ function validateExperienceHeader(
   jobDescription: string,
   violations: GroundingViolation[],
 ): void {
-  const parts = line.split(/\s+[—–]\s+|\s+-\s+/).map((part) => part.trim()).filter(Boolean);
+  const parts = line.split(/\s+[—–]\s+/).map((part) => part.trim()).filter(Boolean);
 
   if (parts.length !== 2) {
     return;
   }
 
   const [company, role] = parts;
+
+  if (!/[A-Za-zÀ-ÿ]/.test(company) || !/[A-Za-zÀ-ÿ]/.test(role)) {
+    return;
+  }
 
   if (!isSupportedText(company, catalog.companies, catalog.sourceText)) {
     pushUnique(
@@ -217,7 +221,7 @@ function validateCertificationLine(
   jobDescription: string,
   violations: GroundingViolation[],
 ): void {
-  const [name] = line.split(/\s+[—–]\s+|\s+-\s+/);
+  const [name] = line.split(/\s+[—–]\s+/);
   const candidateName = name?.trim();
 
   if (!candidateName || !/[A-Za-zÀ-ÿ]/.test(candidateName)) {
@@ -246,7 +250,11 @@ function validateProjectHeading(
   const normalized = normalize(line);
   const looksLikeHeading = line === line.toUpperCase() && /[A-ZÀ-Ý]/.test(line);
 
-  if (!looksLikeHeading || SECTION_HEADINGS.has(line.toUpperCase())) {
+  if (
+    !looksLikeHeading ||
+    SECTION_HEADINGS.has(line.toUpperCase()) ||
+    line.includes(':')
+  ) {
     return;
   }
 
