@@ -39,17 +39,11 @@ export interface PersistCareerVaultInput {
   readonly jobIntelligence?: JobIntelligenceResult;
   readonly jobMatch?: JobMatchResult;
   readonly resumeComposition: RuntimeResumeComposition;
-  readonly renderedResume: string;
+  readonly renderedResume?: string;
   readonly persistedAt?: string;
 }
 
-const TEMPORAL_KEYS = new Set([
-  'createdAt',
-  'capturedAt',
-  'observedAt',
-  'generatedAt',
-  'updatedAt',
-]);
+const TEMPORAL_KEYS = new Set(['createdAt', 'capturedAt', 'observedAt', 'generatedAt', 'updatedAt']);
 
 function sha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
@@ -57,16 +51,14 @@ function sha256(value: string): string {
 
 function semanticValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(semanticValue);
-  if (value && typeof value === 'object') {
-    return Object.keys(value as Record<string, unknown>)
-      .filter((key) => !TEMPORAL_KEYS.has(key))
-      .sort()
-      .reduce<Record<string, unknown>>((result, key) => {
-        result[key] = semanticValue((value as Record<string, unknown>)[key]);
-        return result;
-      }, {});
-  }
-  return value;
+  if (!value || typeof value !== 'object') return value;
+  return Object.keys(value as Record<string, unknown>)
+    .filter((key) => !TEMPORAL_KEYS.has(key))
+    .sort()
+    .reduce<Record<string, unknown>>((result, key) => {
+      result[key] = semanticValue((value as Record<string, unknown>)[key]);
+      return result;
+    }, {});
 }
 
 function semanticallyEqual(left: unknown, right: unknown): boolean {
@@ -80,18 +72,14 @@ function mergeImmutableByKey<T>(
   label: string,
 ): T[] {
   const merged = new Map(existing.map((item) => [keyOf(item), item]));
-
   incoming.forEach((item) => {
     const key = keyOf(item);
     const prior = merged.get(key);
     if (prior && !semanticallyEqual(prior, item)) {
-      throw new CareerVaultIntegrityError(
-        `${label} identity collision would overwrite historical meaning: ${key}`,
-      );
+      throw new CareerVaultIntegrityError(`${label} identity collision would overwrite historical meaning: ${key}`);
     }
     if (!prior) merged.set(key, item);
   });
-
   return Array.from(merged.values());
 }
 
@@ -101,28 +89,14 @@ function requireUnique(values: readonly string[], label: string): void {
   }
 }
 
-function requireReference(
-  condition: boolean,
-  message: string,
-): asserts condition {
+function requireReference(condition: boolean, message: string): asserts condition {
   if (!condition) throw new CareerVaultIntegrityError(message);
 }
 
-/**
- * Validates the complete persisted graph. This is deliberately stricter than
- * validating each object in isolation: every persisted reference must resolve
- * inside the same candidate vault snapshot and manifests must preserve full
- * claim-to-assertion provenance.
- */
+/** Validate the complete persisted graph, not only individual records. */
 export function validateCareerVaultSnapshot(snapshot: CareerVaultSnapshot): void {
-  requireReference(
-    snapshot.schemaVersion === CAREER_VAULT_SCHEMA_VERSION,
-    `Unsupported Career Vault schema: ${snapshot.schemaVersion}`,
-  );
-  requireReference(
-    Number.isInteger(snapshot.revision) && snapshot.revision >= 1,
-    'Career Vault revision must be a positive integer.',
-  );
+  requireReference(snapshot.schemaVersion === CAREER_VAULT_SCHEMA_VERSION, `Unsupported Career Vault schema: ${snapshot.schemaVersion}`);
+  requireReference(Number.isInteger(snapshot.revision) && snapshot.revision >= 1, 'Career Vault revision must be a positive integer.');
 
   requireUnique(snapshot.sources.map((item) => item.id), 'CareerSource collection');
   requireUnique(snapshot.evidence.map((item) => item.id), 'CareerEvidence collection');
@@ -146,30 +120,20 @@ export function validateCareerVaultSnapshot(snapshot: CareerVaultSnapshot): void
   const versionsById = new Map(snapshot.resumeVersions.map((item) => [item.id, item]));
   const claimsById = new Map(snapshot.resumeClaims.map((item) => [item.id, item]));
 
-  snapshot.sources.forEach((source) => {
-    requireReference(
-      source.candidateProfileId === snapshot.candidate.id,
-      `CareerSource ${source.id} belongs to a different candidate.`,
-    );
-  });
+  snapshot.sources.forEach((source) => requireReference(
+    source.candidateProfileId === snapshot.candidate.id,
+    `CareerSource ${source.id} belongs to a different candidate.`,
+  ));
 
-  snapshot.evidence.forEach((item) => {
-    requireReference(sourceIds.has(item.sourceId), `CareerEvidence ${item.id} references unknown source.`);
-  });
+  snapshot.evidence.forEach((item) => requireReference(
+    sourceIds.has(item.sourceId),
+    `CareerEvidence ${item.id} references unknown source.`,
+  ));
 
   snapshot.assertions.forEach((assertion) => {
-    requireReference(
-      assertion.candidateProfileId === snapshot.candidate.id,
-      `CareerAssertion ${assertion.id} belongs to a different candidate.`,
-    );
-    assertion.sourceIds.forEach((id) => requireReference(
-      sourceIds.has(id),
-      `CareerAssertion ${assertion.id} references unknown source ${id}.`,
-    ));
-    assertion.evidenceIds.forEach((id) => requireReference(
-      evidenceIds.has(id),
-      `CareerAssertion ${assertion.id} references unknown evidence ${id}.`,
-    ));
+    requireReference(assertion.candidateProfileId === snapshot.candidate.id, `CareerAssertion ${assertion.id} belongs to a different candidate.`);
+    assertion.sourceIds.forEach((id) => requireReference(sourceIds.has(id), `CareerAssertion ${assertion.id} references unknown source ${id}.`));
+    assertion.evidenceIds.forEach((id) => requireReference(evidenceIds.has(id), `CareerAssertion ${assertion.id} references unknown evidence ${id}.`));
   });
 
   snapshot.jobRequirements.forEach((requirement) => requireReference(
@@ -178,39 +142,21 @@ export function validateCareerVaultSnapshot(snapshot: CareerVaultSnapshot): void
   ));
 
   snapshot.jobAnalyses.forEach((analysis) => {
-    requireReference(
-      jobIds.has(analysis.jobDescriptionId),
-      `Persisted job analysis references unknown JobDescription ${analysis.jobDescriptionId}.`,
-    );
+    requireReference(jobIds.has(analysis.jobDescriptionId), `Persisted job analysis references unknown JobDescription ${analysis.jobDescriptionId}.`);
     requireReference(Boolean(analysis.analyzerVersion), 'Persisted job analysis requires analyzerVersion.');
   });
 
   snapshot.matchReports.forEach((report) => {
-    requireReference(
-      report.candidateProfileId === snapshot.candidate.id,
-      `MatchReport ${report.id} belongs to a different candidate.`,
-    );
-    requireReference(
-      jobIds.has(report.jobDescriptionId),
-      `MatchReport ${report.id} references unknown JobDescription.`,
-    );
+    requireReference(report.candidateProfileId === snapshot.candidate.id, `MatchReport ${report.id} belongs to a different candidate.`);
+    requireReference(jobIds.has(report.jobDescriptionId), `MatchReport ${report.id} references unknown JobDescription.`);
     report.matches.forEach((match) => {
-      requireReference(
-        requirementIds.has(match.requirementId),
-        `RequirementMatch ${match.id} references unknown JobRequirement.`,
-      );
-      match.assertionIds.forEach((id) => requireReference(
-        assertionIds.has(id),
-        `RequirementMatch ${match.id} references unknown CareerAssertion ${id}.`,
-      ));
+      requireReference(requirementIds.has(match.requirementId), `RequirementMatch ${match.id} references unknown JobRequirement.`);
+      match.assertionIds.forEach((id) => requireReference(assertionIds.has(id), `RequirementMatch ${match.id} references unknown CareerAssertion ${id}.`));
     });
   });
 
   snapshot.matchEvaluations.forEach((evaluation) => {
-    requireReference(
-      matchReportIds.has(evaluation.matchReportId),
-      `Persisted match evaluation references unknown MatchReport ${evaluation.matchReportId}.`,
-    );
+    requireReference(matchReportIds.has(evaluation.matchReportId), `Persisted match evaluation references unknown MatchReport ${evaluation.matchReportId}.`);
     requireReference(Boolean(evaluation.engineVersion), 'Persisted match evaluation requires engineVersion.');
   });
 
@@ -220,60 +166,29 @@ export function validateCareerVaultSnapshot(snapshot: CareerVaultSnapshot): void
   )));
 
   snapshot.resumeVersions.forEach((version) => {
-    requireReference(
-      version.candidateProfileId === snapshot.candidate.id,
-      `ResumeVersion ${version.id} belongs to a different candidate.`,
-    );
-    version.claimIds.forEach((id) => requireReference(
-      claimIds.has(id),
-      `ResumeVersion ${version.id} references unknown ResumeClaim ${id}.`,
-    ));
-    if (version.targetedJobDescriptionId) {
-      requireReference(
-        jobIds.has(version.targetedJobDescriptionId),
-        `ResumeVersion ${version.id} references unknown target JobDescription.`,
-      );
-    }
-    if (version.matchReportId) {
-      requireReference(
-        matchReportIds.has(version.matchReportId),
-        `ResumeVersion ${version.id} references unknown MatchReport.`,
-      );
-    }
+    requireReference(version.candidateProfileId === snapshot.candidate.id, `ResumeVersion ${version.id} belongs to a different candidate.`);
+    version.claimIds.forEach((id) => requireReference(claimIds.has(id), `ResumeVersion ${version.id} references unknown ResumeClaim ${id}.`));
+    if (version.targetedJobDescriptionId) requireReference(jobIds.has(version.targetedJobDescriptionId), `ResumeVersion ${version.id} references unknown target JobDescription.`);
+    if (version.matchReportId) requireReference(matchReportIds.has(version.matchReportId), `ResumeVersion ${version.id} references unknown MatchReport.`);
   });
 
   snapshot.resumeManifests.forEach((manifest) => {
-    requireReference(
-      versionIds.has(manifest.resumeVersionId),
-      `ResumeManifest ${manifest.id} references unknown ResumeVersion.`,
-    );
+    requireReference(versionIds.has(manifest.resumeVersionId), `ResumeManifest ${manifest.id} references unknown ResumeVersion.`);
     manifest.entries.forEach((entry) => entry.assertionIds.forEach((id) => requireReference(
       assertionIds.has(id),
       `ResumeManifest ${manifest.id} references unknown CareerAssertion ${id}.`,
     )));
     const validation = validateResumeManifest(manifest, claimsById);
     if (!validation.ok) {
-      throw new CareerVaultIntegrityError(
-        validation.issues.map((issue) => issue.message).join('\n'),
-      );
+      throw new CareerVaultIntegrityError(validation.issues.map((issue) => issue.message).join('\n'));
     }
   });
 
   snapshot.resumeDocuments.forEach((document) => {
     const version = versionsById.get(document.resumeVersionId);
-    requireReference(
-      Boolean(version),
-      `Persisted resume document references unknown ResumeVersion ${document.resumeVersionId}.`,
-    );
-    const calculatedHash = sha256(document.content);
-    requireReference(
-      calculatedHash === document.contentSha256,
-      `Persisted resume document ${document.resumeVersionId} content hash does not match its content.`,
-    );
-    requireReference(
-      document.contentSha256 === version!.contentSha256,
-      `Persisted resume document ${document.resumeVersionId} does not match ResumeVersion contentSha256.`,
-    );
+    requireReference(Boolean(version), `Persisted resume document references unknown ResumeVersion ${document.resumeVersionId}.`);
+    requireReference(sha256(document.content) === document.contentSha256, `Persisted resume document ${document.resumeVersionId} content hash does not match its content.`);
+    requireReference(document.contentSha256 === version!.contentSha256, `Persisted resume document ${document.resumeVersionId} does not match ResumeVersion contentSha256.`);
   });
 
   snapshot.resumeVersions.forEach((version) => requireReference(
@@ -291,11 +206,10 @@ function buildSnapshot(
     throw new CareerVaultIntegrityError('Cannot merge different candidates into one Career Vault.');
   }
 
-  const renderedSha256 = sha256(input.renderedResume);
+  const renderedResume = input.renderedResume ?? input.resumeComposition.renderedResume;
+  const renderedSha256 = sha256(renderedResume);
   if (renderedSha256 !== input.resumeComposition.version.contentSha256) {
-    throw new CareerVaultIntegrityError(
-      'Rendered resume content does not match the ResumeVersion contentSha256.',
-    );
+    throw new CareerVaultIntegrityError('Rendered resume content does not match the ResumeVersion contentSha256.');
   }
 
   const jobAnalyses: PersistedJobAnalysis[] = input.jobIntelligence
@@ -316,72 +230,25 @@ function buildSnapshot(
   const resumeDocuments: PersistedResumeDocument[] = [{
     resumeVersionId: input.resumeComposition.version.id,
     mediaType: 'text/plain',
-    content: input.renderedResume,
+    content: renderedResume,
     contentSha256: renderedSha256,
   }];
 
   const snapshot: CareerVaultSnapshot = {
     schemaVersion: CAREER_VAULT_SCHEMA_VERSION,
-    candidate: existing
-      ? { ...input.candidate, createdAt: existing.candidate.createdAt }
-      : input.candidate,
+    candidate: existing ? { ...input.candidate, createdAt: existing.candidate.createdAt } : input.candidate,
     sources: mergeImmutableByKey(existing?.sources ?? [], input.sources, (item) => item.id, 'CareerSource'),
     evidence: mergeImmutableByKey(existing?.evidence ?? [], input.evidence, (item) => item.id, 'CareerEvidence'),
     assertions: mergeImmutableByKey(existing?.assertions ?? [], input.assertions, (item) => item.id, 'CareerAssertion'),
-    jobs: mergeImmutableByKey(
-      existing?.jobs ?? [],
-      input.jobIntelligence ? [input.jobIntelligence.jobDescription] : [],
-      (item) => item.id,
-      'JobDescription',
-    ),
-    jobRequirements: mergeImmutableByKey(
-      existing?.jobRequirements ?? [],
-      input.jobIntelligence?.requirements ?? [],
-      (item) => item.id,
-      'JobRequirement',
-    ),
-    jobAnalyses: mergeImmutableByKey(
-      existing?.jobAnalyses ?? [],
-      jobAnalyses,
-      (item) => `${item.jobDescriptionId}:${item.analyzerVersion}`,
-      'Job analysis',
-    ),
-    matchReports: mergeImmutableByKey(
-      existing?.matchReports ?? [],
-      input.jobMatch ? [input.jobMatch.report] : [],
-      (item) => item.id,
-      'MatchReport',
-    ),
-    matchEvaluations: mergeImmutableByKey(
-      existing?.matchEvaluations ?? [],
-      matchEvaluations,
-      (item) => `${item.matchReportId}:${item.engineVersion}`,
-      'Match evaluation',
-    ),
-    resumeClaims: mergeImmutableByKey(
-      existing?.resumeClaims ?? [],
-      input.resumeComposition.claims,
-      (item) => item.id,
-      'ResumeClaim',
-    ),
-    resumeVersions: mergeImmutableByKey(
-      existing?.resumeVersions ?? [],
-      [input.resumeComposition.version],
-      (item) => item.id,
-      'ResumeVersion',
-    ),
-    resumeManifests: mergeImmutableByKey(
-      existing?.resumeManifests ?? [],
-      [input.resumeComposition.manifest],
-      (item) => item.id,
-      'ResumeManifest',
-    ),
-    resumeDocuments: mergeImmutableByKey(
-      existing?.resumeDocuments ?? [],
-      resumeDocuments,
-      (item) => item.resumeVersionId,
-      'Rendered resume document',
-    ),
+    jobs: mergeImmutableByKey(existing?.jobs ?? [], input.jobIntelligence ? [input.jobIntelligence.jobDescription] : [], (item) => item.id, 'JobDescription'),
+    jobRequirements: mergeImmutableByKey(existing?.jobRequirements ?? [], input.jobIntelligence?.requirements ?? [], (item) => item.id, 'JobRequirement'),
+    jobAnalyses: mergeImmutableByKey(existing?.jobAnalyses ?? [], jobAnalyses, (item) => `${item.jobDescriptionId}:${item.analyzerVersion}`, 'Job analysis'),
+    matchReports: mergeImmutableByKey(existing?.matchReports ?? [], input.jobMatch ? [input.jobMatch.report] : [], (item) => item.id, 'MatchReport'),
+    matchEvaluations: mergeImmutableByKey(existing?.matchEvaluations ?? [], matchEvaluations, (item) => `${item.matchReportId}:${item.engineVersion}`, 'Match evaluation'),
+    resumeClaims: mergeImmutableByKey(existing?.resumeClaims ?? [], input.resumeComposition.claims, (item) => item.id, 'ResumeClaim'),
+    resumeVersions: mergeImmutableByKey(existing?.resumeVersions ?? [], [input.resumeComposition.version], (item) => item.id, 'ResumeVersion'),
+    resumeManifests: mergeImmutableByKey(existing?.resumeManifests ?? [], [input.resumeComposition.manifest], (item) => item.id, 'ResumeManifest'),
+    resumeDocuments: mergeImmutableByKey(existing?.resumeDocuments ?? [], resumeDocuments, (item) => item.resumeVersionId, 'Rendered resume document'),
     revision: (existing?.revision ?? 0) + 1,
     createdAt: existing?.createdAt ?? persistedAt,
     updatedAt: persistedAt,
@@ -391,15 +258,8 @@ function buildSnapshot(
   return snapshot;
 }
 
-/**
- * Persists the complete candidate/job/resume provenance graph as one atomic
- * repository snapshot, then reloads and revalidates it before success returns.
- * A failed save or failed verification must propagate to the API so a generated
- * resume is never reported as durably stored when it is not.
- */
-export async function persistCareerVault(
-  input: PersistCareerVaultInput,
-): Promise<CareerVaultSnapshot> {
+/** Persist, reload and verify before returning a durability claim. */
+export async function persistCareerVault(input: PersistCareerVaultInput): Promise<CareerVaultSnapshot> {
   const persistedAt = input.persistedAt ?? new Date().toISOString();
   const existing = await input.repository.load(input.candidate.id);
   if (existing) validateCareerVaultSnapshot(existing);
@@ -408,27 +268,13 @@ export async function persistCareerVault(
   await input.repository.save(next);
 
   const reloaded = await input.repository.load(input.candidate.id);
-  if (!reloaded) {
-    throw new CareerVaultIntegrityError('Career Vault save could not be reloaded for verification.');
-  }
+  if (!reloaded) throw new CareerVaultIntegrityError('Career Vault save could not be reloaded for verification.');
   validateCareerVaultSnapshot(reloaded);
 
-  requireReference(
-    reloaded.revision === next.revision,
-    `Career Vault verification expected revision ${next.revision} but loaded ${reloaded.revision}.`,
-  );
-  requireReference(
-    reloaded.resumeVersions.some((item) => item.id === input.resumeComposition.version.id),
-    'Career Vault verification could not find the persisted ResumeVersion.',
-  );
-  requireReference(
-    reloaded.resumeManifests.some((item) => item.id === input.resumeComposition.manifest.id),
-    'Career Vault verification could not find the persisted ResumeManifest.',
-  );
-  requireReference(
-    reloaded.resumeDocuments.some((item) => item.resumeVersionId === input.resumeComposition.version.id),
-    'Career Vault verification could not find the persisted rendered resume document.',
-  );
+  requireReference(reloaded.revision === next.revision, `Career Vault verification expected revision ${next.revision} but loaded ${reloaded.revision}.`);
+  requireReference(reloaded.resumeVersions.some((item) => item.id === input.resumeComposition.version.id), 'Career Vault verification could not find the persisted ResumeVersion.');
+  requireReference(reloaded.resumeManifests.some((item) => item.id === input.resumeComposition.manifest.id), 'Career Vault verification could not find the persisted ResumeManifest.');
+  requireReference(reloaded.resumeDocuments.some((item) => item.resumeVersionId === input.resumeComposition.version.id), 'Career Vault verification could not find the persisted rendered resume document.');
 
   return reloaded;
 }
