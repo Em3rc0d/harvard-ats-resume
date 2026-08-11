@@ -29,8 +29,13 @@ export class UpstashCareerVaultRepository implements CareerVaultRepository {
   }
 }
 
+export interface CareerVaultEnvironment {
+  readonly UPSTASH_REDIS_REST_URL?: string;
+  readonly UPSTASH_REDIS_REST_TOKEN?: string;
+}
+
 export function createCareerVaultRepositoryFromEnv(
-  env: NodeJS.ProcessEnv = process.env,
+  env: CareerVaultEnvironment = process.env,
 ): CareerVaultRepository {
   const url = env.UPSTASH_REDIS_REST_URL;
   const token = env.UPSTASH_REDIS_REST_TOKEN;
