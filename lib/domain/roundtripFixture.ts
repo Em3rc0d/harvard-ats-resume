@@ -44,12 +44,30 @@ export function createRoundtripFixture() {
     observedAt: createdAt,
   });
 
+  const supportingCareerEvidence = createCareerEvidence({
+    id: domainId('CareerEvidence', 'evidence:event-consumers'),
+    sourceId: careerSource.id,
+    excerpt: 'Implemented event consumers for asynchronous workflows.',
+    observedAt: createdAt,
+  });
+
   const careerAssertion = createCareerAssertion({
     id: domainId('CareerAssertion', 'assertion:event-services'),
     candidateProfileId: candidateProfile.id,
     statement: 'Built asynchronous event-driven services.',
     truthClass: 'VERIFIED_FACT',
     evidenceIds: [careerEvidence.id],
+    sourceIds: [careerSource.id],
+    derivedFromAssertionIds: [],
+    createdAt,
+  });
+
+  const supportingCareerAssertion = createCareerAssertion({
+    id: domainId('CareerAssertion', 'assertion:event-consumers'),
+    candidateProfileId: candidateProfile.id,
+    statement: 'Implemented event consumers for asynchronous workflows.',
+    truthClass: 'VERIFIED_FACT',
+    evidenceIds: [supportingCareerEvidence.id],
     sourceIds: [careerSource.id],
     derivedFromAssertionIds: [],
     createdAt,
@@ -102,6 +120,7 @@ export function createRoundtripFixture() {
 
   const assertionsById = new Map([
     [careerAssertion.id, careerAssertion],
+    [supportingCareerAssertion.id, supportingCareerAssertion],
     [suggestionAssertion.id, suggestionAssertion],
   ]);
 
@@ -114,6 +133,15 @@ export function createRoundtripFixture() {
     assertionsById,
   );
 
+  const multiAssertionResumeClaim = createResumeClaim(
+    {
+      id: domainId('ResumeClaim', 'claim:event-services-and-consumers'),
+      assertionIds: [careerAssertion.id, supportingCareerAssertion.id],
+      wording: 'Built asynchronous event-driven services and implemented event consumers.',
+    },
+    assertionsById,
+  );
+
   const resumeVersion = createResumeVersion({
     id: domainId('ResumeVersion', 'resume:platform-engineer:v1'),
     candidateProfileId: candidateProfile.id,
@@ -122,7 +150,10 @@ export function createRoundtripFixture() {
     createdAt,
   });
 
-  const claimsById = new Map([[resumeClaim.id, resumeClaim]]);
+  const claimsById = new Map([
+    [resumeClaim.id, resumeClaim],
+    [multiAssertionResumeClaim.id, multiAssertionResumeClaim],
+  ]);
 
   const resumeManifest = createResumeManifest(
     {
@@ -137,13 +168,16 @@ export function createRoundtripFixture() {
     candidateProfile,
     careerSource,
     careerEvidence,
+    supportingCareerEvidence,
     careerAssertion,
+    supportingCareerAssertion,
     suggestionAssertion,
     jobDescription,
     jobRequirement,
     requirementMatch,
     matchReport,
     resumeClaim,
+    multiAssertionResumeClaim,
     resumeVersion,
     resumeManifest,
     assertionsById,
@@ -157,10 +191,12 @@ export function validateRoundtripFixture(): void {
   assertValid(
     combineValidation([
       validateCareerAssertion(fixture.careerAssertion),
+      validateCareerAssertion(fixture.supportingCareerAssertion),
       validateCareerAssertion(fixture.suggestionAssertion),
       validateJobRequirement(fixture.jobRequirement),
       validateRequirementMatch(fixture.requirementMatch),
       validateResumeClaim(fixture.resumeClaim, fixture.assertionsById),
+      validateResumeClaim(fixture.multiAssertionResumeClaim, fixture.assertionsById),
       validateResumeManifest(fixture.resumeManifest, fixture.claimsById),
     ]),
   );
@@ -183,6 +219,24 @@ export function validateRoundtripFixture(): void {
 
   if (inferredCandidateFact) {
     throw new Error('MATCH INFERENCE must not become a candidate fact.');
+  }
+
+  const partialManifestValidation = validateResumeManifest(
+    {
+      id: domainId('ResumeManifest', 'manifest:partial-provenance-regression'),
+      resumeVersionId: fixture.resumeVersion.id,
+      entries: [
+        {
+          claimId: fixture.multiAssertionResumeClaim.id,
+          assertionIds: [fixture.careerAssertion.id],
+        },
+      ],
+    },
+    fixture.claimsById,
+  );
+
+  if (partialManifestValidation.ok) {
+    throw new Error('INV-006 regression: partial ResumeClaim provenance was incorrectly accepted.');
   }
 }
 
