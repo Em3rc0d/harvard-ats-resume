@@ -6,7 +6,9 @@ import {
 } from '../../application/ai/AIResumeProvider';
 import type { ResumeRequest } from '../../schemas';
 
-const MODEL = 'gemini-2.5-flash';
+export const GEMINI_RESUME_PROVIDER = 'google-gemini';
+export const GEMINI_RESUME_MODEL = 'gemini-2.5-flash';
+export const GEMINI_RESUME_CONTRACT_VERSION = 'ats2-structured-resume-v1';
 const REQUEST_TIMEOUT_MS = 45_000;
 
 const SYSTEM_INSTRUCTION = `You are a constrained professional resume rewriter.
@@ -85,7 +87,7 @@ export class GeminiResumeProvider implements AIResumeProvider {
 
     try {
       const result = await client.models.generateContent({
-        model: MODEL,
+        model: GEMINI_RESUME_MODEL,
         contents: buildUserContent(data),
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
