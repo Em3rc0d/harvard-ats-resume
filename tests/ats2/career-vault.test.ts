@@ -18,6 +18,8 @@ import { createCareerVaultRepositoryFromEnv } from '../../lib/infrastructure/per
 
 const T0 = '2026-08-11T20:00:00.000Z';
 const T1 = '2026-08-11T21:00:00.000Z';
+const VAULT_ID = '123e4567-e89b-42d3-a456-426614174000';
+const OTHER_VAULT_ID = '123e4567-e89b-42d3-a456-426614174001';
 const GENERATION = {
   provider: 'google-gemini',
   model: 'gemini-2.5-flash',
@@ -109,8 +111,8 @@ Soft Skills: Collaboration
 LANGUAGES
 Spanish: Native`;
 
-function artifacts(data: ResumeRequest, capturedAt = T0) {
-  const identity = deriveCareerVaultIdentity(data);
+function artifacts(data: ResumeRequest, capturedAt = T0, careerVaultId = VAULT_ID) {
+  const identity = deriveCareerVaultIdentity(data, careerVaultId);
   const truth = buildLegacyTruthContext(data, {
     projectionKey: identity.candidateProjectionKey,
     candidateProfileId: identity.candidateProfileId,
@@ -146,8 +148,9 @@ async function persist(
   repository: CareerVaultRepository,
   data: ResumeRequest,
   capturedAt = T0,
+  careerVaultId = VAULT_ID,
 ) {
-  const built = artifacts(data, capturedAt);
+  const built = artifacts(data, capturedAt, careerVaultId);
   const snapshot = await persistCareerVault({
     repository,
     candidate: built.truth.candidateProfile,
@@ -162,19 +165,29 @@ async function persist(
   return { ...built, snapshot };
 }
 
-test('Career Vault identity is stable across request time and target changes without exposing raw email', () => {
-  const first = deriveCareerVaultIdentity(resumeFixture('Requirements:\n- Docker', 'Jane@Example.com'));
-  const sameCandidateDifferentTarget = deriveCareerVaultIdentity(
+test('opaque Career Vault identity is stable across email casing and target changes without exposing capability or email', () => {
+  const first = deriveCareerVaultIdentity(
+    resumeFixture('Requirements:\n- Docker', 'Jane@Example.com'),
+    VAULT_ID,
+  );
+  const sameVaultDifferentTarget = deriveCareerVaultIdentity(
     resumeFixture('Requirements:\n- PostgreSQL', 'jane@example.com'),
+    VAULT_ID,
+  );
+  const differentVaultSameEmail = deriveCareerVaultIdentity(
+    resumeFixture('Requirements:\n- Docker', 'jane@example.com'),
+    OTHER_VAULT_ID,
   );
 
-  assert.equal(first.candidateProfileId, sameCandidateDifferentTarget.candidateProfileId);
-  assert.equal(first.candidateProjectionKey, sameCandidateDifferentTarget.candidateProjectionKey);
-  assert.notEqual(first.jobProjectionKey, sameCandidateDifferentTarget.jobProjectionKey);
+  assert.equal(first.candidateProfileId, sameVaultDifferentTarget.candidateProfileId);
+  assert.equal(first.candidateProjectionKey, sameVaultDifferentTarget.candidateProjectionKey);
+  assert.notEqual(first.jobProjectionKey, sameVaultDifferentTarget.jobProjectionKey);
+  assert.notEqual(first.candidateProfileId, differentVaultSameEmail.candidateProfileId);
   assert.equal(String(first.candidateProfileId).includes('jane@example.com'), false);
+  assert.equal(String(first.candidateProfileId).includes(VAULT_ID), false);
 });
 
-test('first durable save survives repository reload with complete candidate→job→resume provenance', async () => {
+test('first durable save survives repository reload with complete candidate→job→resume provenance and exact rendered content', async () => {
   const repository = new MemoryCareerVaultRepository();
   const { snapshot, identity } = await persist(
     repository,
@@ -185,6 +198,9 @@ test('first durable save survives repository reload with complete candidate→jo
   assert.equal(snapshot.candidate.id, identity.candidateProfileId);
   assert.equal(snapshot.resumeVersions.length, 1);
   assert.equal(snapshot.resumeManifests.length, 1);
+  assert.equal(snapshot.resumeDocuments.length, 1);
+  assert.equal(snapshot.resumeDocuments[0]?.content, FORMATTED_RESUME);
+  assert.equal(snapshot.resumeDocuments[0]?.contentSha256, snapshot.resumeVersions[0]?.contentSha256);
   assert.equal(snapshot.jobs.length, 1);
   assert.equal(snapshot.matchReports.length, 1);
   assert.ok(snapshot.assertions.length > 0);
@@ -194,6 +210,7 @@ test('first durable save survives repository reload with complete candidate→jo
   assert.ok(reloaded);
   validateCareerVaultSnapshot(reloaded);
   assert.deepEqual(reloaded.resumeManifests, snapshot.resumeManifests);
+  assert.equal(reloaded.resumeDocuments[0]?.content, FORMATTED_RESUME);
 });
 
 test('repeating the same candidate/job/version increments revision without duplicating immutable history', async () => {
@@ -209,11 +226,12 @@ test('repeating the same candidate/job/version increments revision without dupli
   assert.equal(second.snapshot.matchReports.length, 1);
   assert.equal(second.snapshot.resumeVersions.length, 1);
   assert.equal(second.snapshot.resumeManifests.length, 1);
+  assert.equal(second.snapshot.resumeDocuments.length, 1);
   assert.equal(second.snapshot.createdAt, T0);
   assert.equal(second.snapshot.updatedAt, T1);
 });
 
-test('a different target Job Description creates separate durable job/match/version history', async () => {
+test('a different target Job Description creates separate durable job/match/version/document history', async () => {
   const repository = new MemoryCareerVaultRepository();
   const first = await persist(repository, resumeFixture('Requirements:\n- TypeScript\n- Docker'), T0);
   const second = await persist(repository, resumeFixture('Requirements:\n- TypeScript\n- PostgreSQL'), T1);
@@ -224,6 +242,7 @@ test('a different target Job Description creates separate durable job/match/vers
   assert.equal(second.snapshot.matchReports.length, 2);
   assert.equal(second.snapshot.resumeVersions.length, 2);
   assert.equal(second.snapshot.resumeManifests.length, 2);
+  assert.equal(second.snapshot.resumeDocuments.length, 2);
 });
 
 test('invalid partial manifest is rejected before repository save', async () => {
@@ -260,6 +279,23 @@ test('invalid partial manifest is rejected before repository save', async () => 
   assert.equal(repository.saveCalls, 0);
 });
 
+test('tampered rendered resume document is rejected by reload graph validation', async () => {
+  const repository = new MemoryCareerVaultRepository();
+  const { snapshot } = await persist(repository, resumeFixture(), T0);
+  const tampered = clone(snapshot);
+  tampered.resumeDocuments = [
+    {
+      ...tampered.resumeDocuments[0]!,
+      content: `${tampered.resumeDocuments[0]!.content}\nInvented line`,
+    },
+  ];
+
+  assert.throws(
+    () => validateCareerVaultSnapshot(tampered),
+    /content hash does not match its content/i,
+  );
+});
+
 test('failed durable save leaves the previously committed snapshot intact', async () => {
   const repository = new MemoryCareerVaultRepository();
   const first = await persist(repository, resumeFixture('Requirements:\n- Docker'), T0);
@@ -275,6 +311,7 @@ test('failed durable save leaves the previously committed snapshot intact', asyn
   assert.equal(reloaded.revision, 1);
   assert.equal(reloaded.jobs.length, 1);
   assert.equal(reloaded.resumeVersions.length, 1);
+  assert.equal(reloaded.resumeDocuments.length, 1);
 });
 
 test('durable repository configuration fails closed instead of falling back to memory', () => {
