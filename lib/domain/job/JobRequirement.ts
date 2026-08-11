@@ -20,6 +20,10 @@ export interface JobRequirement {
   readonly statement: string;
   readonly kind: JobRequirementKind;
   readonly necessity: JobRequirementNecessity;
+  readonly canonicalConcept?: string;
+  readonly aliases?: readonly string[];
+  readonly minimumYears?: number;
+  readonly confidence?: number;
 }
 
 export function createJobRequirement(input: JobRequirement): JobRequirement {
@@ -39,6 +43,17 @@ export function validateJobRequirement(requirement: JobRequirement): ValidationR
 
   if (!requirement.jobDescriptionId) {
     return fail('INV-004', 'JobRequirement derives from JobDescription, never CandidateProfile.');
+  }
+
+  if (requirement.minimumYears !== undefined && requirement.minimumYears < 0) {
+    return fail('INV-JOB-MIN-YEARS', 'JobRequirement minimumYears cannot be negative.');
+  }
+
+  if (
+    requirement.confidence !== undefined &&
+    (requirement.confidence < 0 || requirement.confidence > 1)
+  ) {
+    return fail('INV-JOB-CONFIDENCE', 'JobRequirement confidence must be between 0 and 1.');
   }
 
   return pass();

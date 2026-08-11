@@ -5,6 +5,8 @@ import { extractKeywords, calculateATSScore, generateSuggestions } from '@/lib/a
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { buildLegacyTruthContext } from '@/lib/application/legacy/LegacyResumeAdapter';
 import { validateGeneratedResumeGrounding } from '@/lib/application/grounding/GroundingValidator';
+import { analyzeJobDescription } from '@/lib/application/job/JobIntelligenceEngine';
+import { matchJobToCandidate } from '@/lib/application/matching/JobMatchEngine';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -56,11 +58,14 @@ export async function POST(request: NextRequest) {
 
     const data = validationResult.data;
     const sanitizedData = sanitizeResumeData(data);
+    const requestProjectionKey = `request:${Date.now()}`;
+    const capturedAt = new Date().toISOString();
 
     // ATS v2 candidate-truth boundary. Job requirements are structurally
     // excluded from evidence/claims by LegacyResumeAdapter.
     const truthContext = buildLegacyTruthContext(sanitizedData, {
-      projectionKey: `request:${Date.now()}`,
+      projectionKey: requestProjectionKey,
+      capturedAt,
     });
 
     if (truthContext.claims.length === 0) {
@@ -76,6 +81,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Job truth is analyzed independently from candidate truth. The matching
+    // engine can only connect existing JobRequirements to CareerAssertions.
+    const jobIntelligence = sanitizedData.jobDescription?.trim()
+      ? analyzeJobDescription(sanitizedData.jobDescription, {
+          projectionKey: requestProjectionKey,
+          capturedAt,
+        })
+      : undefined;
+
+    const jobMatch = jobIntelligence && jobIntelligence.requirements.length > 0
+      ? matchJobToCandidate(jobIntelligence, truthContext.assertions, {
+          projectionKey: requestProjectionKey,
+          generatedAt: capturedAt,
+        })
+      : undefined;
+
+    // Legacy keyword analysis remains temporarily for UI compatibility while
+    // JobMatch v2 is exposed as a separate explainable report.
     const jobKeywords = data.jobDescription
       ? extractKeywords(data.jobDescription)
       : [];
@@ -95,8 +118,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ATS v2 grounding gate: probabilistic output is a proposal until this
-    // deterministic hard-fact validation approves it.
     const groundingReport = validateGeneratedResumeGrounding(
       sanitizedData,
       geminiResult.formattedResume,
@@ -148,6 +169,25 @@ export async function POST(request: NextRequest) {
       ...(geminiResult.suggestions || []),
     ];
 
+    const explainableJobMatch = jobMatch && jobIntelligence
+      ? {
+          score: jobMatch.score,
+          language: jobIntelligence.language,
+          breakdown: jobMatch.breakdown,
+          requirements: jobMatch.requirements.map((requirement, index) => ({
+            id: requirement.id,
+            statement: requirement.statement,
+            kind: requirement.kind,
+            necessity: requirement.necessity,
+            canonicalConcept: requirement.canonicalConcept,
+            minimumYears: requirement.minimumYears,
+            status: jobMatch.report.matches[index]?.status ?? 'UNKNOWN',
+            rationale: jobMatch.report.matches[index]?.rationale ?? 'No match inference available.',
+            assertionIds: jobMatch.report.matches[index]?.assertionIds ?? [],
+          })),
+        }
+      : undefined;
+
     return NextResponse.json(
       {
         success: true,
@@ -157,6 +197,7 @@ export async function POST(request: NextRequest) {
           matchedKeywords: atsScoreResult.matchedKeywords,
           missingKeywords: atsScoreResult.missingKeywords,
           suggestions: allSuggestions.slice(0, 10),
+          jobMatch: explainableJobMatch,
         },
       },
       {
