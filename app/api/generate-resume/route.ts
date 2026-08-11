@@ -103,12 +103,17 @@ export async function POST(request: NextRequest) {
     );
 
     if (groundingReport.status !== 'APPROVED') {
+      const confirmationDetail = groundingReport.factsToConfirm.length > 0
+        ? ` Review these proposed facts and add them to the form only if true: ${groundingReport.factsToConfirm.join(', ')}.`
+        : '';
+      const errorMessage = groundingReport.status === 'REJECTED'
+        ? 'ATS v2 blocked candidate facts that were supported only by the job description. Edit your candidate data only if those facts are genuinely yours, then generate again.'
+        : `ATS v2 found generated facts that are not yet supported by your candidate data.${confirmationDetail}`;
+
       return NextResponse.json(
         {
           success: false,
-          error: groundingReport.status === 'REJECTED'
-            ? 'Generated resume contained candidate facts sourced only from the job description.'
-            : 'Generated resume introduced facts that require candidate confirmation.',
+          error: errorMessage,
           grounding: groundingReport,
         },
         {
