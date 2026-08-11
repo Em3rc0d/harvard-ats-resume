@@ -144,7 +144,7 @@ function isPresentationLine(line: string, nonEmptyIndex: number): boolean {
 
   const normalized = normalize(trimmed.replace(/^[-•*]\s*/, ''));
   if (SECTION_HEADINGS.has(normalized)) return true;
-  if (nonEmptyIndex <= 1) return true;
+  if (nonEmptyIndex === 0) return true;
   if (/@|https?:\/\//i.test(trimmed)) return true;
   if (isDateOnlyLine(trimmed)) return true;
   return false;
