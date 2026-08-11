@@ -6,6 +6,7 @@ export * from './job/JobDescription';
 export * from './job/JobRequirement';
 export * from './matching/MatchReport';
 export * from './matching/RequirementMatch';
+export * from './resume/ClaimLedger';
 export * from './resume/ResumeClaim';
 export * from './resume/ResumeManifest';
 export * from './resume/ResumeVersion';
