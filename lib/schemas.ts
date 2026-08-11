@@ -51,7 +51,7 @@ export const certificationSchema = z.object({
 // Language Schema
 export const languageSchema = z.object({
   language: z.string().min(1, 'Language is required'),
-  proficiency: z.string().min(1, 'Proficiency is required'), // e.g. Native, Fluent, Intermediate
+  proficiency: z.string().min(1, 'Proficiency is required'),
 });
 
 // Complete Resume Request Schema
@@ -77,6 +77,41 @@ export type Certification = z.infer<typeof certificationSchema>;
 export type Language = z.infer<typeof languageSchema>;
 export type ResumeRequest = z.infer<typeof resumeRequestSchema>;
 
+const jobMatchRequirementResponseSchema = z.object({
+  id: z.string(),
+  statement: z.string(),
+  kind: z.enum([
+    'SKILL',
+    'EXPERIENCE',
+    'RESPONSIBILITY',
+    'EDUCATION',
+    'CERTIFICATION',
+    'LANGUAGE',
+    'LOCATION',
+    'WORK_AUTHORIZATION',
+    'OTHER',
+  ]),
+  necessity: z.enum(['REQUIRED', 'PREFERRED', 'UNKNOWN']),
+  canonicalConcept: z.string().optional(),
+  minimumYears: z.number().nonnegative().optional(),
+  status: z.enum(['MATCH', 'POTENTIAL_MATCH', 'GAP', 'UNKNOWN', 'BLOCKER']),
+  rationale: z.string(),
+  assertionIds: z.array(z.string()),
+});
+
+export const jobMatchResponseSchema = z.object({
+  score: z.number().min(0).max(100),
+  language: z.enum(['EN', 'ES', 'UNKNOWN']),
+  breakdown: z.object({
+    required: z.object({ matched: z.number().int().nonnegative(), total: z.number().int().nonnegative() }),
+    preferred: z.object({ matched: z.number().int().nonnegative(), total: z.number().int().nonnegative() }),
+    unknown: z.object({ matched: z.number().int().nonnegative(), total: z.number().int().nonnegative() }),
+    gaps: z.number().int().nonnegative(),
+    blockers: z.number().int().nonnegative(),
+  }),
+  requirements: z.array(jobMatchRequirementResponseSchema),
+});
+
 // API Response Schema
 export const resumeResponseSchema = z.object({
   success: z.boolean(),
@@ -86,8 +121,10 @@ export const resumeResponseSchema = z.object({
     matchedKeywords: z.array(z.string()),
     missingKeywords: z.array(z.string()),
     suggestions: z.array(z.string()),
+    jobMatch: jobMatchResponseSchema.optional(),
   }).optional(),
   error: z.string().optional(),
 });
 
+export type JobMatchResponse = z.infer<typeof jobMatchResponseSchema>;
 export type ResumeResponse = z.infer<typeof resumeResponseSchema>;
