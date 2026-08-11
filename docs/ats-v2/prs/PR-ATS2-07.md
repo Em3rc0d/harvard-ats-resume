@@ -28,6 +28,17 @@ Correct the concrete overclaims and behavioral gaps found in the post-G7 archite
 6. absent work-authorization evidence remains UNKNOWN rather than BLOCKER;
 7. Java does not match JavaScript.
 
+## Validation
+
+GitHub Actions run `31454540397` passed the behavioral head before documentation-only gate recording:
+- `npm ci` PASS
+- lint PASS
+- typecheck PASS
+- behavior tests PASS (7/7)
+- build PASS
+
+The final documentation head must also pass CI before merge.
+
 ## Gate
 
-`G7H AUDIT_HARDENING` remains pending until remote CI passes `npm ci`, lint, typecheck, behavior tests, and build.
+`G7H AUDIT_HARDENING — PASS`, subject to final-head CI remaining green.
