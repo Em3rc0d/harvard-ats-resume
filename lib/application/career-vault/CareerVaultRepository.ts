@@ -29,6 +29,13 @@ export interface PersistedMatchEvaluation {
   readonly engineVersion: string;
 }
 
+export interface PersistedResumeDocument {
+  readonly resumeVersionId: ResumeVersion['id'];
+  readonly mediaType: 'text/plain';
+  readonly content: string;
+  readonly contentSha256: string;
+}
+
 /**
  * Durable ATS v2 aggregate stored for one logical candidate identity.
  *
@@ -51,6 +58,7 @@ export interface CareerVaultSnapshot {
   readonly resumeClaims: readonly ResumeClaim[];
   readonly resumeVersions: readonly ResumeVersion[];
   readonly resumeManifests: readonly ResumeManifest[];
+  readonly resumeDocuments: readonly PersistedResumeDocument[];
   readonly revision: number;
   readonly createdAt: string;
   readonly updatedAt: string;
