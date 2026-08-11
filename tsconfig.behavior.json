@@ -19,6 +19,7 @@
     "tests/ats2/match-benchmark.test.ts",
     "tests/ats2/resume-versioning.test.ts",
     "tests/ats2/career-vault.test.ts",
+    "tests/ats2/resume-provenance-identity.test.ts",
     "lib/domain/**/*.ts",
     "lib/application/import/**/*.ts",
     "lib/application/legacy/LegacyResumeAdapter.ts",
