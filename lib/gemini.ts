@@ -1,187 +1,9 @@
-import { GoogleGenAI } from '@google/genai';
-import { ResumeRequest } from './schemas';
-
-const getGeminiClient = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured');
-  }
-  return new GoogleGenAI({ apiKey });
-};
-
-// System prompt as specified in requirements
-const SYSTEM_PROMPT = `You are a professional Harvard resume writer and ATS optimization specialist.
-
-Rules:
-- Do NOT invent experience.
-- Do NOT fabricate achievements or metrics.
-- Only restructure and enhance clarity.
-- Use strong action verbs.
-- Keep bullet points concise.
-- Use quantified impact only if provided.
-- Maintain Harvard resume structure.
-- Avoid tables and graphics.
-- Ensure ATS compatibility.
-- Keep content within 1 page equivalent length.`;
+import type { ResumeRequest } from './schemas';
+import { GeminiResumeProvider } from './infrastructure/ai/GeminiResumeProvider';
 
 /**
- * Construct user prompt with candidate data
- */
-function constructUserPrompt(data: ResumeRequest): string {
-  const candidateJSON = JSON.stringify({
-    personalInfo: data.personalInfo,
-    summary: data.summary,
-    experience: data.experience,
-    education: data.education,
-    projects: data.projects,
-    certifications: data.certifications,
-    languages: data.languages,
-    skills: data.skills,
-  }, null, 2);
-
-  let prompt = `Generate a Harvard-style resume using the following candidate data.
-
-Candidate JSON:
-${JSON.stringify(data, null, 2)}
-`;
-
-  if (data.jobDescription) {
-    prompt += `
-Job Description:
-${data.jobDescription}
-
-Instructions:
-- Extract key technical and role-related keywords from the job description.
-- Naturally integrate them into the resume where appropriate.
-`;
-  }
-
-  prompt += `
-Return output in the following structured format. 
-IMPORTANT: DO NOT use markdown code blocks or '===' separators for the resume content sections (like PROFESSIONAL SUMMARY).
-However, YOU MUST use the '===' separators to divide the metadata sections at the end (MATCHED KEYWORDS, IMPROVEMENT SUGGESTIONS, IMPROVED RESUME).
-
-[FULL NAME]
-[Location] | [Email] | [LinkedIn] | [GitHub]
-
-PROFESSIONAL SUMMARY
-[Enhanced 2-3 sentence summary]
-
-EXPERIENCE
-[Company Name] — [Role]
-[Start Date] - [End Date]
-• [Achievement-focused bullet point]
-• [Achievement-focused bullet point]
-
-[Repeat for each experience]
-
-PROJECTS (Optional)
-[Project Name]
-[Brief description and technologies used]
-
-EDUCATION
-[Institution Name]
-[Degree], [Start Date] - [End Date]
-
-CERTIFICATIONS (Optional)
-[Certification Name] — [Issuer], [Date]
-
-LANGUAGES (Optional)
-[Language]: [Proficiency]
-
-SKILLS
-Technical Skills: [Comma-separated list of technical skills]
-Soft Skills: [Comma-separated list of soft skills]
-
-=== MATCHED KEYWORDS ===
-[List of keywords from job description that appear in the resume, comma-separated]
-
-=== IMPROVEMENT SUGGESTIONS ===
-1. [Specific actionable suggestion]
-2. [Specific actionable suggestion]
-
-=== IMPROVED RESUME ===
-[Review the original resume data. Then, RE-WRITE the entire resume below.
-
-CRITICAL TRUTH RULE:
-
-Apply only improvements that can be implemented using facts already
-present in the supplied candidate data.
-
-Never invent or infer metrics, percentages, money, dates, team sizes,
-employers, titles, projects, certifications, technologies,
-responsibilities, ownership, scope, or achievements.
-
-If an improvement requires a factual detail that is not present,
-do not insert it and do not add a placeholder. Keep the resume wording
-fact-preserving and request the missing verified information only in
-IMPROVEMENT SUGGESTIONS.
-
-Job-description facts are requirements, not candidate facts.
-Never transfer them into the candidate resume unless independently
-supported by candidate data.]
-`;
-
-  return prompt;
-}
-
-/**
- * Parse Gemini response into structured format
- */
-function parseGeminiResponse(responseText: string): {
-  formattedResume: string;
-  matchedKeywords: string[];
-  suggestions: string[];
-  improvedResume?: string;
-} {
-  // Extract formatted resume (everything before the keywords section)
-  const resumeMatch = responseText.split(/===\s*MATCHED KEYWORDS\s*===/i)[0];
-  const formattedResume = resumeMatch ? resumeMatch.trim() : responseText.trim();
-
-  // Extract MATCHED KEYWORDS
-  let matchedKeywords: string[] = [];
-  const keywordsParts = responseText.split(/===\s*MATCHED KEYWORDS\s*===/i);
-  if (keywordsParts.length > 1) {
-    const afterKeywords = keywordsParts[1].split(/===/)[0];
-    matchedKeywords = afterKeywords
-      .split(',')
-      .map(k => k.trim())
-      .filter(k => k.length > 0);
-  }
-
-  // Extract IMPROVEMENT SUGGESTIONS
-  let suggestions: string[] = [];
-  const suggestionsParts = responseText.split(/===\s*IMPROVEMENT SUGGESTIONS\s*===/i);
-  if (suggestionsParts.length > 1) {
-    const afterSuggestions = suggestionsParts[1].split(/===\s*IMPROVED RESUME\s*===/i)[0].split(/===/)[0];
-    suggestions = afterSuggestions
-      .split('\n')
-      .map(s => s.replace(/^\d+\.\s*/, '').trim())
-      .filter(s => s.length > 0);
-  }
-
-  // Extract Improved Resume
-  const improvedResumeMatch = responseText.split(/===\s*IMPROVED RESUME\s*===/i);
-  let improvedResumeRaw = improvedResumeMatch.length > 1 ? improvedResumeMatch[1].trim() : undefined;
-
-  // Clean up potential markdown code blocks
-  if (improvedResumeRaw) {
-    improvedResumeRaw = improvedResumeRaw.replace(/^```\w*\n/, '').replace(/\n```$/, '').trim();
-  }
-
-  // Fallback: If improved resume is overly short (e.g. just a placeholder), ignore it.
-  const improvedResume = (improvedResumeRaw && improvedResumeRaw.length > 100) ? improvedResumeRaw : undefined;
-
-  return {
-    formattedResume,
-    matchedKeywords,
-    suggestions,
-    improvedResume
-  };
-}
-
-/**
- * Generate resume using Gemini AI
+ * Generate a resume through the ATS v2 AI provider boundary while preserving
+ * the legacy function contract used by the current API route.
  */
 export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
   success: boolean;
@@ -192,38 +14,16 @@ export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
   error?: string;
 }> {
   try {
-    const genAI = getGeminiClient();
-
-    // Construct full prompt
-    const fullPrompt = `${SYSTEM_PROMPT}\n\n${constructUserPrompt(data)}`;
-
-    // Generate content with timeout
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout')), 45000);
-    });
-
-    const result = await Promise.race([
-      genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: fullPrompt,
-        config: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 8192,
-        },
-      }),
-      timeoutPromise,
-    ]);
-
-    const text = result.text || '';
-
-    // Parse the response
-    const parsed = parseGeminiResponse(text);
+    const provider = new GeminiResumeProvider();
+    const proposal = await provider.generate(data);
+    const improvedResume = proposal.improvedResume.trim();
 
     return {
       success: true,
-      ...parsed,
+      formattedResume: proposal.formattedResume,
+      matchedKeywords: proposal.matchedKeywords,
+      suggestions: proposal.suggestions,
+      improvedResume: improvedResume.length > 100 ? improvedResume : undefined,
     };
   } catch (error) {
     console.error('Gemini API Error:', error);
@@ -235,7 +35,9 @@ export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
 }
 
 /**
- * Sanitize user input before sending to AI
+ * Sanitize user input before sending to AI.
+ * This is transport hygiene only; prompt-injection and factual grounding are
+ * enforced by separate ATS v2 boundaries.
  */
 export function sanitizeResumeData(data: ResumeRequest): ResumeRequest {
   const sanitizeString = (str: string): string => {
@@ -244,11 +46,11 @@ export function sanitizeResumeData(data: ResumeRequest): ResumeRequest {
       .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
       .replace(/javascript:/gi, '')
       .trim()
-      .slice(0, 50000); // Limit total length
+      .slice(0, 50000);
   };
 
   return JSON.parse(
-    JSON.stringify(data, (key, value) => {
+    JSON.stringify(data, (_key, value) => {
       if (typeof value === 'string') {
         return sanitizeString(value);
       }
@@ -256,20 +58,21 @@ export function sanitizeResumeData(data: ResumeRequest): ResumeRequest {
     })
   );
 }
+
 /**
- * Format structured resume data into Harvard-style text
+ * Helper to format resume sections to reduce cognitive complexity.
  */
-/**
- * Helper to format resume sections to reduce cognitive complexity
- */
-function formatExperiences(experience: any[]): string {
+function formatExperiences(experience: ResumeRequest['experience']): string {
   if (!experience || experience.length === 0) return '';
   let text = 'EXPERIENCE\n';
   experience.forEach(exp => {
     text += `${exp.company.toUpperCase()} — ${exp.role.toUpperCase()}\n`;
     text += `${exp.startDate} - ${exp.endDate}\n`;
-    const points = exp.description.split('\n').map((p: string) => p.trim()).filter((p: string) => p.length > 0);
-    points.forEach((point: string) => {
+    const points = exp.description
+      .split('\n')
+      .map((point) => point.trim())
+      .filter((point) => point.length > 0);
+    points.forEach((point) => {
       const cleanPoint = point.replace(/^[•*-]\s*/, '');
       text += `• ${cleanPoint}\n`;
     });
@@ -278,7 +81,7 @@ function formatExperiences(experience: any[]): string {
   return text;
 }
 
-function formatProjects(projects: any[]): string {
+function formatProjects(projects: NonNullable<ResumeRequest['projects']>): string {
   if (!projects || projects.length === 0) return '';
   let text = 'PROJECTS\n';
   projects.forEach(proj => {
@@ -292,7 +95,7 @@ function formatProjects(projects: any[]): string {
   return text;
 }
 
-function formatEducation(education: any[]): string {
+function formatEducation(education: ResumeRequest['education']): string {
   if (!education || education.length === 0) return '';
   let text = 'EDUCATION\n';
   education.forEach(edu => {
@@ -302,7 +105,7 @@ function formatEducation(education: any[]): string {
   return text;
 }
 
-function formatSkills(skills: any): string {
+function formatSkills(skills: ResumeRequest['skills']): string {
   let text = 'SKILLS\n';
   if (skills.hardSkills?.length > 0) {
     text += `Technical Skills: ${skills.hardSkills.join(', ')}\n`;
@@ -314,45 +117,44 @@ function formatSkills(skills: any): string {
 }
 
 /**
- * Format structured resume data into Harvard-style text
+ * Format structured resume data into Harvard-style text.
  */
 export function formatResumeFromData(data: ResumeRequest): string {
   let text = '';
 
-  // Header
   text += `${data.personalInfo.fullName.toUpperCase()}\n`;
   const contactParts = [
     data.personalInfo.location,
     data.personalInfo.email,
-    data.personalInfo.linkedin ? `LinkedIn: ${data.personalInfo.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, '')}` : '',
-    data.personalInfo.github ? `GitHub: ${data.personalInfo.github.replace(/^https?:\/\/(www\.)?github\.com\//, '')}` : ''
+    data.personalInfo.linkedin
+      ? `LinkedIn: ${data.personalInfo.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, '')}`
+      : '',
+    data.personalInfo.github
+      ? `GitHub: ${data.personalInfo.github.replace(/^https?:\/\/(www\.)?github\.com\//, '')}`
+      : '',
   ].filter(Boolean);
   text += `${contactParts.join(' | ')}\n\n`;
 
-  // Professional Summary
   text += `PROFESSIONAL SUMMARY\n${data.summary}\n\n`;
 
-  // Sections
   text += formatExperiences(data.experience);
   text += formatProjects(data.projects ?? []);
   text += formatEducation(data.education);
   text += formatSkills(data.skills);
 
-  // Certifications
   const certifications = data.certifications;
   if (certifications && certifications.length > 0) {
-    text += `CERTIFICATIONS\n`;
+    text += 'CERTIFICATIONS\n';
     certifications.forEach(cert => {
       text += `${cert.name} — ${cert.issuer}, ${cert.date}\n`;
     });
     text += '\n';
   }
 
-  // Languages
   const languages = data.languages;
   if (languages && languages.length > 0) {
-    text += `LANGUAGES\n`;
-    const langs = languages.map(l => `${l.language}: ${l.proficiency}`);
+    text += 'LANGUAGES\n';
+    const langs = languages.map(language => `${language.language}: ${language.proficiency}`);
     text += `${langs.join(' | ')}\n`;
   }
 
