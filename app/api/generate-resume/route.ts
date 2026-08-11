@@ -3,13 +3,14 @@ import { resumeRequestSchema } from '@/lib/schemas';
 import { generateResumeWithGemini, sanitizeResumeData } from '@/lib/gemini';
 import { extractKeywords, calculateATSScore, generateSuggestions } from '@/lib/ats-scoring';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
+import { buildLegacyTruthContext } from '@/lib/application/legacy/LegacyResumeAdapter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/generate-resume
- * 
+ *
  * Main endpoint for generating ATS-optimized Harvard-style resumes
  */
 export async function POST(request: NextRequest) {
@@ -57,8 +58,28 @@ export async function POST(request: NextRequest) {
 
     const data = validationResult.data;
 
-    // Sanitize input to prevent injection attacks
+    // Sanitize legacy DTO before projecting it into ATS v2 candidate truth.
     const sanitizedData = sanitizeResumeData(data);
+
+    // ATS v2 boundary: candidate data becomes evidence-backed assertions and
+    // canonical claims before any probabilistic generation is allowed to run.
+    // jobDescription is deliberately excluded by LegacyResumeAdapter.
+    const truthContext = buildLegacyTruthContext(sanitizedData, {
+      projectionKey: `request:${Date.now()}`,
+    });
+
+    if (truthContext.claims.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'No evidence-backed resume claims could be created from the supplied candidate data.',
+        },
+        {
+          status: 400,
+          headers: rateLimitHeaders,
+        }
+      );
+    }
 
     // Step 1: Extract keywords from job description (if provided)
     const jobKeywords = data.jobDescription
