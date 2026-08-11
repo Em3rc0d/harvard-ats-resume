@@ -26,6 +26,7 @@ interface RequirementSelector {
 interface BenchmarkCase {
   readonly name: string;
   readonly category: 'SKILL' | 'TENURE' | 'RESPONSIBILITY' | 'EDUCATION' | 'LANGUAGE' | 'LOCATION' | 'WORK_AUTHORIZATION' | 'CERTIFICATION' | 'SCORING' | 'EXTRACTION';
+  readonly locale: 'EN' | 'ES';
   readonly jd: string;
   readonly candidate: CandidateSpec;
   readonly selector?: RequirementSelector;
@@ -81,268 +82,52 @@ function resumeFixture(spec: CandidateSpec): ResumeRequest {
 }
 
 const CASES: readonly BenchmarkCase[] = [
-  {
-    name: 'exact TypeScript evidence matches required TypeScript',
-    category: 'SKILL',
-    jd: 'Requirements:\n- TypeScript',
-    candidate: { hardSkills: ['TypeScript'] },
-    selector: { canonicalConcept: 'TypeScript' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'missing TypeScript is a gap',
-    category: 'SKILL',
-    jd: 'Requirements:\n- TypeScript',
-    candidate: { hardSkills: ['Python'], experience: [experience('Built backend APIs with Python.', ['Python'])] },
-    selector: { canonicalConcept: 'TypeScript' },
-    expectedStatus: 'GAP',
-  },
-  {
-    name: 'Java does not match JavaScript',
-    category: 'SKILL',
-    jd: 'Requirements:\n- Java',
-    candidate: { hardSkills: ['JavaScript'], experience: [experience('Built APIs with JavaScript.', ['JavaScript'])] },
-    selector: { canonicalConcept: 'Java' },
-    expectedStatus: 'GAP',
-  },
-  {
-    name: 'C sharp requirement matches dotnet alias evidence',
-    category: 'SKILL',
-    jd: 'Requirements:\n- C#',
-    candidate: { hardSkills: ['.NET'], experience: [experience('Built services with .NET.', ['.NET'])] },
-    selector: { canonicalConcept: 'C#' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'Go requirement matches explicit Go candidate skill',
-    category: 'SKILL',
-    jd: 'Requirements:\n- Go',
-    candidate: { hardSkills: ['Go'], experience: [experience('Built services with Go.', ['Go'])] },
-    selector: { canonicalConcept: 'Go' },
-    expectedStatus: 'MATCH',
-    expectedRequirementCount: 1,
-  },
-  {
-    name: 'Kubernetes requirement matches k8s alias evidence',
-    category: 'SKILL',
-    jd: 'Requirements:\n- Kubernetes',
-    candidate: { hardSkills: ['k8s'], experience: [experience('Deployed workloads with k8s.', ['k8s'])] },
-    selector: { canonicalConcept: 'Kubernetes' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'AWS does not match Azure',
-    category: 'SKILL',
-    jd: 'Requirements:\n- AWS',
-    candidate: { hardSkills: ['Azure'], experience: [experience('Deployed services on Azure.', ['Azure'])] },
-    selector: { canonicalConcept: 'AWS' },
-    expectedStatus: 'GAP',
-  },
-  {
-    name: 'PostgreSQL requirement matches postgres alias',
-    category: 'SKILL',
-    jd: 'Requirements:\n- PostgreSQL',
-    candidate: { hardSkills: ['Postgres'], experience: [experience('Built data services with Postgres.', ['Postgres'])] },
-    selector: { canonicalConcept: 'PostgreSQL' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'REST APIs requirement matches REST API wording',
-    category: 'SKILL',
-    jd: 'Requirements:\n- REST APIs',
-    candidate: { hardSkills: ['REST API'], experience: [experience('Built REST API endpoints.', ['REST API'])] },
-    selector: { canonicalConcept: 'REST APIs' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'preferred React requirement preserves preference and matches',
-    category: 'SKILL',
-    jd: 'Preferred:\n- React',
-    candidate: { hardSkills: ['React'], experience: [experience('Built user interfaces with React.', ['React'])] },
-    selector: { canonicalConcept: 'React' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'five-year TypeScript requirement rejects documented two-year period',
-    category: 'TENURE',
-    jd: 'Requirements:\n- 5+ years TypeScript',
-    candidate: { hardSkills: ['TypeScript'], experience: [experience('Built APIs with TypeScript.', ['TypeScript'], '2023', '2025')] },
-    selector: { canonicalConcept: 'TypeScript' },
-    expectedStatus: 'GAP',
-    expectedRequirementCount: 1,
-  },
-  {
-    name: 'two-year TypeScript requirement matches documented two-year period',
-    category: 'TENURE',
-    jd: 'Requirements:\n- 2+ years TypeScript',
-    candidate: { hardSkills: ['TypeScript'], experience: [experience('Built APIs with TypeScript.', ['TypeScript'], '2023', '2025')] },
-    selector: { canonicalConcept: 'TypeScript' },
-    expectedStatus: 'MATCH',
-    expectedRequirementCount: 1,
-  },
-  {
-    name: 'unparseable tenure remains potential rather than fabricated match',
-    category: 'TENURE',
-    jd: 'Requirements:\n- 3+ years TypeScript',
-    candidate: { hardSkills: ['TypeScript'], experience: [experience('Built APIs with TypeScript.', ['TypeScript'], 'Spring 2022', 'Current')] },
-    selector: { canonicalConcept: 'TypeScript' },
-    expectedStatus: 'POTENTIAL_MATCH',
-    expectedRequirementCount: 1,
-  },
-  {
-    name: 'design responsibility matches explicit design evidence',
-    category: 'RESPONSIBILITY',
-    jd: 'Requirements:\n- Design distributed systems',
-    candidate: { hardSkills: [], experience: [experience('Designed distributed systems for internal workflows.')] },
-    selector: { kind: 'RESPONSIBILITY' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'implementation in distributed architecture is only potential for design responsibility',
-    category: 'RESPONSIBILITY',
-    jd: 'Requirements:\n- Design distributed systems',
-    candidate: { hardSkills: [], experience: [experience('Implemented services in a distributed architecture.')] },
-    selector: { kind: 'RESPONSIBILITY' },
-    expectedStatus: 'POTENTIAL_MATCH',
-  },
-  {
-    name: 'collaboration must not satisfy leadership responsibility',
-    category: 'RESPONSIBILITY',
-    jd: 'Requirements:\n- Lead engineering teams',
-    candidate: { hardSkills: [], experience: [experience('Collaborated with engineering teams on backend delivery.')] },
-    selector: { kind: 'RESPONSIBILITY' },
-    expectedStatus: 'GAP',
-  },
-  {
-    name: 'maintenance must not satisfy architecture responsibility',
-    category: 'RESPONSIBILITY',
-    jd: 'Requirements:\n- Architect cloud platforms',
-    candidate: { hardSkills: [], experience: [experience('Maintained cloud platforms for internal applications.')] },
-    selector: { kind: 'RESPONSIBILITY' },
-    expectedStatus: 'GAP',
-  },
-  {
-    name: 'explicit leadership evidence matches leadership responsibility',
-    category: 'RESPONSIBILITY',
-    jd: 'Requirements:\n- Lead engineering teams',
-    candidate: { hardSkills: [], experience: [experience('Led engineering teams delivering backend services.')] },
-    selector: { kind: 'RESPONSIBILITY' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'bachelor degree requirement matches bachelor evidence',
-    category: 'EDUCATION',
-    jd: 'Requirements:\n- Bachelor degree in Computer Science',
-    candidate: {},
-    selector: { kind: 'EDUCATION' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'master degree must not match bachelor degree',
-    category: 'EDUCATION',
-    jd: 'Requirements:\n- Master degree in Computer Science',
-    candidate: {},
-    selector: { kind: 'EDUCATION' },
-    expectedStatus: 'GAP',
-  },
-  {
-    name: 'English requirement matches fluent English evidence',
-    category: 'LANGUAGE',
-    jd: 'Requirements:\n- Fluent English',
-    candidate: { languages: [{ language: 'English', proficiency: 'Fluent' }] },
-    selector: { kind: 'LANGUAGE' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'English requirement does not match Spanish-only evidence',
-    category: 'LANGUAGE',
-    jd: 'Requirements:\n- Fluent English',
-    candidate: { languages: [{ language: 'Spanish', proficiency: 'Native' }] },
-    selector: { kind: 'LANGUAGE' },
-    expectedStatus: 'GAP',
-  },
-  {
-    name: 'Lima location requirement matches candidate location',
-    category: 'LOCATION',
-    jd: 'Requirements:\n- Must be located in Lima, Peru',
-    candidate: { location: 'Lima, Peru' },
-    selector: { kind: 'LOCATION' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'New York location requirement does not match Lima',
-    category: 'LOCATION',
-    jd: 'Requirements:\n- Must be located in New York, USA',
-    candidate: { location: 'Lima, Peru' },
-    selector: { kind: 'LOCATION' },
-    expectedStatus: 'GAP',
-  },
-  {
-    name: 'missing work authorization remains unknown',
-    category: 'WORK_AUTHORIZATION',
-    jd: 'Requirements:\n- Must be authorized to work in the United States',
-    candidate: {},
-    selector: { kind: 'WORK_AUTHORIZATION' },
-    expectedStatus: 'UNKNOWN',
-  },
-  {
-    name: 'explicit work authorization evidence matches',
-    category: 'WORK_AUTHORIZATION',
-    jd: 'Requirements:\n- Must be authorized to work in the United States',
-    candidate: { summary: 'Backend engineer authorized to work in the United States.' },
-    selector: { kind: 'WORK_AUTHORIZATION' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'PMP certification requirement matches explicit certification',
-    category: 'CERTIFICATION',
-    jd: 'Requirements:\n- PMP certification required',
-    candidate: { certifications: [{ name: 'PMP', issuer: 'PMI', date: '2024' }] },
-    selector: { kind: 'CERTIFICATION' },
-    expectedStatus: 'MATCH',
-  },
-  {
-    name: 'PMP certification requirement is gap when absent',
-    category: 'CERTIFICATION',
-    jd: 'Requirements:\n- PMP certification required',
-    candidate: { certifications: [] },
-    selector: { kind: 'CERTIFICATION' },
-    expectedStatus: 'GAP',
-  },
-  {
-    name: 'required match outweighs preferred gap in score',
-    category: 'SCORING',
-    jd: 'Requirements:\n- TypeScript\nPreferred:\n- AWS',
-    candidate: { hardSkills: ['TypeScript'], experience: [experience('Built APIs with TypeScript.', ['TypeScript'])] },
-    expectedRequirementCount: 2,
-    expectedScore: 67,
-  },
-  {
-    name: 'preferred match cannot compensate for required gap',
-    category: 'SCORING',
-    jd: 'Requirements:\n- TypeScript\nPreferred:\n- AWS',
-    candidate: { hardSkills: ['AWS'], experience: [experience('Deployed services on AWS.', ['AWS'])] },
-    expectedRequirementCount: 2,
-    expectedScore: 33,
-  },
-  {
-    name: 'uncatalogued required Snowflake requirement is retained and matched lexically',
-    category: 'EXTRACTION',
-    jd: 'Requirements:\n- Snowflake',
-    candidate: { summary: 'Data engineer working with Snowflake pipelines.', hardSkills: [] },
-    selector: { kind: 'OTHER', statementIncludes: 'Snowflake' },
-    expectedStatus: 'MATCH',
-    expectedRequirementCount: 1,
-  },
-  {
-    name: 'uncatalogued required Snowflake requirement is a gap without evidence',
-    category: 'EXTRACTION',
-    jd: 'Requirements:\n- Snowflake',
-    candidate: { summary: 'Backend engineer building APIs.', hardSkills: [] },
-    selector: { kind: 'OTHER', statementIncludes: 'Snowflake' },
-    expectedStatus: 'GAP',
-    expectedRequirementCount: 1,
-  },
+  { name: 'exact TypeScript evidence matches required TypeScript', category: 'SKILL', locale: 'EN', jd: 'Requirements:\n- TypeScript', candidate: { hardSkills: ['TypeScript'] }, selector: { canonicalConcept: 'TypeScript' }, expectedStatus: 'MATCH' },
+  { name: 'missing TypeScript is a gap', category: 'SKILL', locale: 'EN', jd: 'Requirements:\n- TypeScript', candidate: { hardSkills: ['Python'], experience: [experience('Built backend APIs with Python.', ['Python'])] }, selector: { canonicalConcept: 'TypeScript' }, expectedStatus: 'GAP' },
+  { name: 'Java does not match JavaScript', category: 'SKILL', locale: 'EN', jd: 'Requirements:\n- Java', candidate: { hardSkills: ['JavaScript'], experience: [experience('Built APIs with JavaScript.', ['JavaScript'])] }, selector: { canonicalConcept: 'Java' }, expectedStatus: 'GAP' },
+  { name: 'C sharp requirement matches dotnet alias evidence', category: 'SKILL', locale: 'EN', jd: 'Requirements:\n- C#', candidate: { hardSkills: ['.NET'], experience: [experience('Built services with .NET.', ['.NET'])] }, selector: { canonicalConcept: 'C#' }, expectedStatus: 'MATCH' },
+  { name: 'Go requirement matches explicit Go candidate skill', category: 'SKILL', locale: 'EN', jd: 'Requirements:\n- Go', candidate: { hardSkills: ['Go'], experience: [experience('Built services with Go.', ['Go'])] }, selector: { canonicalConcept: 'Go' }, expectedStatus: 'MATCH', expectedRequirementCount: 1 },
+  { name: 'Kubernetes requirement matches k8s alias evidence', category: 'SKILL', locale: 'EN', jd: 'Requirements:\n- Kubernetes', candidate: { hardSkills: ['k8s'], experience: [experience('Deployed workloads with k8s.', ['k8s'])] }, selector: { canonicalConcept: 'Kubernetes' }, expectedStatus: 'MATCH' },
+  { name: 'AWS does not match Azure', category: 'SKILL', locale: 'EN', jd: 'Requirements:\n- AWS', candidate: { hardSkills: ['Azure'], experience: [experience('Deployed services on Azure.', ['Azure'])] }, selector: { canonicalConcept: 'AWS' }, expectedStatus: 'GAP' },
+  { name: 'PostgreSQL requirement matches postgres alias', category: 'SKILL', locale: 'EN', jd: 'Requirements:\n- PostgreSQL', candidate: { hardSkills: ['Postgres'], experience: [experience('Built data services with Postgres.', ['Postgres'])] }, selector: { canonicalConcept: 'PostgreSQL' }, expectedStatus: 'MATCH' },
+  { name: 'REST APIs requirement matches REST API wording', category: 'SKILL', locale: 'EN', jd: 'Requirements:\n- REST APIs', candidate: { hardSkills: ['REST API'], experience: [experience('Built REST API endpoints.', ['REST API'])] }, selector: { canonicalConcept: 'REST APIs' }, expectedStatus: 'MATCH' },
+  { name: 'preferred React requirement matches', category: 'SKILL', locale: 'EN', jd: 'Preferred:\n- React', candidate: { hardSkills: ['React'], experience: [experience('Built user interfaces with React.', ['React'])] }, selector: { canonicalConcept: 'React' }, expectedStatus: 'MATCH' },
+
+  { name: 'five-year TypeScript requirement rejects documented two-year period', category: 'TENURE', locale: 'EN', jd: 'Requirements:\n- 5+ years TypeScript', candidate: { hardSkills: ['TypeScript'], experience: [experience('Built APIs with TypeScript.', ['TypeScript'], '2023', '2025')] }, selector: { canonicalConcept: 'TypeScript' }, expectedStatus: 'GAP', expectedRequirementCount: 1 },
+  { name: 'two-year TypeScript requirement matches documented two-year period', category: 'TENURE', locale: 'EN', jd: 'Requirements:\n- 2+ years TypeScript', candidate: { hardSkills: ['TypeScript'], experience: [experience('Built APIs with TypeScript.', ['TypeScript'], '2023', '2025')] }, selector: { canonicalConcept: 'TypeScript' }, expectedStatus: 'MATCH', expectedRequirementCount: 1 },
+  { name: 'truly unparseable tenure remains potential rather than fabricated match', category: 'TENURE', locale: 'EN', jd: 'Requirements:\n- 3+ years TypeScript', candidate: { hardSkills: ['TypeScript'], experience: [experience('Built APIs with TypeScript.', ['TypeScript'], 'Spring twenty-two', 'Current')] }, selector: { canonicalConcept: 'TypeScript' }, expectedStatus: 'POTENTIAL_MATCH', expectedRequirementCount: 1 },
+
+  { name: 'design responsibility matches explicit design evidence', category: 'RESPONSIBILITY', locale: 'EN', jd: 'Requirements:\n- Design distributed systems', candidate: { hardSkills: [], experience: [experience('Designed distributed systems for internal workflows.')] }, selector: { kind: 'RESPONSIBILITY' }, expectedStatus: 'MATCH' },
+  { name: 'implementation in distributed architecture is only potential for design responsibility', category: 'RESPONSIBILITY', locale: 'EN', jd: 'Requirements:\n- Design distributed systems', candidate: { hardSkills: [], experience: [experience('Implemented services in a distributed architecture.')] }, selector: { kind: 'RESPONSIBILITY' }, expectedStatus: 'POTENTIAL_MATCH' },
+  { name: 'collaboration must not satisfy leadership responsibility', category: 'RESPONSIBILITY', locale: 'EN', jd: 'Requirements:\n- Lead engineering teams', candidate: { hardSkills: [], experience: [experience('Collaborated with engineering teams on backend delivery.')] }, selector: { kind: 'RESPONSIBILITY' }, expectedStatus: 'GAP' },
+  { name: 'maintenance must not satisfy architecture responsibility', category: 'RESPONSIBILITY', locale: 'EN', jd: 'Requirements:\n- Architect cloud platforms', candidate: { hardSkills: [], experience: [experience('Maintained cloud platforms for internal applications.')] }, selector: { kind: 'RESPONSIBILITY' }, expectedStatus: 'GAP' },
+  { name: 'explicit leadership evidence matches leadership responsibility', category: 'RESPONSIBILITY', locale: 'EN', jd: 'Requirements:\n- Lead engineering teams', candidate: { hardSkills: [], experience: [experience('Led engineering teams delivering backend services.')] }, selector: { kind: 'RESPONSIBILITY' }, expectedStatus: 'MATCH' },
+
+  { name: 'bachelor degree requirement matches bachelor evidence', category: 'EDUCATION', locale: 'EN', jd: 'Requirements:\n- Bachelor degree in Computer Science', candidate: {}, selector: { kind: 'EDUCATION' }, expectedStatus: 'MATCH' },
+  { name: 'master degree must not match bachelor degree', category: 'EDUCATION', locale: 'EN', jd: 'Requirements:\n- Master degree in Computer Science', candidate: {}, selector: { kind: 'EDUCATION' }, expectedStatus: 'GAP' },
+  { name: 'English requirement matches fluent English evidence', category: 'LANGUAGE', locale: 'EN', jd: 'Requirements:\n- Fluent English', candidate: { languages: [{ language: 'English', proficiency: 'Fluent' }] }, selector: { kind: 'LANGUAGE' }, expectedStatus: 'MATCH' },
+  { name: 'English requirement does not match Spanish-only evidence', category: 'LANGUAGE', locale: 'EN', jd: 'Requirements:\n- Fluent English', candidate: { languages: [{ language: 'Spanish', proficiency: 'Native' }] }, selector: { kind: 'LANGUAGE' }, expectedStatus: 'GAP' },
+  { name: 'Lima location requirement matches candidate location', category: 'LOCATION', locale: 'EN', jd: 'Requirements:\n- Must be located in Lima, Peru', candidate: { location: 'Lima, Peru' }, selector: { kind: 'LOCATION' }, expectedStatus: 'MATCH' },
+  { name: 'New York location requirement does not match Lima', category: 'LOCATION', locale: 'EN', jd: 'Requirements:\n- Must be located in New York, USA', candidate: { location: 'Lima, Peru' }, selector: { kind: 'LOCATION' }, expectedStatus: 'GAP' },
+  { name: 'missing work authorization remains unknown', category: 'WORK_AUTHORIZATION', locale: 'EN', jd: 'Requirements:\n- Must be authorized to work in the United States', candidate: {}, selector: { kind: 'WORK_AUTHORIZATION' }, expectedStatus: 'UNKNOWN' },
+  { name: 'explicit work authorization evidence matches', category: 'WORK_AUTHORIZATION', locale: 'EN', jd: 'Requirements:\n- Must be authorized to work in the United States', candidate: { summary: 'Backend engineer authorized to work in the United States.' }, selector: { kind: 'WORK_AUTHORIZATION' }, expectedStatus: 'MATCH' },
+  { name: 'PMP certification requirement matches explicit certification', category: 'CERTIFICATION', locale: 'EN', jd: 'Requirements:\n- PMP certification required', candidate: { certifications: [{ name: 'PMP', issuer: 'PMI', date: '2024' }] }, selector: { kind: 'CERTIFICATION' }, expectedStatus: 'MATCH' },
+  { name: 'PMP certification requirement is gap when absent', category: 'CERTIFICATION', locale: 'EN', jd: 'Requirements:\n- PMP certification required', candidate: { certifications: [] }, selector: { kind: 'CERTIFICATION' }, expectedStatus: 'GAP' },
+  { name: 'required match outweighs preferred gap in score', category: 'SCORING', locale: 'EN', jd: 'Requirements:\n- TypeScript\nPreferred:\n- AWS', candidate: { hardSkills: ['TypeScript'], experience: [experience('Built APIs with TypeScript.', ['TypeScript'])] }, expectedRequirementCount: 2, expectedScore: 67 },
+  { name: 'preferred match cannot compensate for required gap', category: 'SCORING', locale: 'EN', jd: 'Requirements:\n- TypeScript\nPreferred:\n- AWS', candidate: { hardSkills: ['AWS'], experience: [experience('Deployed services on AWS.', ['AWS'])] }, expectedRequirementCount: 2, expectedScore: 33 },
+  { name: 'uncatalogued required Snowflake is retained and matched', category: 'EXTRACTION', locale: 'EN', jd: 'Requirements:\n- Snowflake', candidate: { summary: 'Data engineer working with Snowflake pipelines.', hardSkills: [] }, selector: { kind: 'OTHER', statementIncludes: 'Snowflake' }, expectedStatus: 'MATCH', expectedRequirementCount: 1 },
+  { name: 'uncatalogued required Snowflake is gap without evidence', category: 'EXTRACTION', locale: 'EN', jd: 'Requirements:\n- Snowflake', candidate: { summary: 'Backend engineer building APIs.', hardSkills: [] }, selector: { kind: 'OTHER', statementIncludes: 'Snowflake' }, expectedStatus: 'GAP', expectedRequirementCount: 1 },
+
+  { name: 'ES TypeScript exact match', category: 'SKILL', locale: 'ES', jd: 'Requisitos:\n- TypeScript', candidate: { hardSkills: ['TypeScript'] }, selector: { canonicalConcept: 'TypeScript' }, expectedStatus: 'MATCH' },
+  { name: 'ES five-year TypeScript rejects two documented years', category: 'TENURE', locale: 'ES', jd: 'Requisitos:\n- 5+ años TypeScript', candidate: { hardSkills: ['TypeScript'], experience: [experience('Desarrolló APIs con TypeScript.', ['TypeScript'], '2023', '2025')] }, selector: { canonicalConcept: 'TypeScript' }, expectedStatus: 'GAP', expectedRequirementCount: 1 },
+  { name: 'ES collaboration does not satisfy leadership', category: 'RESPONSIBILITY', locale: 'ES', jd: 'Requisitos:\n- Liderar equipos de ingeniería', candidate: { hardSkills: [], experience: [experience('Colaboró con equipos de ingeniería en entregas backend.')] }, selector: { kind: 'RESPONSIBILITY' }, expectedStatus: 'GAP' },
+  { name: 'ES explicit leadership matches leadership requirement', category: 'RESPONSIBILITY', locale: 'ES', jd: 'Requisitos:\n- Liderar equipos de ingeniería', candidate: { hardSkills: [], experience: [experience('Lideró equipos de ingeniería en entregas backend.')] }, selector: { kind: 'RESPONSIBILITY' }, expectedStatus: 'MATCH' },
+  { name: 'ES inglés fluido matches Fluent English evidence', category: 'LANGUAGE', locale: 'ES', jd: 'Requisitos:\n- Inglés fluido', candidate: { languages: [{ language: 'English', proficiency: 'Fluent' }] }, selector: { kind: 'LANGUAGE' }, expectedStatus: 'MATCH' },
+  { name: 'ES inglés fluido does not match Spanish-only evidence', category: 'LANGUAGE', locale: 'ES', jd: 'Requisitos:\n- Inglés fluido', candidate: { languages: [{ language: 'Spanish', proficiency: 'Native' }] }, selector: { kind: 'LANGUAGE' }, expectedStatus: 'GAP' },
+  { name: 'ES Lima residence requirement matches location', category: 'LOCATION', locale: 'ES', jd: 'Requisitos:\n- Debe residir en Lima, Peru', candidate: { location: 'Lima, Peru' }, selector: { kind: 'LOCATION' }, expectedStatus: 'MATCH' },
+  { name: 'ES missing work authorization remains unknown', category: 'WORK_AUTHORIZATION', locale: 'ES', jd: 'Requisitos:\n- Debe contar con permiso de trabajo en Estados Unidos', candidate: {}, selector: { kind: 'WORK_AUTHORIZATION' }, expectedStatus: 'UNKNOWN' },
+  { name: 'ES maestría does not match bachelor evidence', category: 'EDUCATION', locale: 'ES', jd: 'Requisitos:\n- Maestría en Computer Science', candidate: {}, selector: { kind: 'EDUCATION' }, expectedStatus: 'GAP' },
+  { name: 'ES preferred Docker matches Docker evidence', category: 'SKILL', locale: 'ES', jd: 'Deseables:\n- Docker', candidate: { hardSkills: ['Docker'], experience: [experience('Desplegó servicios con Docker.', ['Docker'])] }, selector: { canonicalConcept: 'Docker' }, expectedStatus: 'MATCH' },
 ];
 
 function selectRequirementIndex(
@@ -352,17 +137,15 @@ function selectRequirementIndex(
   return requirements.findIndex((requirement) => {
     if (selector.canonicalConcept && requirement.canonicalConcept !== selector.canonicalConcept) return false;
     if (selector.kind && requirement.kind !== selector.kind) return false;
-    if (
-      selector.statementIncludes &&
-      !requirement.statement.toLowerCase().includes(selector.statementIncludes.toLowerCase())
-    ) return false;
+    if (selector.statementIncludes && !requirement.statement.toLowerCase().includes(selector.statementIncludes.toLowerCase())) return false;
     return true;
   });
 }
 
-test('controlled job-match benchmark meets calibration contract', () => {
+test('controlled EN/ES job-match benchmark meets calibration contract', () => {
   const mismatches: Array<Record<string, unknown>> = [];
   const byCategory = new Map<string, { correct: number; total: number }>();
+  const byLocale = new Map<string, { correct: number; total: number }>();
   let statusChecks = 0;
   let statusCorrect = 0;
   let falseMatch = 0;
@@ -370,121 +153,66 @@ test('controlled job-match benchmark meets calibration contract', () => {
 
   CASES.forEach((benchmarkCase, index) => {
     const data = resumeFixture(benchmarkCase.candidate);
-    const job = analyzeJobDescription(benchmarkCase.jd, {
-      projectionKey: `benchmark-job-${index}`,
-      capturedAt: '2026-08-11T00:00:00.000Z',
-    });
-    const projection = projectLegacyResumeRequest(data, {
-      projectionKey: `benchmark-candidate-${index}`,
-      capturedAt: '2026-08-11T00:00:00.000Z',
-    });
-    const result = matchJobToCandidate(job, projection.assertions, {
-      projectionKey: `benchmark-match-${index}`,
-      generatedAt: '2026-08-11T00:00:00.000Z',
-    });
+    const job = analyzeJobDescription(benchmarkCase.jd, { projectionKey: `benchmark-job-${index}`, capturedAt: '2026-08-11T00:00:00.000Z' });
+    const projection = projectLegacyResumeRequest(data, { projectionKey: `benchmark-candidate-${index}`, capturedAt: '2026-08-11T00:00:00.000Z' });
+    const result = matchJobToCandidate(job, projection.assertions, { projectionKey: `benchmark-match-${index}`, generatedAt: '2026-08-11T00:00:00.000Z' });
 
     const category = byCategory.get(benchmarkCase.category) ?? { correct: 0, total: 0 };
+    const locale = byLocale.get(benchmarkCase.locale) ?? { correct: 0, total: 0 };
     category.total += 1;
+    locale.total += 1;
     let caseCorrect = true;
 
-    if (
-      benchmarkCase.expectedRequirementCount !== undefined &&
-      job.requirements.length !== benchmarkCase.expectedRequirementCount
-    ) {
+    if (benchmarkCase.expectedRequirementCount !== undefined && job.requirements.length !== benchmarkCase.expectedRequirementCount) {
       caseCorrect = false;
-      mismatches.push({
-        name: benchmarkCase.name,
-        category: benchmarkCase.category,
-        dimension: 'requirement-count',
-        expected: benchmarkCase.expectedRequirementCount,
-        actual: job.requirements.length,
-        requirements: job.requirements.map((requirement) => ({
-          kind: requirement.kind,
-          concept: requirement.canonicalConcept,
-          statement: requirement.statement,
-          necessity: requirement.necessity,
-        })),
-      });
+      mismatches.push({ name: benchmarkCase.name, locale: benchmarkCase.locale, category: benchmarkCase.category, dimension: 'requirement-count', expected: benchmarkCase.expectedRequirementCount, actual: job.requirements.length, requirements: job.requirements.map((requirement) => ({ kind: requirement.kind, concept: requirement.canonicalConcept, statement: requirement.statement, necessity: requirement.necessity })) });
     }
 
     if (benchmarkCase.expectedScore !== undefined && result.score !== benchmarkCase.expectedScore) {
       caseCorrect = false;
-      mismatches.push({
-        name: benchmarkCase.name,
-        category: benchmarkCase.category,
-        dimension: 'score',
-        expected: benchmarkCase.expectedScore,
-        actual: result.score,
-        statuses: result.report.matches.map((match) => match.status),
-      });
+      mismatches.push({ name: benchmarkCase.name, locale: benchmarkCase.locale, category: benchmarkCase.category, dimension: 'score', expected: benchmarkCase.expectedScore, actual: result.score, statuses: result.report.matches.map((match) => match.status) });
     }
 
     if (benchmarkCase.selector && benchmarkCase.expectedStatus) {
       statusChecks += 1;
       const requirementIndex = selectRequirementIndex(job.requirements, benchmarkCase.selector);
-      const actualStatus = requirementIndex >= 0
-        ? result.report.matches[requirementIndex]?.status
-        : undefined;
+      const actualStatus = requirementIndex >= 0 ? result.report.matches[requirementIndex]?.status : undefined;
 
-      if (actualStatus === benchmarkCase.expectedStatus) {
-        statusCorrect += 1;
-      } else {
+      if (actualStatus === benchmarkCase.expectedStatus) statusCorrect += 1;
+      else {
         caseCorrect = false;
-        mismatches.push({
-          name: benchmarkCase.name,
-          category: benchmarkCase.category,
-          dimension: 'status',
-          selector: benchmarkCase.selector,
-          expected: benchmarkCase.expectedStatus,
-          actual: actualStatus ?? 'REQUIREMENT_NOT_EXTRACTED',
-          requirements: job.requirements.map((requirement, requirementIndexValue) => ({
-            kind: requirement.kind,
-            concept: requirement.canonicalConcept,
-            statement: requirement.statement,
-            necessity: requirement.necessity,
-            status: result.report.matches[requirementIndexValue]?.status,
-          })),
-        });
+        mismatches.push({ name: benchmarkCase.name, locale: benchmarkCase.locale, category: benchmarkCase.category, dimension: 'status', selector: benchmarkCase.selector, expected: benchmarkCase.expectedStatus, actual: actualStatus ?? 'REQUIREMENT_NOT_EXTRACTED', requirements: job.requirements.map((requirement, requirementIndexValue) => ({ kind: requirement.kind, concept: requirement.canonicalConcept, statement: requirement.statement, necessity: requirement.necessity, status: result.report.matches[requirementIndexValue]?.status })) });
       }
 
-      if (
-        actualStatus === 'MATCH' &&
-        (benchmarkCase.expectedStatus === 'GAP' || benchmarkCase.expectedStatus === 'UNKNOWN')
-      ) {
-        falseMatch += 1;
-      }
-      if (actualStatus === 'GAP' && benchmarkCase.expectedStatus === 'MATCH') {
-        falseGap += 1;
-      }
+      if (actualStatus === 'MATCH' && (benchmarkCase.expectedStatus === 'GAP' || benchmarkCase.expectedStatus === 'UNKNOWN')) falseMatch += 1;
+      if (actualStatus === 'GAP' && benchmarkCase.expectedStatus === 'MATCH') falseGap += 1;
     }
 
-    if (caseCorrect) category.correct += 1;
+    if (caseCorrect) {
+      category.correct += 1;
+      locale.correct += 1;
+    }
     byCategory.set(benchmarkCase.category, category);
+    byLocale.set(benchmarkCase.locale, locale);
   });
 
   const exactStatusAccuracy = statusChecks === 0 ? 1 : statusCorrect / statusChecks;
+  const summarize = (entries: Map<string, { correct: number; total: number }>) => Object.fromEntries(
+    Array.from(entries.entries()).map(([key, value]) => [key, { ...value, accuracy: Number((value.correct / value.total).toFixed(4)) }]),
+  );
   const summary = {
     cases: CASES.length,
     statusChecks,
     exactStatusAccuracy: Number(exactStatusAccuracy.toFixed(4)),
     falseMatch,
     falseGap,
-    categories: Object.fromEntries(
-      Array.from(byCategory.entries()).map(([category, value]) => [
-        category,
-        { ...value, accuracy: Number((value.correct / value.total).toFixed(4)) },
-      ]),
-    ),
+    locales: summarize(byLocale),
+    categories: summarize(byCategory),
     mismatches,
   };
 
   console.log(`MATCH_BENCHMARK ${JSON.stringify(summary)}`);
-
-  assert.equal(
-    mismatches.length,
-    0,
-    `Controlled benchmark mismatches:\n${JSON.stringify(summary, null, 2)}`,
-  );
+  assert.equal(mismatches.length, 0, `Controlled benchmark mismatches:\n${JSON.stringify(summary, null, 2)}`);
   assert.equal(falseMatch, 0, 'Controlled benchmark permits no false MATCH on labeled GAP/UNKNOWN cases.');
   assert.equal(falseGap, 0, 'Controlled benchmark permits no false GAP on labeled MATCH cases.');
   assert.equal(exactStatusAccuracy, 1, 'Controlled deterministic benchmark must reproduce all labeled statuses.');
