@@ -4,7 +4,10 @@ import {
   createCareerAssertion,
   createCareerEvidence,
   createCareerSource,
+  createClaimLedger,
   domainId,
+  getResumeClaims,
+  registerCanonicalClaim,
   type CandidateProfile,
   type CandidateProfileId,
   type CareerAssertion,
@@ -12,6 +15,8 @@ import {
   type CareerEvidenceId,
   type CareerSource,
   type CareerSourceId,
+  type ClaimLedger,
+  type ResumeClaim,
 } from '../../domain';
 
 export interface LegacyResumeProjectionOptions {
@@ -25,6 +30,11 @@ export interface LegacyResumeDomainProjection {
   readonly source: CareerSource;
   readonly evidence: readonly CareerEvidence[];
   readonly assertions: readonly CareerAssertion[];
+}
+
+export interface LegacyTruthContext extends LegacyResumeDomainProjection {
+  readonly claimLedger: ClaimLedger;
+  readonly claims: readonly ResumeClaim[];
 }
 
 interface AssertionSeed {
@@ -184,5 +194,37 @@ export function projectLegacyResumeRequest(
     source,
     evidence,
     assertions,
+  };
+}
+
+/**
+ * Builds the first ATS v2 truth boundary around the legacy request.
+ * Every canonical resume claim is backed by exactly one candidate assertion.
+ */
+export function buildLegacyTruthContext(
+  data: ResumeRequest,
+  options: LegacyResumeProjectionOptions = {},
+): LegacyTruthContext {
+  const projectionKey = requireSafeProjectionKey(options.projectionKey ?? 'legacy');
+  const projection = projectLegacyResumeRequest(data, {
+    ...options,
+    projectionKey,
+  });
+
+  let claimLedger = createClaimLedger(projection.assertions);
+
+  projection.assertions.forEach((assertion, index) => {
+    const ordinal = String(index + 1).padStart(3, '0');
+    claimLedger = registerCanonicalClaim(
+      claimLedger,
+      assertion.id,
+      `claim:${projectionKey}:${ordinal}`,
+    );
+  });
+
+  return {
+    ...projection,
+    claimLedger,
+    claims: getResumeClaims(claimLedger),
   };
 }
