@@ -243,7 +243,10 @@ function hasCandidateContent(candidate: ImportedCandidateDraft): boolean {
 
 export class N8nResumeImportProvider implements ResumeImportProvider {
   async extract(file: ResumeImportFile): Promise<ProviderResumeExtraction> {
-    const endpoint = process.env.N8N_RESUME_URL;
+    // Prefer the new private variable. The legacy NEXT_PUBLIC name is accepted
+    // only inside this server-side module so existing deployments keep working
+    // while configuration is rotated; browser code no longer references it.
+    const endpoint = process.env.N8N_RESUME_URL ?? process.env.NEXT_PUBLIC_N8N_RESUME_URL;
     if (!endpoint) {
       throw new Error('N8N_RESUME_URL is not configured');
     }
