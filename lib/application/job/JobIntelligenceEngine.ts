@@ -33,7 +33,7 @@ const SKILLS: readonly SkillDefinition[] = [
   { canonical: 'Python', aliases: ['python'] },
   { canonical: 'C#', aliases: ['c#', '.net', 'dotnet'] },
   { canonical: 'C++', aliases: ['c++'] },
-  { canonical: 'Go', aliases: ['golang'] },
+  { canonical: 'Go', aliases: ['go', 'golang'] },
   { canonical: 'Rust', aliases: ['rust'] },
   { canonical: 'React', aliases: ['react', 'react.js', 'reactjs'] },
   { canonical: 'Angular', aliases: ['angular'] },
@@ -170,7 +170,7 @@ function splitStatements(text: string): JobStatement[] {
       trimmed
         .split(/(?<=[.!?;])\s+/)
         .map((statement) => statement.trim())
-        .filter((statement) => statement.length >= 4)
+        .filter((statement) => statement.length >= 2)
         .forEach((statement) => {
           statements.push({ text: statement, contextNecessity });
         });
@@ -284,7 +284,8 @@ export function analyzeJobDescription(
     });
 
     const nonSkillKind = detectNonSkillKind(statement);
-    if (nonSkillKind && (detectedSkills.length === 0 || nonSkillKind !== 'RESPONSIBILITY')) {
+    const isSkillBoundAttribute = nonSkillKind === 'RESPONSIBILITY' || nonSkillKind === 'EXPERIENCE';
+    if (nonSkillKind && (detectedSkills.length === 0 || !isSkillBoundAttribute)) {
       requirements.push(
         createRequirement(jobDescription, ordinal++, statement, nonSkillKind, necessity, {
           minimumYears,
