@@ -6,6 +6,7 @@ import { extractKeywords, calculateATSScore, generateSuggestions } from '@/lib/a
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { buildLegacyTruthContext } from '@/lib/application/legacy/LegacyResumeAdapter';
 import { validateGeneratedResumeGrounding } from '@/lib/application/grounding/GroundingValidator';
+import { evaluateGeneratedResumeSemanticGrounding } from '@/lib/application/grounding/SemanticEntailmentEvaluator';
 import { analyzeJobDescription } from '@/lib/application/job/JobIntelligenceEngine';
 import { matchJobToCandidate } from '@/lib/application/matching/JobMatchEngine';
 
@@ -128,6 +129,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Layer 1: deterministic factual blockers. These remain authoritative and
+    // can never be overridden by semantic evaluation.
     const groundingReport = validateGeneratedResumeGrounding(
       sanitizedData,
       geminiResult.formattedResume,
@@ -146,6 +149,39 @@ export async function POST(request: NextRequest) {
           success: false,
           error: errorMessage,
           grounding: groundingReport,
+        },
+        {
+          status: 422,
+          headers: {
+            ...rateLimitHeaders,
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        }
+      );
+    }
+
+    // Layer 2: conservative semantic drift evaluation. It checks high-risk
+    // responsibility/scope wording against candidate assertions only. Job
+    // requirements are never accepted as evidence for candidate claims.
+    const semanticGroundingReport = evaluateGeneratedResumeSemanticGrounding(
+      geminiResult.formattedResume,
+      truthContext.assertions,
+    );
+
+    if (semanticGroundingReport.status !== 'APPROVED') {
+      const proposedClaims = semanticGroundingReport.issues
+        .map((issue) => issue.generatedClaim)
+        .filter((claim, index, claims) => claims.indexOf(claim) === index)
+        .slice(0, 5);
+      const confirmationDetail = proposedClaims.length > 0
+        ? ` Review these stronger claims and confirm the underlying responsibility/scope in your candidate data if true: ${proposedClaims.join(' | ')}.`
+        : '';
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: `ATS v2 detected generated wording that may overstate the candidate evidence.${confirmationDetail}`,
+          semanticGrounding: semanticGroundingReport,
         },
         {
           status: 422,
