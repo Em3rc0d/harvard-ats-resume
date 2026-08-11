@@ -75,3 +75,23 @@ The repository is stabilized with automated CI/QA tests, clean dependency bounda
 
 Gate wording:
 `G2 PLATFORM_HEALTH — PASS`
+
+## PR-ATS2-02 — Domain Foundation
+
+### BEFORE
+ATS v2 lacked an explicit domain model separating candidate truth, job truth, match inference, and resume wording.
+
+### DURING
+- Added `lib/domain` as a dependency-free modular-monolith domain foundation.
+- Modeled candidate truth through `CareerSource`, `CareerEvidence`, and provenance-bearing `CareerAssertion`.
+- Modeled job truth through `JobDescription` and `JobRequirement`, independent from candidate assertions.
+- Modeled `RequirementMatch` as an inference bridge that cannot create candidate facts.
+- Separated `CareerAssertion` from `ResumeClaim`.
+- Added `ResumeVersion` and `ResumeManifest` provenance records.
+- Added deterministic invariants and a roundtrip fixture.
+
+### AFTER
+The ATS v2 domain language is explicit and compile-checked. No existing UI, Gemini, n8n, PDF, scoring, persistence, RAG, vector database, or distributed-systems behavior is intentionally changed.
+
+Gate wording:
+`G3 DOMAIN_FOUNDATION — PASS`
