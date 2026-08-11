@@ -6,6 +6,7 @@ import ResumeResults from '@/components/ResumeResults';
 import CVUpload from '@/components/CVUpload';
 import type { ResumeRequest } from '@/lib/schemas';
 import type { ResumeImportContext } from '@/lib/application/import/ResumeImportProvider';
+import type { GeneratedResumeResult } from '@/lib/application/product/ProductResultContract';
 import { useLanguage } from '@/components/LanguageProvider';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { Upload, FileSignature, AlertCircle } from 'lucide-react';
@@ -23,9 +24,6 @@ function getOrCreateCareerVaultId(): string {
     window.localStorage.setItem(CAREER_VAULT_STORAGE_KEY, created);
     return created;
   } catch {
-    // Storage may be unavailable in privacy-restricted browser contexts. Keep a
-    // stable opaque capability for this page lifetime rather than falling back
-    // to an email-derived identity.
     volatileCareerVaultId ??= window.crypto.randomUUID();
     return volatileCareerVaultId;
   }
@@ -35,14 +33,7 @@ export default function Home() {
   const { t } = useLanguage();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<{
-    formattedResume: string;
-    atsScore: number;
-    matchedKeywords: string[];
-    missingKeywords: string[];
-    suggestions: string[];
-    improvedResume?: string;
-  } | null>(null);
+  const [results, setResults] = useState<GeneratedResumeResult | null>(null);
 
   const [userName, setUserName] = useState<string>('Candidate');
   const [hasStarted, setHasStarted] = useState(false);
@@ -88,7 +79,7 @@ export default function Home() {
       }
 
       if (result.success && result.data) {
-        setResults(result.data);
+        setResults(result.data as GeneratedResumeResult);
       } else {
         throw new Error('Invalid response from server');
       }
@@ -110,8 +101,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section */}
-      {/* Minimal Header */}
       <header className="bg-white border-b border-gray-200 py-6 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -131,7 +120,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-5xl mx-auto px-6 py-12">
         {error && (
           <div className="mb-8 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-sm flex items-center gap-2">
@@ -162,7 +150,6 @@ export default function Home() {
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6">
-                  {/* Option 1: Upload CV */}
                   <button
                     onClick={() => setIsUploading(true)}
                     className="group relative p-8 bg-white border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-300 text-left"
@@ -171,12 +158,9 @@ export default function Home() {
                       <Upload className="w-6 h-6" />
                     </div>
                     <h3 className="text-lg font-bold text-gray-900 mb-2">{t.hero.uploadCV}</h3>
-                    <p className="text-sm text-gray-500">
-                      {t.hero.uploadDesc}
-                    </p>
+                    <p className="text-sm text-gray-500">{t.hero.uploadDesc}</p>
                   </button>
 
-                  {/* Option 2: Start Manually */}
                   <button
                     onClick={handleManualStart}
                     className="group relative p-8 bg-white border-2 border-gray-100 rounded-xl hover:border-gray-900 hover:bg-gray-50 transition-all duration-300 text-left shadow-sm hover:shadow-md"
@@ -185,9 +169,7 @@ export default function Home() {
                       <FileSignature className="w-6 h-6" />
                     </div>
                     <h3 className="text-lg font-bold text-gray-900 mb-2">{t.hero.startManual}</h3>
-                    <p className="text-sm text-gray-500">
-                      {t.hero.manualDesc}
-                    </p>
+                    <p className="text-sm text-gray-500">{t.hero.manualDesc}</p>
                   </button>
                 </div>
               </div>
@@ -202,10 +184,7 @@ export default function Home() {
                     {initialResumeData ? t.hero.reviewTitle : t.hero.buildTitle}
                   </h2>
                   <p className="text-gray-500 max-w-2xl mx-auto text-sm leading-relaxed">
-                    {initialResumeData
-                      ? t.hero.reviewDesc
-                      : t.hero.buildDesc
-                    }
+                    {initialResumeData ? t.hero.reviewDesc : t.hero.buildDesc}
                   </p>
                 </div>
 
@@ -235,7 +214,6 @@ export default function Home() {
         })()}
       </main>
 
-      {/* Minimal Footer */}
       <footer className="border-t border-gray-200 py-12 mt-12 bg-white">
         <div className="max-w-5xl mx-auto px-6 text-center">
           <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">
