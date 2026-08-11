@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { resumeRequestSchema } from '@/lib/schemas';
 import { resumeImportContextSchema } from '@/lib/application/import/ResumeImportProvider';
 import { generateResumeWithGemini, sanitizeResumeData } from '@/lib/gemini';
@@ -28,6 +29,7 @@ export const dynamic = 'force-dynamic';
 
 const resumeGenerationInputSchema = resumeRequestSchema.extend({
   sourceContext: resumeImportContextSchema.optional(),
+  careerVaultId: z.string().uuid('Career Vault identity must be an opaque UUID capability.'),
 });
 
 /**
@@ -77,10 +79,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { sourceContext, ...resumeData } = validationResult.data;
+    const { sourceContext, careerVaultId, ...resumeData } = validationResult.data;
     const sanitizedData = sanitizeResumeData(resumeData);
     const capturedAt = new Date().toISOString();
-    const vaultIdentity = deriveCareerVaultIdentity(sanitizedData, sourceContext);
+    const vaultIdentity = deriveCareerVaultIdentity(sanitizedData, careerVaultId, sourceContext);
 
     // G12 requires durable persistence. Unlike rate limiting, Career Vault must
     // never silently fall back to process memory because a successful response
@@ -108,9 +110,9 @@ export async function POST(request: NextRequest) {
       throw storageError;
     }
 
-    // ATS v2 candidate-truth boundary. Candidate identity and truth-snapshot
-    // identity are stable across requests; raw email is never placed in IDs.
-    // Job requirements remain structurally excluded from candidate evidence.
+    // ATS v2 candidate-truth boundary. Candidate identity comes from an opaque
+    // browser-held capability; truth-snapshot identity comes from candidate data.
+    // Raw vault capability, email, and Job Description content never enter IDs.
     const truthContext = buildLegacyTruthContext(sanitizedData, {
       projectionKey: vaultIdentity.candidateProjectionKey,
       candidateProfileId: vaultIdentity.candidateProfileId,
