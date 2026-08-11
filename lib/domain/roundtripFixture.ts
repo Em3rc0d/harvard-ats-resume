@@ -146,7 +146,15 @@ export function createRoundtripFixture() {
     id: domainId('ResumeVersion', 'resume:platform-engineer:v1'),
     candidateProfileId: candidateProfile.id,
     targetedJobDescriptionId: jobDescription.id,
+    targetJobDescriptionSha256: 'b'.repeat(64),
+    matchReportId: matchReport.id,
     claimIds: [resumeClaim.id],
+    contentSha256: 'a'.repeat(64),
+    generation: {
+      provider: 'fixture-provider',
+      model: 'fixture-model',
+      contractVersion: 'fixture-contract-v1',
+    },
     createdAt,
   });
 
