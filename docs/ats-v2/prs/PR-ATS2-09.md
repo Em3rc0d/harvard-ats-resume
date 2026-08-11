@@ -4,7 +4,7 @@
 
 Close the semantic-drift gap that remains after deterministic grounding: generated wording may preserve all explicit entities and numbers while still escalating responsibility, ownership, design authority, architecture authority, scope, or impact beyond what candidate assertions support.
 
-Examples this gate must catch:
+Examples this gate catches:
 
 - `Participated in the backend migration` → `Led the backend migration`
 - `Implemented backend APIs` → `Designed backend APIs`
@@ -17,7 +17,7 @@ The same responsibility-escalation guard is characterized in English and Spanish
 
 ## Architecture
 
-The generation trust pipeline becomes:
+The generation trust pipeline is now:
 
 ```text
 AI proposal
@@ -46,6 +46,32 @@ The semantic layer can never override a deterministic grounding rejection.
 - adds a dedicated adversarial behavior suite in EN/ES;
 - updates `npm test` to execute all ATS v2 behavior suites.
 
+## Incidents found during execution
+
+### CI attempt 1
+
+TypeScript rejected direct iteration over `ReadonlySet` under the repository compiler target (`TS2802`). The implementation was rewritten to use target-compatible collection traversal without changing semantics.
+
+### CI attempt 2
+
+The adversarial corpus exposed that `enterprise-scale` was not included in the scale-qualifier catalog. The evaluator was corrected rather than weakening the test.
+
+These failures were contained to the feature branch and never reached `develop`.
+
+## Final validation
+
+Final validated head before this documentation-only record: `e099240604b13f635c356b650884d90feb3a4abf`.
+
+GitHub Actions run `31493712687`:
+
+- `npm ci` — PASS
+- lint — PASS
+- typecheck — PASS
+- behavior tests — PASS (`25/25`)
+- build — PASS
+
+Vercel preview/deployment — READY.
+
 ## Trust wording
 
 This gate deliberately does **not** claim universal natural-language entailment or zero hallucinations.
@@ -54,17 +80,4 @@ This gate deliberately does **not** claim universal natural-language entailment 
 
 ## Gate
 
-Target gate wording after remote validation:
-
 `G9 SEMANTIC_GROUNDING_EVALUATED — PASS (HIGH-RISK SEMANTIC DRIFT), UNIVERSAL ENTAILMENT NOT CLAIMED`
-
-## Required validation
-
-- `npm ci`
-- `npm run lint`
-- `npm run typecheck`
-- `npm test`
-- `npm run build`
-- Vercel preview/deployment
-
-The gate must not be marked PASS until all required remote checks succeed.
