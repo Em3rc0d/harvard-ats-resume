@@ -19,12 +19,14 @@ export const CAREER_VAULT_SCHEMA_VERSION = 'ats2-career-vault-v1' as const;
 export interface PersistedJobAnalysis {
   readonly jobDescriptionId: JobDescription['id'];
   readonly language: JobLanguage;
+  readonly analyzerVersion: string;
 }
 
 export interface PersistedMatchEvaluation {
   readonly matchReportId: MatchReport['id'];
   readonly score: number;
   readonly breakdown: JobMatchBreakdown;
+  readonly engineVersion: string;
 }
 
 /**
