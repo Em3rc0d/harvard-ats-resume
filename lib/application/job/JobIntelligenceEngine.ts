@@ -33,7 +33,7 @@ const SKILLS: readonly SkillDefinition[] = [
   { canonical: 'Python', aliases: ['python'] },
   { canonical: 'C#', aliases: ['c#', '.net', 'dotnet'] },
   { canonical: 'C++', aliases: ['c++'] },
-  { canonical: 'Go', aliases: ['golang'] },
+  { canonical: 'Go', aliases: ['go', 'golang'] },
   { canonical: 'Rust', aliases: ['rust'] },
   { canonical: 'React', aliases: ['react', 'react.js', 'reactjs'] },
   { canonical: 'Angular', aliases: ['angular'] },
@@ -107,7 +107,7 @@ const PREFERRED_PATTERNS = [
 const REQUIRED_SECTION_PATTERN = /^(requirements?|required qualifications?|minimum qualifications?|must[- ]haves?|requisitos?|requisitos obligatorios?|requisitos m[ií]nimos)$/i;
 const PREFERRED_SECTION_PATTERN = /^(preferred qualifications?|nice[- ]to[- ]haves?|preferred|deseables?|requisitos deseables?|preferidos?)$/i;
 const EXPERIENCE_PATTERN = /\b(experience|experiencia|years?|a[nñ]os?)\b/i;
-const EDUCATION_PATTERN = /\b(bachelor|master|degree|university|college|licenciatura|maestr[ií]a|t[ií]tulo|universidad|ingenier[ií]a)\b/i;
+const EDUCATION_PATTERN = /\b(bachelor|master|degree|university|college|licenciatura|maestr[ií]a|t[ií]tulo|universidad)\b/i;
 const CERTIFICATION_PATTERN = /\b(certification|certificate|certified|certificaci[oó]n|certificado|certificada|certificado)\b/i;
 const LANGUAGE_PATTERN = /\b(english|spanish|french|portuguese|idioma|ingl[eé]s|espa[nñ]ol|franc[eé]s|portugu[eé]s|fluent|fluido|bilingual|biling[uü]e)\b/i;
 const LOCATION_PATTERN = /\b(remote|hybrid|on[- ]site|onsite|location|located|ubicaci[oó]n|remoto|h[ií]brido|presencial|residir|residence)\b/i;
@@ -170,7 +170,7 @@ function splitStatements(text: string): JobStatement[] {
       trimmed
         .split(/(?<=[.!?;])\s+/)
         .map((statement) => statement.trim())
-        .filter((statement) => statement.length >= 4)
+        .filter((statement) => statement.length >= 2)
         .forEach((statement) => {
           statements.push({ text: statement, contextNecessity });
         });
@@ -284,7 +284,8 @@ export function analyzeJobDescription(
     });
 
     const nonSkillKind = detectNonSkillKind(statement);
-    if (nonSkillKind && (detectedSkills.length === 0 || nonSkillKind !== 'RESPONSIBILITY')) {
+    const isSkillBoundAttribute = nonSkillKind === 'RESPONSIBILITY' || nonSkillKind === 'EXPERIENCE';
+    if (nonSkillKind && (detectedSkills.length === 0 || !isSkillBoundAttribute)) {
       requirements.push(
         createRequirement(jobDescription, ordinal++, statement, nonSkillKind, necessity, {
           minimumYears,

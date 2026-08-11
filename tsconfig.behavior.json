@@ -16,6 +16,7 @@
   "include": [
     "tests/ats2/behavior.test.ts",
     "tests/ats2/semantic-entailment.test.ts",
+    "tests/ats2/match-benchmark.test.ts",
     "lib/domain/**/*.ts",
     "lib/application/import/**/*.ts",
     "lib/application/legacy/LegacyResumeAdapter.ts",

@@ -26,6 +26,21 @@ export interface JobMatchResult {
   readonly breakdown: JobMatchBreakdown;
 }
 
+type ResponsibilityIntent =
+  | 'LEADERSHIP'
+  | 'ARCHITECTURE'
+  | 'OWNERSHIP'
+  | 'DESIGN'
+  | 'MENTORING'
+  | 'MANAGEMENT'
+  | 'IMPLEMENTATION'
+  | 'MAINTENANCE'
+  | 'COLLABORATION'
+  | 'DEVELOPMENT'
+  | 'UNKNOWN';
+
+type DegreeLevel = 'BACHELOR' | 'MASTER' | 'UNKNOWN';
+
 const STOPWORDS = new Set([
   'and', 'the', 'for', 'with', 'from', 'that', 'this', 'your', 'you', 'our',
   'are', 'will', 'have', 'has', 'must', 'required', 'preferred', 'minimum',
@@ -33,6 +48,14 @@ const STOPWORDS = new Set([
   'con', 'para', 'los', 'las', 'una', 'uno', 'que', 'del', 'por', 'debe',
   'requerido', 'requerida', 'preferido', 'preferida', 'experiencia', 'anos',
   'trabajo', 'habilidad', 'habilidades', 'minimo',
+]);
+
+const STRICT_RESPONSIBILITY_INTENTS = new Set<ResponsibilityIntent>([
+  'LEADERSHIP',
+  'ARCHITECTURE',
+  'OWNERSHIP',
+  'MENTORING',
+  'MANAGEMENT',
 ]);
 
 function normalize(value: string): string {
@@ -239,6 +262,229 @@ function applyMinimumYearsToLexical(
   };
 }
 
+function responsibilityIntent(value: string): ResponsibilityIntent {
+  const text = normalize(value);
+  if (/\b(lead|leads|leading|led|liderar|lidera|lidero|liderando)\b/.test(text)) return 'LEADERSHIP';
+  if (/\b(architect|architected|architecting|architecture|arquitectar|arquitecto|arquitectura)\b/.test(text)) return 'ARCHITECTURE';
+  if (/\b(own|owns|owned|ownership|dueno|propietario)\b/.test(text)) return 'OWNERSHIP';
+  if (/\b(design|designed|designing|disenar|diseno|disenando)\b/.test(text)) return 'DESIGN';
+  if (/\b(mentor|mentored|mentoring|mentorar|mentoreo)\b/.test(text)) return 'MENTORING';
+  if (/\b(manage|managed|managing|gestionar|gestiono|gestionando)\b/.test(text)) return 'MANAGEMENT';
+  if (/\b(implement|implemented|implementing|implementar|implemento|implementando)\b/.test(text)) return 'IMPLEMENTATION';
+  if (/\b(maintain|maintained|maintaining|mantener|mantuvo|manteniendo)\b/.test(text)) return 'MAINTENANCE';
+  if (/\b(collaborate|collaborated|collaborating|colaborar|colaboro|colaborando)\b/.test(text)) return 'COLLABORATION';
+  if (/\b(develop|developed|developing|build|built|building|create|created|desarrollar|desarrollo|construir|construyo|crear|creo)\b/.test(text)) return 'DEVELOPMENT';
+  return 'UNKNOWN';
+}
+
+function classifyResponsibility(
+  requirement: JobRequirement,
+  assertions: readonly CareerAssertion[],
+): { status: RequirementMatchStatus; assertions: readonly CareerAssertion[]; rationale: string } {
+  const intent = responsibilityIntent(requirement.statement);
+  const lexical = lexicalMatches(requirement, assertions);
+
+  if (STRICT_RESPONSIBILITY_INTENTS.has(intent)) {
+    const sameIntent = assertions.filter((assertion) => responsibilityIntent(assertion.statement) === intent);
+    const sameIntentLexical = lexicalMatches(requirement, sameIntent);
+
+    if (sameIntentLexical.exact.length > 0) {
+      return applyMinimumYearsToLexical(requirement, sameIntentLexical.exact, 'MATCH');
+    }
+    if (sameIntentLexical.potential.length > 0) {
+      return applyMinimumYearsToLexical(requirement, sameIntentLexical.potential, 'POTENTIAL_MATCH');
+    }
+
+    return {
+      status: 'GAP',
+      assertions: [],
+      rationale: `Candidate evidence does not explicitly support the required ${intent.toLowerCase()} responsibility; shared domain nouns alone are insufficient.`,
+    };
+  }
+
+  if (intent === 'DESIGN') {
+    const designAssertions = assertions.filter((assertion) => responsibilityIntent(assertion.statement) === 'DESIGN');
+    const designLexical = lexicalMatches(requirement, designAssertions);
+    if (designLexical.exact.length > 0) {
+      return applyMinimumYearsToLexical(requirement, designLexical.exact, 'MATCH');
+    }
+    if (designLexical.potential.length > 0) {
+      return applyMinimumYearsToLexical(requirement, designLexical.potential, 'POTENTIAL_MATCH');
+    }
+
+    const topical = [...lexical.exact, ...lexical.potential];
+    if (topical.length > 0) {
+      return {
+        status: 'POTENTIAL_MATCH',
+        assertions: topical,
+        rationale: 'Candidate evidence overlaps the design domain, but explicit design responsibility is not documented.',
+      };
+    }
+
+    return {
+      status: 'GAP',
+      assertions: [],
+      rationale: 'No candidate assertion supports the requested design responsibility or its domain context.',
+    };
+  }
+
+  if (lexical.exact.length > 0) {
+    return applyMinimumYearsToLexical(requirement, lexical.exact, 'MATCH');
+  }
+  if (lexical.potential.length > 0) {
+    return applyMinimumYearsToLexical(requirement, lexical.potential, 'POTENTIAL_MATCH');
+  }
+
+  return {
+    status: 'GAP',
+    assertions: [],
+    rationale: 'No evidence-backed candidate assertion currently supports this responsibility.',
+  };
+}
+
+function degreeLevel(value: string): DegreeLevel {
+  const text = normalize(value);
+  if (/\b(master|masters|maestria)\b/.test(text)) return 'MASTER';
+  if (/\b(bachelor|bachelors|licenciatura|ingenieria)\b/.test(text)) return 'BACHELOR';
+  return 'UNKNOWN';
+}
+
+function classifyEducation(
+  requirement: JobRequirement,
+  assertions: readonly CareerAssertion[],
+): { status: RequirementMatchStatus; assertions: readonly CareerAssertion[]; rationale: string } {
+  const requestedLevel = degreeLevel(requirement.statement);
+  const educationAssertions = assertions.filter((assertion) => /^studied\b/i.test(assertion.statement));
+
+  if (requestedLevel !== 'UNKNOWN') {
+    const eligible = educationAssertions.filter((assertion) => {
+      const candidateLevel = degreeLevel(assertion.statement);
+      if (requestedLevel === 'MASTER') return candidateLevel === 'MASTER';
+      return candidateLevel === 'BACHELOR' || candidateLevel === 'MASTER';
+    });
+
+    if (eligible.length === 0) {
+      return {
+        status: 'GAP',
+        assertions: [],
+        rationale: `Candidate education does not document the required ${requestedLevel.toLowerCase()} degree level.`,
+      };
+    }
+
+    const lexical = lexicalMatches(requirement, eligible);
+    if (lexical.exact.length > 0) {
+      return { status: 'MATCH', assertions: lexical.exact, rationale: 'Candidate education matches the required degree level and field context.' };
+    }
+    if (lexical.potential.length > 0) {
+      return { status: 'POTENTIAL_MATCH', assertions: lexical.potential, rationale: 'Candidate education matches the degree level but only partially overlaps the requested field context.' };
+    }
+
+    return {
+      status: 'POTENTIAL_MATCH',
+      assertions: eligible,
+      rationale: 'Candidate education satisfies the requested degree level, but field equivalence requires review.',
+    };
+  }
+
+  const lexical = lexicalMatches(requirement, educationAssertions);
+  if (lexical.exact.length > 0) return { status: 'MATCH', assertions: lexical.exact, rationale: 'Candidate education strongly supports this requirement.' };
+  if (lexical.potential.length > 0) return { status: 'POTENTIAL_MATCH', assertions: lexical.potential, rationale: 'Candidate education partially overlaps this requirement.' };
+  return { status: 'GAP', assertions: [], rationale: 'No candidate education assertion supports this requirement.' };
+}
+
+function languageConcept(value: string): string | undefined {
+  const text = normalize(value);
+  const concepts: readonly [string, readonly string[]][] = [
+    ['english', ['english', 'ingles']],
+    ['spanish', ['spanish', 'espanol']],
+    ['french', ['french', 'frances']],
+    ['portuguese', ['portuguese', 'portugues']],
+  ];
+
+  return concepts.find(([, aliases]) => aliases.some((alias) => containsConcept(text, alias)))?.[0];
+}
+
+function proficiencyRank(value: string): number | undefined {
+  const text = normalize(value);
+  if (/\b(native|nativo|nativa)\b/.test(text)) return 5;
+  if (/\b(fluent|fluido|fluida|bilingual|bilingue)\b/.test(text)) return 4;
+  if (/\b(advanced|avanzado|avanzada)\b/.test(text)) return 3;
+  if (/\b(intermediate|intermedio|intermedia)\b/.test(text)) return 2;
+  if (/\b(basic|basico|basica)\b/.test(text)) return 1;
+  return undefined;
+}
+
+function classifyLanguage(
+  requirement: JobRequirement,
+  assertions: readonly CareerAssertion[],
+): { status: RequirementMatchStatus; assertions: readonly CareerAssertion[]; rationale: string } {
+  const requestedLanguage = languageConcept(requirement.statement);
+  if (!requestedLanguage) {
+    const lexical = lexicalMatches(requirement, assertions);
+    if (lexical.exact.length > 0) return { status: 'MATCH', assertions: lexical.exact, rationale: 'Candidate language evidence strongly supports this requirement.' };
+    if (lexical.potential.length > 0) return { status: 'POTENTIAL_MATCH', assertions: lexical.potential, rationale: 'Candidate language evidence partially overlaps this requirement.' };
+    return { status: 'GAP', assertions: [], rationale: 'No candidate language evidence supports this requirement.' };
+  }
+
+  const languageAssertions = assertions.filter((assertion) =>
+    /^language\b/i.test(assertion.statement) && languageConcept(assertion.statement) === requestedLanguage,
+  );
+
+  if (languageAssertions.length === 0) {
+    return {
+      status: 'GAP',
+      assertions: [],
+      rationale: `Candidate evidence does not document ${requestedLanguage}.`,
+    };
+  }
+
+  const requiredRank = proficiencyRank(requirement.statement);
+  if (requiredRank === undefined) {
+    return { status: 'MATCH', assertions: languageAssertions, rationale: `Candidate evidence documents ${requestedLanguage}.` };
+  }
+
+  const adequate = languageAssertions.filter((assertion) => (proficiencyRank(assertion.statement) ?? 0) >= requiredRank);
+  if (adequate.length > 0) {
+    return { status: 'MATCH', assertions: adequate, rationale: `Candidate evidence documents ${requestedLanguage} at or above the required proficiency.` };
+  }
+
+  return {
+    status: 'GAP',
+    assertions: languageAssertions,
+    rationale: `Candidate evidence documents ${requestedLanguage}, but not at the required proficiency.`,
+  };
+}
+
+function classifyLocation(
+  requirement: JobRequirement,
+  assertions: readonly CareerAssertion[],
+): { status: RequirementMatchStatus; assertions: readonly CareerAssertion[]; rationale: string } {
+  const locationAssertions = assertions.filter((assertion) => /^candidate location:/i.test(assertion.statement));
+  const normalizedRequirement = normalize(requirement.statement);
+
+  const exact = locationAssertions.filter((assertion) => {
+    const location = assertion.statement.replace(/^candidate location:\s*/i, '').replace(/\.$/, '').trim();
+    return location.length >= 2 && normalizedRequirement.includes(normalize(location));
+  });
+
+  if (exact.length > 0) {
+    return { status: 'MATCH', assertions: exact, rationale: 'Candidate location explicitly matches the stated job location requirement.' };
+  }
+
+  if (/\b(remote|remoto)\b/.test(normalizedRequirement)) {
+    const remoteEvidence = assertions.filter((assertion) => /\b(remote|remoto)\b/i.test(assertion.statement));
+    if (remoteEvidence.length > 0) {
+      return { status: 'MATCH', assertions: remoteEvidence, rationale: 'Candidate evidence explicitly supports the remote-location requirement.' };
+    }
+  }
+
+  return {
+    status: 'GAP',
+    assertions: locationAssertions,
+    rationale: 'Candidate location evidence does not match the explicit job location requirement.',
+  };
+}
+
 function classifyMatch(
   requirement: JobRequirement,
   assertions: readonly CareerAssertion[],
@@ -254,6 +500,22 @@ function classifyMatch(
       assertions: [],
       rationale: `No candidate assertion supports ${requirement.canonicalConcept}; the job requirement is not converted into a candidate fact.`,
     };
+  }
+
+  if (requirement.kind === 'RESPONSIBILITY') {
+    return classifyResponsibility(requirement, assertions);
+  }
+
+  if (requirement.kind === 'EDUCATION') {
+    return classifyEducation(requirement, assertions);
+  }
+
+  if (requirement.kind === 'LANGUAGE') {
+    return classifyLanguage(requirement, assertions);
+  }
+
+  if (requirement.kind === 'LOCATION') {
+    return classifyLocation(requirement, assertions);
   }
 
   const lexical = lexicalMatches(requirement, assertions);
