@@ -34,8 +34,15 @@ export interface CareerVaultEnvironment {
   readonly UPSTASH_REDIS_REST_TOKEN?: string;
 }
 
+function processCareerVaultEnvironment(): CareerVaultEnvironment {
+  return {
+    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+  };
+}
+
 export function createCareerVaultRepositoryFromEnv(
-  env: CareerVaultEnvironment = process.env,
+  env: CareerVaultEnvironment = processCareerVaultEnvironment(),
 ): CareerVaultRepository {
   const url = env.UPSTASH_REDIS_REST_URL;
   const token = env.UPSTASH_REDIS_REST_TOKEN;
