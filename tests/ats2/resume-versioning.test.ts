@@ -154,6 +154,24 @@ test('generated skill line preserves provenance to every supporting skill assert
   assert.deepEqual(new Set(manifestEntry.assertionIds), new Set(skillClaim.assertionIds));
 });
 
+test('summary remains a traceable claim when a resume omits the contact line', () => {
+  const withoutContact = `JANE CANDIDATE
+PROFESSIONAL SUMMARY
+Backend engineer focused on reliable APIs and TypeScript services.
+
+EXPERIENCE
+ACME — BACKEND ENGINEER
+2023 - 2025
+• Built APIs with TypeScript for internal business workflows.`;
+  const result = compositionFor(withoutContact);
+
+  const summaryClaim = result.claims.find(
+    (claim) => claim.wording === 'Backend engineer focused on reliable APIs and TypeScript services.',
+  );
+  assert.ok(summaryClaim);
+  assert.ok(summaryClaim.assertionIds.length > 0);
+});
+
 test('runtime versioning refuses material wording that cannot be traced to candidate assertions', () => {
   const untraceable = `${FORMATTED_RESUME}\n\nPROJECTS\n• Operated quantum satellites for lunar logistics.`;
 
