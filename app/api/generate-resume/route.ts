@@ -4,6 +4,7 @@ import { generateResumeWithGemini, sanitizeResumeData } from '@/lib/gemini';
 import { extractKeywords, calculateATSScore, generateSuggestions } from '@/lib/ats-scoring';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { buildLegacyTruthContext } from '@/lib/application/legacy/LegacyResumeAdapter';
+import { validateGeneratedResumeGrounding } from '@/lib/application/grounding/GroundingValidator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,12 +16,10 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Get client IP for rate limiting
     const ip = request.headers.get('x-forwarded-for') ||
       request.headers.get('x-real-ip') ||
       'unknown';
 
-    // Apply rate limiting (50 requests per hour)
     const rateLimitResult = await rateLimit(ip, 50, 60 * 60 * 1000);
     const rateLimitHeaders = getRateLimitHeaders(rateLimitResult);
 
@@ -38,7 +37,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse and validate request body
     const body = await request.json();
     const validationResult = resumeRequestSchema.safeParse(body);
 
@@ -57,13 +55,10 @@ export async function POST(request: NextRequest) {
     }
 
     const data = validationResult.data;
-
-    // Sanitize legacy DTO before projecting it into ATS v2 candidate truth.
     const sanitizedData = sanitizeResumeData(data);
 
-    // ATS v2 boundary: candidate data becomes evidence-backed assertions and
-    // canonical claims before any probabilistic generation is allowed to run.
-    // jobDescription is deliberately excluded by LegacyResumeAdapter.
+    // ATS v2 candidate-truth boundary. Job requirements are structurally
+    // excluded from evidence/claims by LegacyResumeAdapter.
     const truthContext = buildLegacyTruthContext(sanitizedData, {
       projectionKey: `request:${Date.now()}`,
     });
@@ -81,12 +76,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 1: Extract keywords from job description (if provided)
     const jobKeywords = data.jobDescription
       ? extractKeywords(data.jobDescription)
       : [];
 
-    // Step 2: Call Gemini API to generate formatted resume
     const geminiResult = await generateResumeWithGemini(sanitizedData);
 
     if (!geminiResult.success || !geminiResult.formattedResume) {
@@ -102,7 +95,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 3: Calculate ATS score algorithmically (server-side, not AI)
+    // ATS v2 grounding gate: probabilistic output is a proposal until this
+    // deterministic hard-fact validation approves it.
+    const groundingReport = validateGeneratedResumeGrounding(
+      sanitizedData,
+      geminiResult.formattedResume,
+    );
+
+    if (groundingReport.status !== 'APPROVED') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: groundingReport.status === 'REJECTED'
+            ? 'Generated resume contained candidate facts sourced only from the job description.'
+            : 'Generated resume introduced facts that require candidate confirmation.',
+          grounding: groundingReport,
+        },
+        {
+          status: 422,
+          headers: {
+            ...rateLimitHeaders,
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        }
+      );
+    }
+
     const allSkills = [
       ...data.skills.hardSkills,
       ...data.skills.softSkills,
@@ -114,20 +132,17 @@ export async function POST(request: NextRequest) {
       allSkills
     );
 
-    // Step 4: Generate improvement suggestions
     const suggestions = generateSuggestions(
       atsScoreResult.atsScore,
       atsScoreResult.missingKeywords,
       data.experience
     );
 
-    // Combine AI suggestions with algorithm suggestions
     const allSuggestions = [
       ...suggestions,
       ...(geminiResult.suggestions || []),
     ];
 
-    // Return structured response as per spec
     return NextResponse.json(
       {
         success: true,
@@ -136,7 +151,7 @@ export async function POST(request: NextRequest) {
           atsScore: atsScoreResult.atsScore,
           matchedKeywords: atsScoreResult.matchedKeywords,
           missingKeywords: atsScoreResult.missingKeywords,
-          suggestions: allSuggestions.slice(0, 10), // Limit to top 10
+          suggestions: allSuggestions.slice(0, 10),
         },
       },
       {
@@ -161,7 +176,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Block other HTTP methods
 export async function GET() {
   return NextResponse.json(
     { success: false, error: 'Method not allowed' },
