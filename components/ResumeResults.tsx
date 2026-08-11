@@ -64,6 +64,10 @@ const COPY = {
     gap: 'Gap',
     unknown: 'Unknown',
     blocker: 'Blocker',
+    strong: 'Strong',
+    solid: 'Solid',
+    mixed: 'Mixed',
+    needsReview: 'Needs review',
   },
   es: {
     jobMatch: 'Compatibilidad con la vacante',
@@ -96,6 +100,10 @@ const COPY = {
     gap: 'Gap',
     unknown: 'Desconocido',
     blocker: 'Bloqueador',
+    strong: 'Fuerte',
+    solid: 'Sólido',
+    mixed: 'Mixto',
+    needsReview: 'Requiere revisión',
   },
   fr: {
     jobMatch: 'Adéquation au poste',
@@ -128,6 +136,10 @@ const COPY = {
     gap: 'Écart',
     unknown: 'Inconnu',
     blocker: 'Bloquant',
+    strong: 'Fort',
+    solid: 'Solide',
+    mixed: 'Mitigé',
+    needsReview: 'À revoir',
   },
   pt: {
     jobMatch: 'Aderência à vaga',
@@ -160,24 +172,32 @@ const COPY = {
     gap: 'Gap',
     unknown: 'Desconhecido',
     blocker: 'Bloqueador',
+    strong: 'Forte',
+    solid: 'Sólido',
+    mixed: 'Misto',
+    needsReview: 'Requer revisão',
   },
 } as const;
 
-function metricLabel(score: number): string {
-  if (score >= 85) return 'Strong';
-  if (score >= 70) return 'Solid';
-  if (score >= 50) return 'Mixed';
-  return 'Needs review';
+type ExplainabilityCopy = (typeof COPY)[keyof typeof COPY];
+
+function metricLabel(score: number, copy: ExplainabilityCopy): string {
+  if (score >= 85) return copy.strong;
+  if (score >= 70) return copy.solid;
+  if (score >= 50) return copy.mixed;
+  return copy.needsReview;
 }
 
 function MetricCard({
   title,
   metric,
   unavailable,
+  copy,
 }: Readonly<{
   title: string;
   metric?: ProductMetricEvaluation | { readonly score: number; readonly scope: string };
   unavailable?: string;
+  copy: ExplainabilityCopy;
 }>) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm min-h-[168px]">
@@ -188,7 +208,7 @@ function MetricCard({
             <span className="text-4xl font-serif font-bold text-gray-950">{Math.round(metric.score)}</span>
             <span className="text-sm font-semibold text-gray-400">/100</span>
           </div>
-          <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-600">{metricLabel(metric.score)}</p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-600">{metricLabel(metric.score, copy)}</p>
           <p className="mt-4 text-xs leading-relaxed text-gray-500">{metric.scope}</p>
         </>
       ) : (
@@ -218,7 +238,7 @@ function statusStyle(status: ExplainableJobRequirementView['status']) {
 
 function requirementStatusLabel(
   status: ExplainableJobRequirementView['status'],
-  copy: (typeof COPY)[keyof typeof COPY],
+  copy: ExplainabilityCopy,
 ): string {
   if (status === 'MATCH') return copy.match;
   if (status === 'POTENTIAL_MATCH') return copy.potential;
@@ -232,7 +252,7 @@ function RequirementCard({
   copy,
 }: Readonly<{
   requirement: ExplainableJobRequirementView;
-  copy: (typeof COPY)[keyof typeof COPY];
+  copy: ExplainabilityCopy;
 }>) {
   const style = statusStyle(requirement.status);
   const Icon = style.icon;
@@ -329,7 +349,7 @@ function MetricChecks({
   );
 }
 
-function ClaimCard({ claim, copy }: Readonly<{ claim: ClaimTraceabilityView; copy: (typeof COPY)[keyof typeof COPY] }>) {
+function ClaimCard({ claim, copy }: Readonly<{ claim: ClaimTraceabilityView; copy: ExplainabilityCopy }>) {
   return (
     <details className="group rounded-lg border border-gray-200 bg-white">
       <summary className="cursor-pointer list-none p-4 flex items-start gap-3">
@@ -435,9 +455,10 @@ export default function ResumeResults({
             scope: `${jobSummary?.totalRequirements ?? 0} explicit job requirement(s) evaluated against candidate assertions.`,
           } : undefined}
           unavailable={`${copy.notEvaluated}. ${copy.noJob}`}
+          copy={copy}
         />
-        <MetricCard title={copy.resumeQuality} metric={productEvaluation.resumeQuality} />
-        <MetricCard title={copy.parseability} metric={productEvaluation.atsParseability} />
+        <MetricCard title={copy.resumeQuality} metric={productEvaluation.resumeQuality} copy={copy} />
+        <MetricCard title={copy.parseability} metric={productEvaluation.atsParseability} copy={copy} />
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
