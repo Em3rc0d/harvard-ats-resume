@@ -3,6 +3,9 @@ import { domainId, type CandidateProfileId } from '../../domain';
 import type { ResumeRequest } from '../../schemas';
 import type { ResumeImportContext } from '../import/ResumeImportProvider';
 
+export const JOB_INTELLIGENCE_PERSISTENCE_VERSION = 'ji-g10-v1' as const;
+export const JOB_MATCH_PERSISTENCE_VERSION = 'jm-g10-v1' as const;
+
 function sha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
@@ -74,8 +77,8 @@ export function deriveCareerVaultIdentity(
   }
 
   const targetJobSha256 = sha256(targetJob);
-  const jobProjectionKey = `job-snapshot:${targetJobSha256.slice(0, 24)}`;
-  const matchProjectionKey = `match:${candidateSnapshotSha256.slice(0, 12)}:${targetJobSha256.slice(0, 12)}`;
+  const jobProjectionKey = `job-snapshot:${targetJobSha256.slice(0, 18)}:${JOB_INTELLIGENCE_PERSISTENCE_VERSION}`;
+  const matchProjectionKey = `match:${candidateSnapshotSha256.slice(0, 10)}:${targetJobSha256.slice(0, 10)}:${JOB_MATCH_PERSISTENCE_VERSION}`;
 
   return {
     candidateProfileId,
