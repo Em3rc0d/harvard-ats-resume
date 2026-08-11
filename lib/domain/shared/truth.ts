@@ -1,6 +1,11 @@
 import type { CareerAssertionId, CareerEvidenceId, CareerSourceId } from './identifiers';
 
-export type TruthClass = 'VERIFIED_FACT' | 'DERIVED_FACT' | 'REWRITE' | 'SUGGESTION';
+export type TruthClass =
+  | 'CANDIDATE_ASSERTED'
+  | 'VERIFIED_FACT'
+  | 'DERIVED_FACT'
+  | 'REWRITE'
+  | 'SUGGESTION';
 
 export interface TruthProvenance {
   readonly evidenceIds: readonly CareerEvidenceId[];

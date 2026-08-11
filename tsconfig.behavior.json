@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM"],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": false,
+    "outDir": ".test-dist",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "tests/ats2/behavior.test.ts",
+    "lib/domain/**/*.ts",
+    "lib/application/legacy/LegacyResumeAdapter.ts",
+    "lib/application/grounding/GroundingValidator.ts",
+    "lib/application/job/JobIntelligenceEngine.ts",
+    "lib/application/matching/JobMatchEngine.ts",
+    "lib/schemas.ts"
+  ]
+}

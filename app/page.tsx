@@ -9,6 +9,8 @@ import { useLanguage } from '@/components/LanguageProvider';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { Upload, FileSignature, AlertCircle } from 'lucide-react';
 
+type CandidateSourceOrigin = 'manual_form' | 'resume_upload';
+
 export default function Home() {
   const { t } = useLanguage();
   const [isLoading, setIsLoading] = useState(false);
@@ -26,11 +28,18 @@ export default function Home() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [initialResumeData, setInitialResumeData] = useState<ResumeRequest | undefined>(undefined);
+  const [candidateSourceOrigin, setCandidateSourceOrigin] = useState<CandidateSourceOrigin>('manual_form');
 
   const handleCVData = (data: ResumeRequest) => {
     setInitialResumeData(data);
+    setCandidateSourceOrigin('resume_upload');
     setHasStarted(true);
     setIsUploading(false);
+  };
+
+  const handleManualStart = () => {
+    setCandidateSourceOrigin('manual_form');
+    setHasStarted(true);
   };
 
   const handleSubmit = async (data: ResumeRequest) => {
@@ -43,6 +52,7 @@ export default function Home() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-ats-candidate-source': candidateSourceOrigin,
         },
         body: JSON.stringify(data),
       });
@@ -71,6 +81,7 @@ export default function Home() {
     setError(null);
     setHasStarted(false);
     setInitialResumeData(undefined);
+    setCandidateSourceOrigin('manual_form');
   };
 
   return (
@@ -143,7 +154,7 @@ export default function Home() {
 
                   {/* Option 2: Start Manually */}
                   <button
-                    onClick={() => setHasStarted(true)}
+                    onClick={handleManualStart}
                     className="group relative p-8 bg-white border-2 border-gray-100 rounded-xl hover:border-gray-900 hover:bg-gray-50 transition-all duration-300 text-left shadow-sm hover:shadow-md"
                   >
                     <div className="w-12 h-12 bg-gray-100 text-gray-900 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">

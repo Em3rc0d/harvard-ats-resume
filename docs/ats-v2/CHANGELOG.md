@@ -105,14 +105,16 @@ The ATS v2 domain existed, but the production generation endpoint still received
 - Added `LegacyResumeAdapter`.
 - Projected the existing request into `CandidateProfile`, `CareerSource`, `CareerEvidence`, and `CareerAssertion`.
 - Structurally excluded `jobDescription` from candidate evidence.
-- Added `ClaimLedger` and canonical evidence-backed `ResumeClaim` registration.
+- Added `ClaimLedger` and canonical `ResumeClaim` registration.
 - Required the API generation path to establish the ATS v2 truth context before Gemini can run.
 
 ### AFTER
 Every accepted generation request crosses the candidate-truth boundary before probabilistic generation. Job requirements cannot enter candidate evidence through the legacy adapter.
 
+Audit clarification: this gate established logical provenance over the accepted legacy DTO; it did not yet establish source-document-level verification. PR-ATS2-07 corrects the legacy truth class so DTO values are not mislabeled as independently verified facts.
+
 Gate wording:
-`G4 EVIDENCE_CLAIM_LEDGER — PASS`
+`G4 EVIDENCE_CLAIM_LEDGER — PASS (BOUNDARY), TRUSTED IMPORT NOT YET`
 
 Merged PR: `#2`.
 
@@ -149,16 +151,18 @@ Schema-valid AI output was still only structurally trustworthy; an LLM could sti
 - Added deterministic `GroundingValidator` after AI generation and before scoring/output.
 - Candidate catalog excludes Job Description data.
 - Added validation for unsupported numbers, employers, roles, projects, certifications, skills, and technologies.
-- Added `JD_REQUIREMENT_LEAKAGE` classification when generated candidate content is supported only by the Job Description.
+- Added `JD_REQUIREMENT_LEAKAGE` classification for covered generated candidate content supported only by the Job Description.
 - Added `REJECTED`, `NEEDS_USER_CONFIRMATION`, and `APPROVED` grounding states.
-- Blocked ungrounded output with HTTP 422.
+- Blocked detected ungrounded output with HTTP 422.
 - Added evidence-first confirmation guidance: users must add a proposed fact to candidate input only when true and regenerate; the AI proposal is never automatically promoted into CareerEvidence.
 
 ### AFTER
-Probabilistic output is now a proposal until the deterministic factual gate approves it. Job-only facts are blocked from becoming candidate claims.
+Probabilistic output is treated as a proposal until the deterministic gate approves the classes of facts it knows how to inspect.
+
+Audit clarification: this gate did not prove complete semantic grounding. PR-ATS2-07 adds conservative narrative-claim checks and behavioral regression tests; future semantic entailment remains a separate layer.
 
 Gate wording:
-`G6 GROUNDED_GENERATION — PASS`
+`G6 GROUNDED_GENERATION — PASS (FOUNDATION), COMPLETE SEMANTIC GROUNDING NOT CLAIMED`
 
 Merged PR: `#4`.
 
@@ -180,24 +184,72 @@ The product still depended on the legacy keyword heuristic as its visible matchi
 - Kept the legacy `atsScore` temporarily for UI compatibility rather than silently redefining its semantics.
 
 ### AFTER
-ATS v2 now has an executable and explainable Job Match path independent from the old keyword score. Matching remains inference and cannot create candidate truth.
+ATS v2 has an executable first-pass Job Match path independent from the old keyword score. Matching remains inference and cannot create candidate truth.
+
+Audit clarification: the initial G7 implementation extracted `minimumYears` without enforcing it, could lose requirement-section context, and treated missing work authorization too strongly. PR-ATS2-07 corrects those behaviors and adds executable regression tests.
 
 Gate wording:
-`G7 JOB_MATCH_V2 — PASS`
+`G7 JOB_MATCH_V2 — PASS (FOUNDATION), CALIBRATED MATCH RELIABILITY NOT YET CLAIMED`
 
 Merged PR: `#5`.
+
+## PR-ATS2-07 — Audit Hardening
+
+### BEFORE
+A post-G7 audit identified several places where implementation existed but the documented trust guarantee was stronger than the executable behavior:
+- legacy DTO values were labeled `VERIFIED_FACT` even though source-level verification was not retained;
+- upload versus manual provenance was collapsed;
+- CI compiled the system but did not run behavioral tests;
+- narrative hallucinations could escape entity/number grounding checks;
+- requirement-section headings did not propagate necessity to bullets;
+- uncatalogued explicit requirements could be silently omitted;
+- `minimumYears` was extracted but not enforced by matching;
+- missing work-authorization evidence could become a blocker;
+- configured rate limit and user-facing copy disagreed.
+
+### DURING
+- Added `CANDIDATE_ASSERTED` and stopped promoting legacy DTO data to `VERIFIED_FACT`.
+- Preserved manual-form versus resume-upload `CareerSource` origin.
+- Added candidate location assertion projection.
+- Added conservative narrative, education, and language grounding checks.
+- Added line-level Job Description leakage rejection for unsupported narrative claims.
+- Carried REQUIRED/PREFERRED section context into child job requirements.
+- Preserved uncatalogued explicit requirements as `OTHER`.
+- Enforced `minimumYears` conservatively against linked parseable candidate date ranges.
+- Changed absent work-authorization evidence to `UNKNOWN` rather than `BLOCKER`.
+- Corrected rate-limit copy to 50 requests/hour.
+- Added executable ATS v2 behavior tests without introducing a new test dependency.
+- Updated CI to run `npm test` between typecheck and build.
+
+### VALIDATION
+GitHub Actions run `31454540397` passed:
+- `npm ci`
+- lint
+- typecheck
+- seven ATS v2 behavioral regression tests
+- build
+
+### AFTER
+The audited foundations now have executable regression coverage for the specific failure modes found in the audit. This still does not claim source-document trusted import, complete semantic entailment, or statistically calibrated Job Match accuracy.
+
+Gate wording:
+`G7H AUDIT_HARDENING — PASS`
 
 ## Current Migration Position
 
 ```text
-G0 REPRODUCIBLE_BASELINE   PASS
-G1 TRUST_CONTAINMENT       PASS
-G2 PLATFORM_HEALTH         PASS
-G3 DOMAIN_FOUNDATION       PASS
-G4 EVIDENCE_CLAIM_LEDGER   PASS
-G5 STRUCTURED_AI           PASS
-G6 GROUNDED_GENERATION     PASS
-G7 JOB_MATCH_V2            PASS
+G0  REPRODUCIBLE_BASELINE          PASS
+G1  TRUST_CONTAINMENT              PASS
+G2  PLATFORM_HEALTH                PASS / ACCEPTED SECURITY DEBT
+G3  DOMAIN_FOUNDATION              PASS
+G4  CANDIDATE_TRUTH_BOUNDARY       PASS
+    TRUSTED_SOURCE_EVIDENCE        NOT YET
+G5  STRUCTURED_AI                  PASS
+G6  GROUNDING_FOUNDATION           PASS + AUDIT HARDENED
+    SEMANTIC_ENTAILMENT            NOT YET
+G7  JOB_MATCH_FOUNDATION           PASS + AUDIT HARDENED
+    CALIBRATED_MATCH_RELIABILITY   NOT YET
+G7H AUDIT_HARDENING                PASS
 ```
 
-The next architectural work should move from truth/matching foundations into trusted import, resume version composition/rendering, privacy/security boundaries, persistence/Career Vault, explainability UX, observability, and pilot validation. The legacy keyword score remains intentionally visible until the product UI is migrated to separate Resume Quality, Parseability, and Job Match concepts.
+The next architectural work can proceed from a more honest baseline. Priority should remain trusted import/source provenance, semantic grounding evaluation, match benchmarking/calibration, resume version composition/rendering, privacy/security boundaries, persistence/Career Vault, explainability UX, observability, and pilot validation. The legacy keyword score remains intentionally visible until the product UI is migrated to separate Resume Quality, Parseability, and Job Match concepts.

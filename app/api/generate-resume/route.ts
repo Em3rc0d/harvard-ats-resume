@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Rate limit exceeded. You can generate 5 resumes per hour. Please try again later.',
+          error: 'Rate limit exceeded. You can generate 50 resumes per hour. Please try again later.',
           retryAfter: new Date(rateLimitResult.reset).toISOString(),
         },
         {
@@ -60,12 +60,21 @@ export async function POST(request: NextRequest) {
     const sanitizedData = sanitizeResumeData(data);
     const requestProjectionKey = `request:${Date.now()}`;
     const capturedAt = new Date().toISOString();
+    const sourceOrigin = request.headers.get('x-ats-candidate-source');
+    const sourceKind = sourceOrigin === 'resume_upload' ? 'RESUME_UPLOAD' : 'CANDIDATE_PROVIDED';
+    const sourceLabel = sourceKind === 'RESUME_UPLOAD'
+      ? 'Resume upload extracted and reviewed by candidate'
+      : 'Manual resume form reviewed by candidate';
 
     // ATS v2 candidate-truth boundary. Job requirements are structurally
-    // excluded from evidence/claims by LegacyResumeAdapter.
+    // excluded from evidence/claims by LegacyResumeAdapter. Legacy form data
+    // is candidate-asserted, not promoted to independently VERIFIED_FACT.
     const truthContext = buildLegacyTruthContext(sanitizedData, {
       projectionKey: requestProjectionKey,
       capturedAt,
+      sourceKind,
+      sourceLabel,
+      truthClass: 'CANDIDATE_ASSERTED',
     });
 
     if (truthContext.claims.length === 0) {
