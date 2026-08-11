@@ -21,6 +21,11 @@ interface SkillDefinition {
   readonly aliases: readonly string[];
 }
 
+interface JobStatement {
+  readonly text: string;
+  readonly contextNecessity: JobRequirementNecessity;
+}
+
 const SKILLS: readonly SkillDefinition[] = [
   { canonical: 'Java', aliases: ['java'] },
   { canonical: 'JavaScript', aliases: ['javascript', 'js'] },
@@ -99,11 +104,13 @@ const PREFERRED_PATTERNS = [
   /\bser[aá] un plus\b/i,
 ];
 
+const REQUIRED_SECTION_PATTERN = /^(requirements?|required qualifications?|minimum qualifications?|must[- ]haves?|requisitos?|requisitos obligatorios?|requisitos m[ií]nimos)$/i;
+const PREFERRED_SECTION_PATTERN = /^(preferred qualifications?|nice[- ]to[- ]haves?|preferred|deseables?|requisitos deseables?|preferidos?)$/i;
 const EXPERIENCE_PATTERN = /\b(experience|experiencia|years?|a[nñ]os?)\b/i;
 const EDUCATION_PATTERN = /\b(bachelor|master|degree|university|college|licenciatura|maestr[ií]a|t[ií]tulo|universidad|ingenier[ií]a)\b/i;
 const CERTIFICATION_PATTERN = /\b(certification|certificate|certified|certificaci[oó]n|certificado|certificada|certificado)\b/i;
 const LANGUAGE_PATTERN = /\b(english|spanish|french|portuguese|idioma|ingl[eé]s|espa[nñ]ol|franc[eé]s|portugu[eé]s|fluent|fluido|bilingual|biling[uü]e)\b/i;
-const LOCATION_PATTERN = /\b(remote|hybrid|on[- ]site|onsite|location|ubicaci[oó]n|remoto|h[ií]brido|presencial)\b/i;
+const LOCATION_PATTERN = /\b(remote|hybrid|on[- ]site|onsite|location|located|ubicaci[oó]n|remoto|h[ií]brido|presencial|residir|residence)\b/i;
 const WORK_AUTH_PATTERN = /\b(work authorization|authorized to work|visa sponsorship|sponsorship|permiso de trabajo|autorizaci[oó]n de trabajo|patrocinio de visa)\b/i;
 const RESPONSIBILITY_PATTERN = /\b(design|develop|build|lead|mentor|own|manage|architect|implement|maintain|collaborate|dise[nñ]ar|desarrollar|construir|liderar|mentorar|gestionar|implementar|mantener|colaborar)\b/i;
 
@@ -131,13 +138,45 @@ function containsAlias(text: string, alias: string): boolean {
   return normalizedText.includes(normalizedAlias);
 }
 
-function splitStatements(text: string): string[] {
-  return text
+function headingNecessity(line: string): JobRequirementNecessity | undefined {
+  const normalizedHeading = line.replace(/:$/, '').trim();
+  if (REQUIRED_SECTION_PATTERN.test(normalizedHeading)) return 'REQUIRED';
+  if (PREFERRED_SECTION_PATTERN.test(normalizedHeading)) return 'PREFERRED';
+  return undefined;
+}
+
+function splitStatements(text: string): JobStatement[] {
+  const statements: JobStatement[] = [];
+  let contextNecessity: JobRequirementNecessity = 'UNKNOWN';
+
+  text
     .replace(/\r/g, '\n')
-    .split(/\n+|(?<=[.!?;])\s+/)
-    .map((statement) => statement.replace(/^[\s•*\-–—]+/, '').trim())
-    .filter((statement) => statement.length >= 4)
-    .slice(0, 120);
+    .split(/\n+/)
+    .forEach((rawLine) => {
+      const trimmed = rawLine.replace(/^[\s•*\-–—]+/, '').trim();
+      if (!trimmed) return;
+
+      const headingContext = headingNecessity(trimmed);
+      if (headingContext) {
+        contextNecessity = headingContext;
+        return;
+      }
+
+      if (trimmed.endsWith(':') && trimmed.length <= 60) {
+        contextNecessity = 'UNKNOWN';
+        return;
+      }
+
+      trimmed
+        .split(/(?<=[.!?;])\s+/)
+        .map((statement) => statement.trim())
+        .filter((statement) => statement.length >= 4)
+        .forEach((statement) => {
+          statements.push({ text: statement, contextNecessity });
+        });
+    });
+
+  return statements.slice(0, 120);
 }
 
 function detectLanguage(text: string): JobLanguage {
@@ -150,10 +189,13 @@ function detectLanguage(text: string): JobLanguage {
   return 'UNKNOWN';
 }
 
-function detectNecessity(statement: string): JobRequirementNecessity {
+function detectNecessity(
+  statement: string,
+  contextNecessity: JobRequirementNecessity,
+): JobRequirementNecessity {
   if (PREFERRED_PATTERNS.some((pattern) => pattern.test(statement))) return 'PREFERRED';
   if (REQUIRED_PATTERNS.some((pattern) => pattern.test(statement))) return 'REQUIRED';
-  return 'UNKNOWN';
+  return contextNecessity;
 }
 
 function detectMinimumYears(statement: string): number | undefined {
@@ -173,7 +215,7 @@ function detectNonSkillKind(statement: string): JobRequirementKind | undefined {
 }
 
 function requirementConfidence(kind: JobRequirementKind, necessity: JobRequirementNecessity): number {
-  let confidence = kind === 'SKILL' ? 0.98 : 0.78;
+  let confidence = kind === 'SKILL' ? 0.98 : kind === 'OTHER' ? 0.55 : 0.78;
   if (necessity !== 'UNKNOWN') confidence += 0.08;
   return Math.min(1, confidence);
 }
@@ -206,10 +248,8 @@ function createRequirement(
 /**
  * Deterministic EN/ES first-pass job intelligence.
  *
- * It intentionally extracts only requirements that can be explained from the
- * source text. Unknown statements are not promoted into candidate truth and
- * can be enhanced by a later structured AI extractor without changing the
- * domain contract.
+ * Explicit required/preferred statements are retained even when the technology
+ * is outside the canonical skill catalog, preventing silent requirement loss.
  */
 export function analyzeJobDescription(
   sourceText: string,
@@ -226,8 +266,8 @@ export function analyzeJobDescription(
   const requirements: JobRequirement[] = [];
   let ordinal = 1;
 
-  splitStatements(sourceText).forEach((statement) => {
-    const necessity = detectNecessity(statement);
+  splitStatements(sourceText).forEach(({ text: statement, contextNecessity }) => {
+    const necessity = detectNecessity(statement, contextNecessity);
     const minimumYears = detectMinimumYears(statement);
     const detectedSkills = SKILLS.filter((skill) =>
       skill.aliases.some((alias) => containsAlias(statement, alias)),
@@ -247,6 +287,15 @@ export function analyzeJobDescription(
     if (nonSkillKind && (detectedSkills.length === 0 || nonSkillKind !== 'RESPONSIBILITY')) {
       requirements.push(
         createRequirement(jobDescription, ordinal++, statement, nonSkillKind, necessity, {
+          minimumYears,
+        }),
+      );
+      return;
+    }
+
+    if (detectedSkills.length === 0 && necessity !== 'UNKNOWN') {
+      requirements.push(
+        createRequirement(jobDescription, ordinal++, statement, 'OTHER', necessity, {
           minimumYears,
         }),
       );
