@@ -282,13 +282,16 @@ test('invalid partial manifest is rejected before repository save', async () => 
 test('tampered rendered resume document is rejected by reload graph validation', async () => {
   const repository = new MemoryCareerVaultRepository();
   const { snapshot } = await persist(repository, resumeFixture(), T0);
-  const tampered = clone(snapshot);
-  tampered.resumeDocuments = [
-    {
-      ...tampered.resumeDocuments[0]!,
-      content: `${tampered.resumeDocuments[0]!.content}\nInvented line`,
-    },
-  ];
+  const cloned = clone(snapshot);
+  const tampered: CareerVaultSnapshot = {
+    ...cloned,
+    resumeDocuments: [
+      {
+        ...cloned.resumeDocuments[0]!,
+        content: `${cloned.resumeDocuments[0]!.content}\nInvented line`,
+      },
+    ],
+  };
 
   assert.throws(
     () => validateCareerVaultSnapshot(tampered),
