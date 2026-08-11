@@ -18,6 +18,7 @@
     "tests/ats2/semantic-entailment.test.ts",
     "tests/ats2/match-benchmark.test.ts",
     "tests/ats2/resume-versioning.test.ts",
+    "tests/ats2/career-vault.test.ts",
     "lib/domain/**/*.ts",
     "lib/application/import/**/*.ts",
     "lib/application/legacy/LegacyResumeAdapter.ts",
@@ -26,6 +27,8 @@
     "lib/application/job/JobIntelligenceEngine.ts",
     "lib/application/matching/JobMatchEngine.ts",
     "lib/application/resume/ResumeCompositionService.ts",
+    "lib/application/career-vault/**/*.ts",
+    "lib/infrastructure/persistence/UpstashCareerVaultRepository.ts",
     "lib/schemas.ts"
   ]
 }
