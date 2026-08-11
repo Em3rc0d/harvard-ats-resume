@@ -70,7 +70,7 @@ const ACTION_VERBS = [
   'built', 'developed', 'implemented', 'designed', 'architected', 'created', 'delivered',
   'led', 'managed', 'improved', 'reduced', 'increased', 'automated', 'maintained', 'supported',
   'construi', 'desarrolle', 'implemente', 'disene', 'arquitecte', 'cree', 'entregue', 'lidere',
-  'gestione', 'mejore', 'reduje', 'aumente', 'automaticé', 'mantuv', 'apoye',
+  'gestione', 'mejore', 'reduje', 'aumente', 'automatice', 'mantuv', 'apoye',
 ];
 
 function beginsWithActionVerb(value: string): boolean {
