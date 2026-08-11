@@ -10,6 +10,7 @@ import { validateGeneratedResumeGrounding } from '@/lib/application/grounding/Gr
 import { evaluateGeneratedResumeSemanticGrounding } from '@/lib/application/grounding/SemanticEntailmentEvaluator';
 import { analyzeJobDescription } from '@/lib/application/job/JobIntelligenceEngine';
 import { matchJobToCandidate } from '@/lib/application/matching/JobMatchEngine';
+import { evaluateProductResume } from '@/lib/application/product/ProductEvaluationService';
 import { composeApprovedResumeVersion } from '@/lib/application/resume/ResumeCompositionService';
 import { deriveCareerVaultIdentity } from '@/lib/application/career-vault/CareerVaultIdentity';
 import {
@@ -110,9 +111,6 @@ export async function POST(request: NextRequest) {
       throw storageError;
     }
 
-    // ATS v2 candidate-truth boundary. Candidate identity comes from an opaque
-    // browser-held capability; truth-snapshot identity comes from candidate data.
-    // Raw vault capability, email, and Job Description content never enter IDs.
     const truthContext = buildLegacyTruthContext(sanitizedData, {
       projectionKey: vaultIdentity.candidateProjectionKey,
       candidateProfileId: vaultIdentity.candidateProfileId,
@@ -134,8 +132,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Job truth receives its own stable source/engine-version identity, separate
-    // from candidate truth. The matching engine only connects existing domain IDs.
     const jobIntelligence = sanitizedData.jobDescription?.trim()
       ? analyzeJobDescription(sanitizedData.jobDescription, {
           projectionKey: vaultIdentity.jobProjectionKey!,
@@ -150,8 +146,8 @@ export async function POST(request: NextRequest) {
         })
       : undefined;
 
-    // Legacy keyword analysis remains temporarily for UI compatibility while
-    // JobMatch v2 is exposed as a separate explainable report.
+    // Legacy keyword analysis is retained as a compatibility payload only. G13
+    // no longer presents it as the primary product truth or "ATS compatibility".
     const jobKeywords = sanitizedData.jobDescription
       ? extractKeywords(sanitizedData.jobDescription)
       : [];
@@ -171,8 +167,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Layer 1: deterministic factual blockers. These remain authoritative and
-    // can never be overridden by semantic evaluation.
     const groundingReport = validateGeneratedResumeGrounding(
       sanitizedData,
       geminiResult.formattedResume,
@@ -202,9 +196,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Layer 2: conservative semantic drift evaluation. It checks high-risk
-    // responsibility/scope wording against candidate assertions only. Job
-    // requirements are never accepted as evidence for candidate claims.
     const semanticGroundingReport = evaluateGeneratedResumeSemanticGrounding(
       geminiResult.formattedResume,
       truthContext.assertions,
@@ -235,9 +226,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Layer 3: runtime materialization. Only output that passed both grounding
-    // gates may become a ResumeVersion. Every material generated claim must be
-    // linked back to existing candidate assertions through a complete manifest.
     let resumeComposition;
     try {
       resumeComposition = composeApprovedResumeVersion({
@@ -296,27 +284,58 @@ export async function POST(request: NextRequest) {
       ...(geminiResult.suggestions || []),
     ];
 
+    const assertionsById = new Map(truthContext.assertions.map((assertion) => [assertion.id, assertion]));
+    const productEvaluation = evaluateProductResume(sanitizedData, geminiResult.formattedResume);
+
     const explainableJobMatch = jobMatch && jobIntelligence
       ? {
           score: jobMatch.score,
           language: jobIntelligence.language,
           breakdown: jobMatch.breakdown,
-          requirements: jobMatch.requirements.map((requirement, index) => ({
-            id: requirement.id,
-            statement: requirement.statement,
-            kind: requirement.kind,
-            necessity: requirement.necessity,
-            canonicalConcept: requirement.canonicalConcept,
-            minimumYears: requirement.minimumYears,
-            status: jobMatch.report.matches[index]?.status ?? 'UNKNOWN',
-            rationale: jobMatch.report.matches[index]?.rationale ?? 'No match inference available.',
-            assertionIds: jobMatch.report.matches[index]?.assertionIds ?? [],
-          })),
+          requirements: jobMatch.requirements.map((requirement, index) => {
+            const inference = jobMatch.report.matches[index];
+            const assertionIds = inference?.assertionIds ?? [];
+            return {
+              id: requirement.id,
+              statement: requirement.statement,
+              kind: requirement.kind,
+              necessity: requirement.necessity,
+              canonicalConcept: requirement.canonicalConcept,
+              minimumYears: requirement.minimumYears,
+              status: inference?.status ?? 'UNKNOWN',
+              rationale: inference?.rationale ?? 'No match inference available.',
+              assertionIds,
+              evidence: assertionIds
+                .map((id) => assertionsById.get(id))
+                .filter((assertion) => Boolean(assertion))
+                .map((assertion) => ({
+                  assertionId: assertion!.id,
+                  statement: assertion!.statement,
+                  truthClass: assertion!.truthClass,
+                  sourceIds: assertion!.sourceIds,
+                  evidenceIds: assertion!.evidenceIds,
+                })),
+            };
+          }),
         }
       : undefined;
 
-    // Layer 4: durable persistence. The full graph is written atomically as one
-    // Career Vault snapshot and reloaded/validated before an HTTP 200 can exist.
+    const claimTraceability = resumeComposition.claims.map((claim) => ({
+      claimId: claim.id,
+      wording: claim.wording,
+      assertionIds: claim.assertionIds,
+      evidence: claim.assertionIds
+        .map((id) => assertionsById.get(id))
+        .filter((assertion) => Boolean(assertion))
+        .map((assertion) => ({
+          assertionId: assertion!.id,
+          statement: assertion!.statement,
+          truthClass: assertion!.truthClass,
+          sourceIds: assertion!.sourceIds,
+          evidenceIds: assertion!.evidenceIds,
+        })),
+    }));
+
     let careerVault;
     try {
       careerVault = await persistCareerVault({
@@ -358,11 +377,9 @@ export async function POST(request: NextRequest) {
         success: true,
         data: {
           formattedResume: geminiResult.formattedResume,
-          atsScore: atsScoreResult.atsScore,
-          matchedKeywords: atsScoreResult.matchedKeywords,
-          missingKeywords: atsScoreResult.missingKeywords,
-          suggestions: allSuggestions.slice(0, 10),
+          productEvaluation,
           jobMatch: explainableJobMatch,
+          claimTraceability,
           resumeVersion: resumeComposition.version,
           resumeManifest: resumeComposition.manifest,
           resumeClaims: resumeComposition.claims,
@@ -373,6 +390,17 @@ export async function POST(request: NextRequest) {
             revision: careerVault.revision,
             createdAt: careerVault.createdAt,
             updatedAt: careerVault.updatedAt,
+          },
+          // Compatibility payload: intentionally not used as ATS v2 primary UX.
+          atsScore: atsScoreResult.atsScore,
+          matchedKeywords: atsScoreResult.matchedKeywords,
+          missingKeywords: atsScoreResult.missingKeywords,
+          suggestions: allSuggestions.slice(0, 10),
+          legacyAnalysis: {
+            status: 'LEGACY_COMPATIBILITY_ONLY',
+            atsScore: atsScoreResult.atsScore,
+            matchedKeywords: atsScoreResult.matchedKeywords,
+            missingKeywords: atsScoreResult.missingKeywords,
           },
         },
       },
