@@ -15,14 +15,19 @@ import {
   type CareerEvidenceId,
   type CareerSource,
   type CareerSourceId,
+  type CareerSourceKind,
   type ClaimLedger,
   type ResumeClaim,
+  type TruthClass,
 } from '../../domain';
 
 export interface LegacyResumeProjectionOptions {
   readonly projectionKey?: string;
   readonly capturedAt?: string;
   readonly candidateProfileId?: CandidateProfileId;
+  readonly sourceKind?: CareerSourceKind;
+  readonly sourceLabel?: string;
+  readonly truthClass?: TruthClass;
 }
 
 export interface LegacyResumeDomainProjection {
@@ -57,6 +62,10 @@ function collectAssertionSeeds(data: ResumeRequest): AssertionSeed[] {
     {
       statement: `Professional summary: ${data.summary}`,
       evidenceExcerpt: data.summary,
+    },
+    {
+      statement: `Candidate location: ${data.personalInfo.location}.`,
+      evidenceExcerpt: `Location: ${data.personalInfo.location}`,
     },
   ];
 
@@ -131,6 +140,10 @@ function collectAssertionSeeds(data: ResumeRequest): AssertionSeed[] {
  *
  * Deliberately ignored input: jobDescription.
  * Job requirements are external truth and MUST NOT become candidate evidence.
+ *
+ * Legacy DTO values are candidate-asserted, not independently verified facts.
+ * Trusted import can later promote claims only when source-level evidence has
+ * been retained and verified.
  */
 export function projectLegacyResumeRequest(
   data: ResumeRequest,
@@ -140,7 +153,13 @@ export function projectLegacyResumeRequest(
   const capturedAt = options.capturedAt ?? new Date().toISOString();
   const candidateProfileId =
     options.candidateProfileId ?? domainId('CandidateProfile', `candidate:${projectionKey}`);
-  const sourceId: CareerSourceId = domainId('CareerSource', `source:${projectionKey}:manual-form`);
+  const sourceKind = options.sourceKind ?? 'CANDIDATE_PROVIDED';
+  const sourceLabel = options.sourceLabel ?? 'Legacy resume form reviewed by candidate';
+  const truthClass = options.truthClass ?? 'CANDIDATE_ASSERTED';
+  const sourceId: CareerSourceId = domainId(
+    'CareerSource',
+    `source:${projectionKey}:${sourceKind.toLowerCase()}`,
+  );
 
   const candidateProfile = createCandidateProfile({
     id: candidateProfileId,
@@ -151,8 +170,8 @@ export function projectLegacyResumeRequest(
   const source = createCareerSource({
     id: sourceId,
     candidateProfileId,
-    kind: 'CANDIDATE_PROVIDED',
-    label: 'Legacy resume form',
+    kind: sourceKind,
+    label: sourceLabel,
     capturedAt,
   });
 
@@ -178,7 +197,7 @@ export function projectLegacyResumeRequest(
       id: domainId('CareerAssertion', `assertion:${projectionKey}:${ordinal}`),
       candidateProfileId,
       statement: seed.statement,
-      truthClass: 'VERIFIED_FACT',
+      truthClass,
       evidenceIds: [evidenceId],
       sourceIds: [sourceId],
       derivedFromAssertionIds: [],
