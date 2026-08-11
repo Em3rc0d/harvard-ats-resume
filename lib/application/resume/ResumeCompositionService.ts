@@ -31,6 +31,7 @@ export interface RuntimeResumeComposition {
   readonly version: ResumeVersion;
   readonly manifest: ResumeManifest;
   readonly claims: readonly ResumeClaim[];
+  readonly renderedResume: string;
   readonly persistence: 'EPHEMERAL_RUNTIME';
 }
 
@@ -287,6 +288,7 @@ export function composeApprovedResumeVersion(
     version,
     manifest,
     claims,
+    renderedResume: input.formattedResume,
     persistence: 'EPHEMERAL_RUNTIME',
   };
 }
