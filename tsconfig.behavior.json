@@ -16,6 +16,7 @@
   "include": [
     "tests/ats2/behavior.test.ts",
     "lib/domain/**/*.ts",
+    "lib/application/import/**/*.ts",
     "lib/application/legacy/LegacyResumeAdapter.ts",
     "lib/application/grounding/GroundingValidator.ts",
     "lib/application/job/JobIntelligenceEngine.ts",
