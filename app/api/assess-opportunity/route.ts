@@ -14,22 +14,46 @@ import {
   OpportunityHistoryUnavailableError,
   persistOpportunityAssessmentHistory,
 } from '@/lib/application/opportunity/OpportunityHistory';
+import {
+  assessCareerTargetRelevance,
+  createCareerTarget,
+} from '@/lib/application/target/CareerTargetService';
+import {
+  persistCareerTarget,
+  recordTargetOpportunityEvaluation,
+} from '@/lib/application/target/CareerTargetPortfolio';
 import { createOpportunityHistoryRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashOpportunityHistoryRepository';
+import { createCareerTargetRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashCareerTargetRepository';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const careerTargetSchema = z.object({
+  roleTitle: z.string().trim().min(2).max(120),
+  jobFamily: z.string().trim().max(120).optional(),
+  preferredSeniority: z.enum(['ENTRY', 'JUNIOR', 'MID', 'SENIOR', 'LEAD', 'STAFF', 'PRINCIPAL', 'MANAGER', 'DIRECTOR', 'ANY']).default('ANY'),
+  preferredLocations: z.array(z.string().trim().min(2).max(120)).max(5).default([]),
+  workModels: z.array(z.enum(['REMOTE', 'HYBRID', 'ONSITE', 'FLEXIBLE'])).min(1).max(4).default(['FLEXIBLE']),
+  employmentTypes: z.array(z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'ANY'])).min(1).max(5).default(['ANY']),
+  industries: z.array(z.string().trim().min(2).max(120)).max(10).default([]),
+  relocation: z.enum(['OPEN', 'NOT_OPEN', 'UNSPECIFIED']).default('UNSPECIFIED'),
+  priority: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]).default(3),
+});
+
 const opportunityAssessmentInputSchema = resumeRequestSchema.extend({
   careerVaultId: z.string().uuid('Career Vault identity must be an opaque UUID capability.'),
+  careerTarget: careerTargetSchema,
 });
 
 /**
  * POST /api/assess-opportunity
  *
- * Market v0.1 Application Intelligence boundary. It compares one immutable
- * CareerSnapshot with one immutable JobSnapshot before any generative resume
- * work runs, then durably records the derived assessment. Job requirements stay
- * market truth and never become candidate evidence.
+ * Evidence fit and candidate intent remain independent dimensions:
+ *
+ * Career Truth + Job Truth -> OpportunityAssessment (can I defend this?)
+ * CareerTarget + Job Truth  -> Target Relevance      (do I want this direction?)
+ *
+ * Neither target preferences nor job requirements become candidate evidence.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,7 +64,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Career data must be complete enough for a trustworthy opportunity assessment.',
+          error: 'Career data and Career Target must be complete enough for a trustworthy opportunity assessment.',
           issues: validation.error.issues.map((issue) => ({
             fieldPath: issue.path.length > 0 ? issue.path.join('.') : 'request',
             message: issue.message,
@@ -53,7 +77,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { careerVaultId, ...resumeData } = validation.data;
+    const { careerVaultId, careerTarget: targetInput, ...resumeData } = validation.data;
     const data = sanitizeResumeData(resumeData);
     const jobDescription = data.jobDescription?.trim() ?? '';
 
@@ -72,6 +96,28 @@ export async function POST(request: NextRequest) {
 
     const capturedAt = new Date().toISOString();
     const vaultIdentity = deriveCareerVaultIdentity(data, careerVaultId);
+    const careerTarget = createCareerTarget(vaultIdentity.candidateProfileId, targetInput, capturedAt);
+    const targetRelevance = assessCareerTargetRelevance(careerTarget, jobDescription);
+
+    let targetRepository;
+    try {
+      targetRepository = createCareerTargetRepositoryFromEnv();
+      await persistCareerTarget(targetRepository, careerTarget, capturedAt);
+    } catch (targetPersistenceError) {
+      console.error('Career Target persistence error:', targetPersistenceError);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Career Target could not be durably committed. CV Engine will not treat an unpersisted preference as the active target.',
+          targetPersistence: { status: 'FAILED' },
+        },
+        {
+          status: 503,
+          headers: { 'Cache-Control': 'no-store, max-age=0' },
+        },
+      );
+    }
+
     const truthContext = buildLegacyTruthContext(data, {
       projectionKey: vaultIdentity.candidateProjectionKey,
       candidateProfileId: vaultIdentity.candidateProfileId,
@@ -178,11 +224,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let targetPortfolio;
+    try {
+      targetPortfolio = await recordTargetOpportunityEvaluation(
+        targetRepository,
+        careerTarget,
+        artifacts.assessmentRecord.id,
+        targetRelevance,
+        capturedAt,
+      );
+    } catch (linkError) {
+      console.error('Career Target opportunity-link persistence error:', linkError);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'The assessment was preserved, but its Career Target relevance could not be durably linked. Retry the assessment before using it to make a target-aware decision.',
+          targetPersistence: { status: 'LINK_FAILED' },
+        },
+        {
+          status: 503,
+          headers: { 'Cache-Control': 'no-store, max-age=0' },
+        },
+      );
+    }
+
     return NextResponse.json(
       {
         success: true,
         data: {
           assessment,
+          careerTarget: {
+            target: careerTarget,
+            relevance: targetRelevance,
+            portfolioRevision: targetPortfolio.revision,
+            scopeBoundary: 'TARGET_PREFERENCE_DOES_NOT_CHANGE_JOB_MATCH',
+          },
           opportunityHistory: {
             persistence: 'DURABLE_OPPORTUNITY_HISTORY',
             assessmentId: artifacts.assessmentRecord.id,
