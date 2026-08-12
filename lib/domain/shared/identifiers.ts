@@ -5,6 +5,7 @@ export type CareerSourceId = DomainId<'CareerSource'>;
 export type CareerEvidenceId = DomainId<'CareerEvidence'>;
 export type CareerAssertionId = DomainId<'CareerAssertion'>;
 export type CareerSnapshotId = DomainId<'CareerSnapshot'>;
+export type CareerTargetId = DomainId<'CareerTarget'>;
 export type JobDescriptionId = DomainId<'JobDescription'>;
 export type JobRequirementId = DomainId<'JobRequirement'>;
 export type JobSnapshotId = DomainId<'JobSnapshot'>;

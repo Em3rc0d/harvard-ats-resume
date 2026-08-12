@@ -114,10 +114,11 @@ test('imported flow routes through Career Review and Target before trusted gener
   assert.match(page, /TargetJobStep/);
 });
 
-test('target job UX states the Job Description never becomes candidate evidence', () => {
+test('target job UX keeps Job Description and CareerTarget outside candidate evidence', () => {
   const target = readFileSync(join(process.cwd(), 'components/TargetJobStep.tsx'), 'utf8');
-  assert.match(target, /never becomes candidate evidence/i);
   assert.match(target, /Missing requirements stay missing/i);
+  assert.match(target, /Neither a Career Target nor a Job Description can create/i);
+  assert.match(target, /Intent is not evidence/i);
   assert.doesNotMatch(target, /matching keywords/i);
 });
 

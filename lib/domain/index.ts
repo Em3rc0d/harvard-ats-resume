@@ -3,6 +3,7 @@ export * from './candidate/CareerAssertion';
 export * from './candidate/CareerEvidence';
 export * from './candidate/CareerSnapshot';
 export * from './candidate/CareerSource';
+export * from './candidate/CareerTarget';
 export * from './job/JobDescription';
 export * from './job/JobRequirement';
 export * from './job/JobSnapshot';
