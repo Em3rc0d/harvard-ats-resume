@@ -1,12 +1,23 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 
 interface VoiceInputProps {
     onTranscript: (text: string) => void;
     className?: string;
     isListening?: boolean;
     onListeningChange?: (isListening: boolean) => void;
+}
+
+const subscribeToBrowserCapability = () => () => undefined;
+
+function getSpeechRecognitionSupport() {
+    if (typeof window === 'undefined') return false;
+    const browserWindow = window as typeof window & {
+        SpeechRecognition?: new () => any;
+        webkitSpeechRecognition?: new () => any;
+    };
+    return Boolean(browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition);
 }
 
 export default function VoiceInput(props: Readonly<VoiceInputProps>) {
@@ -17,9 +28,13 @@ export default function VoiceInput(props: Readonly<VoiceInputProps>) {
         onListeningChange
     } = props;
     const [internalIsListening, setInternalIsListening] = useState(false);
-    const [isSupported, setIsSupported] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const recognitionRef = useRef<any>(null);
+    const isSupported = useSyncExternalStore(
+        subscribeToBrowserCapability,
+        getSpeechRecognitionSupport,
+        () => false,
+    );
 
     const isListening = externalIsListening === undefined ? internalIsListening : externalIsListening;
 
@@ -31,70 +46,85 @@ export default function VoiceInput(props: Readonly<VoiceInputProps>) {
     }, [externalIsListening, onListeningChange]);
 
     useEffect(() => {
-        if (globalThis.window !== undefined) {
-            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-            if (SpeechRecognition) {
-                setIsSupported(true);
-                recognitionRef.current = new SpeechRecognition();
-                recognitionRef.current.continuous = true;
-                recognitionRef.current.interimResults = true;
-                // Use browser language or default to English
-                recognitionRef.current.lang = navigator.language || 'en-US';
+        if (!isSupported || typeof window === 'undefined') return;
 
-                recognitionRef.current.onresult = (event: any) => {
-                    let finalTranscript = '';
-                    for (let i = event.resultIndex; i < event.results.length; ++i) {
-                        if (event.results[i].isFinal) {
-                            finalTranscript += event.results[i][0].transcript;
-                        }
-                    }
-                    if (finalTranscript) {
-                        onTranscript(finalTranscript);
-                        setError(null);
-                    }
-                };
+        const browserWindow = window as typeof window & {
+            SpeechRecognition?: new () => any;
+            webkitSpeechRecognition?: new () => any;
+        };
+        const SpeechRecognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
 
-                recognitionRef.current.onerror = (event: any) => {
-                    console.error('Speech recognition error', event.error);
-                    let errorMessage = 'Error listening';
-                    if (event.error === 'not-allowed') {
-                        errorMessage = 'Mic access denied';
-                    } else if (event.error === 'no-speech') {
-                        // Ignore no-speech errors usually, or handle gently
-                        return;
-                    } else if (event.error === 'network') {
-                        errorMessage = 'Network error';
-                    }
-                    setError(errorMessage);
-                    handleIsListeningChange(false);
-                };
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = navigator.language || 'en-US';
+        recognitionRef.current = recognition;
 
-                recognitionRef.current.onend = () => {
-                    handleIsListeningChange(false);
-                };
+        recognition.onstart = () => setError(null);
+        recognition.onresult = (event: any) => {
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                }
             }
-        }
-    }, [onTranscript, handleIsListeningChange]);
+            if (finalTranscript) {
+                onTranscript(finalTranscript);
+                setError(null);
+            }
+        };
+
+        recognition.onerror = (event: any) => {
+            console.error('Speech recognition error', event.error);
+            let errorMessage = 'Error listening';
+            if (event.error === 'not-allowed') {
+                errorMessage = 'Mic access denied';
+            } else if (event.error === 'no-speech') {
+                return;
+            } else if (event.error === 'network') {
+                errorMessage = 'Network error';
+            }
+            setError(errorMessage);
+            handleIsListeningChange(false);
+        };
+
+        recognition.onend = () => {
+            handleIsListeningChange(false);
+        };
+
+        return () => {
+            recognition.onstart = null;
+            recognition.onresult = null;
+            recognition.onerror = null;
+            recognition.onend = null;
+            try {
+                recognition.stop();
+            } catch {
+                // Recognition may already be stopped.
+            }
+            if (recognitionRef.current === recognition) recognitionRef.current = null;
+        };
+    }, [handleIsListeningChange, isSupported, onTranscript]);
 
     useEffect(() => {
-        if (recognitionRef.current) {
-            if (isListening) {
-                try {
-                    setError(null);
-                    recognitionRef.current.start();
-                } catch (e) {
-                    // Ignore error if already started
-                }
-            } else {
-                try {
-                    recognitionRef.current.stop();
-                } catch (e) {
-                    // Ignore
-                }
+        const recognition = recognitionRef.current;
+        if (!recognition) return;
+
+        if (isListening) {
+            try {
+                recognition.start();
+            } catch {
+                // Ignore if recognition is already running.
+            }
+        } else {
+            try {
+                recognition.stop();
+            } catch {
+                // Ignore if recognition is already stopped.
             }
         }
     }, [isListening]);
-
 
     const toggleListening = () => {
         handleIsListeningChange(!isListening);
@@ -113,7 +143,7 @@ export default function VoiceInput(props: Readonly<VoiceInputProps>) {
                     ? 'bg-red-100 text-red-600 animate-pulse ring-2 ring-red-400'
                     : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                     } ${className}`}
-                title={isListening ? "Stop listening" : "Start voice input"}
+                title={isListening ? 'Stop listening' : 'Start voice input'}
             >
                 <svg
                     xmlns="http://www.w3.org/2000/svg"

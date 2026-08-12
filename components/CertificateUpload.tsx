@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { createWorker } from 'tesseract.js';
 import { useLanguage } from '@/components/LanguageProvider';
+import Image from 'next/image';
 
 // PDF.js will be loaded dynamically on client side only
 let pdfjsLib: any = null;
@@ -243,7 +244,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         return results;
     };
 
-    const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
@@ -274,9 +275,9 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
             setProgress(100);
             setIsProcessing(false);
         }
-    }, [allowMultiple, onBatchDataExtracted, onDataExtracted, processImage]);
+    };
 
-    const handleDrop = useCallback((e: React.DragEvent<HTMLButtonElement>) => {
+    const handleDrop = (e: React.DragEvent<HTMLButtonElement>) => {
         e.preventDefault();
         const file = e.dataTransfer.files?.[0];
         if (file) {
@@ -291,7 +292,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                 .then(data => onDataExtracted(data))
                 .catch(err => console.error('Drop processing error:', err));
         }
-    }, [onDataExtracted]);
+    };
 
     const handleDragOver = useCallback((e: React.DragEvent<HTMLButtonElement>) => {
         e.preventDefault();
@@ -375,7 +376,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
             {/* Preview & Results (Single file only) */}
             {!allowMultiple && preview && (
                 <div className="mt-4">
-                    <img src={preview} alt="Certificate preview" className="max-h-48 rounded-lg mx-auto shadow-sm" />
+                    <Image src={preview} alt="Certificate preview" width={640} height={360} unoptimized className="max-h-48 w-auto rounded-lg mx-auto shadow-sm" />
                 </div>
             )}
 
