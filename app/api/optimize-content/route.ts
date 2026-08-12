@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { normalizeCandidatePresentationText } from '@/lib/application/presentation/InlineCandidateTextCleanup';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,21 +18,6 @@ const requestSchema = z.object({
  * fact-preserving AI rewrite remains /api/generate-resume, where deterministic
  * and semantic grounding run before a resume version can be emitted.
  */
-export function normalizeCandidatePresentationText(value: string): string {
-  return value
-    .normalize('NFKC')
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((line) => line
-      .trim()
-      .replace(/^[*-]\s+/, '• ')
-      .replace(/[ \t]+/g, ' ')
-      .replace(/\s+([,.;:!?])/g, '$1'))
-    .filter((line, index, lines) => line.length > 0 || (index > 0 && lines[index - 1]?.length))
-    .join('\n')
-    .trim();
-}
-
 export async function POST(request: NextRequest) {
   try {
     const parsed = requestSchema.safeParse(await request.json());
