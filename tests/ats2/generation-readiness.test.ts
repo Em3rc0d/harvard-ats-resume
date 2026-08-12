@@ -78,24 +78,28 @@ test('target job step blocks generation until candidate generation readiness pas
   assert.match(target, /disabled=!\{?canGenerate\}?|disabled=\{!canGenerate\}/);
 });
 
-test('targeted resume generation requires a current Opportunity Assessment before build', () => {
+test('targeted resume generation requires a current target-aware Opportunity Assessment before build', () => {
   const target = readFileSync(join(process.cwd(), 'components/TargetJobStep.tsx'), 'utf8');
 
   assert.match(target, /fetch\('\/api\/assess-opportunity'/);
-  assert.match(target, /return Boolean\(currentAssessment\)/);
+  assert.match(target, /return Boolean\(currentAssessment && targetRelevance\)/);
+  assert.match(target, /assessedTargetKey === targetKey/);
   assert.match(target, /mode === 'GENERAL'\) return true/);
   assert.match(target, /currentAssessment && <OpportunityAssessmentCard assessment=\{currentAssessment\}/);
 });
 
-test('editing the target job invalidates the previous Opportunity Assessment', () => {
+test('editing the target job or CareerTarget invalidates the previous target-aware assessment', () => {
   const target = readFileSync(join(process.cwd(), 'components/TargetJobStep.tsx'), 'utf8');
-  const updateStart = target.indexOf('const updateJobDescription =');
+  const invalidationStart = target.indexOf('const invalidateAssessment =');
   const assessStart = target.indexOf('const assess = async');
-  const updateBlock = target.slice(updateStart, assessStart);
+  const invalidationBlock = target.slice(invalidationStart, assessStart);
 
-  assert.ok(updateStart >= 0);
-  assert.ok(assessStart > updateStart);
-  assert.match(updateBlock, /setJobDescription\(value\)/);
-  assert.match(updateBlock, /setAssessment\(null\)/);
-  assert.match(updateBlock, /setAssessedJobDescription\(''\)/);
+  assert.ok(invalidationStart >= 0);
+  assert.ok(assessStart > invalidationStart);
+  assert.match(invalidationBlock, /setAssessment\(null\)/);
+  assert.match(invalidationBlock, /setTargetRelevance\(null\)/);
+  assert.match(invalidationBlock, /setAssessedJobDescription\(''\)/);
+  assert.match(invalidationBlock, /setAssessedTargetKey\(''\)/);
+  assert.match(target, /setJobDescription\(event\.target\.value\); invalidateAssessment\(\)/);
+  assert.match(target, /setTargetRole\(event\.target\.value\); invalidateAssessment\(\)/);
 });
