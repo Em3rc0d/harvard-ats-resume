@@ -1,0 +1,71 @@
+name: Platform Refresh Probe
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  refresh:
+    name: Generate supported dependency baseline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install current dependencies
+        run: npm ci
+
+      - name: Upgrade Next.js and React runtime
+        run: npm install --save-exact next@latest react@latest react-dom@latest
+
+      - name: Upgrade lint and TypeScript runtime support
+        run: npm install --save-dev --save-exact eslint@latest eslint-config-next@latest @types/node@latest @types/react@latest @types/react-dom@latest typescript@latest
+
+      - name: Migrate next lint to ESLint CLI
+        run: npx --yes @next/codemod@canary next-lint-to-eslint-cli .
+
+      - name: Refresh Browserslist database
+        run: npx --yes update-browserslist-db@latest
+
+      - name: Apply safe audit fixes
+        run: npm audit fix
+
+      - name: Audit dependency tree
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Typecheck
+        run: npm run typecheck
+        continue-on-error: true
+
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Behavior tests
+        run: npm test
+        continue-on-error: true
+
+      - name: Production build
+        run: npm run build
+        continue-on-error: true
+
+      - name: Capture generated baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-refresh-baseline
+          if-no-files-found: error
+          path: |
+            package.json
+            package-lock.json
+            eslint.config.*
+            next.config.*
+            tsconfig.json
