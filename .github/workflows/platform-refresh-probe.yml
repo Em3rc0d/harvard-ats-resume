@@ -26,11 +26,17 @@ jobs:
       - name: Upgrade Next.js and React runtime
         run: npm install --save-exact next@latest react@latest react-dom@latest
 
-      - name: Upgrade lint and TypeScript runtime support
-        run: npm install --save-dev --save-exact eslint@latest eslint-config-next@latest @types/node@latest @types/react@latest @types/react-dom@latest typescript@latest
+      - name: Upgrade lint and React type support
+        run: npm install --save-dev --save-exact eslint@latest eslint-config-next@latest @types/node@24 @types/react@latest @types/react-dom@latest
 
       - name: Migrate next lint to ESLint CLI
         run: npx --yes @next/codemod@canary next-lint-to-eslint-cli . --force
+
+      - name: Preserve webpack compatibility boundary
+        run: |
+          npm pkg set scripts.dev="next dev --webpack"
+          npm pkg set scripts.dev:https="next dev --webpack --experimental-https"
+          npm pkg set scripts.build="next build --webpack"
 
       - name: Refresh Browserslist database
         run: npx --yes update-browserslist-db@latest
@@ -41,16 +47,7 @@ jobs:
         continue-on-error: true
 
       - name: Record resolved versions
-        run: |
-          {
-            echo "node=$(node --version)"
-            echo "npm=$(npm --version)"
-            echo "next=$(node -p \"require('next/package.json').version\")"
-            echo "react=$(node -p \"require('react/package.json').version\")"
-            echo "react-dom=$(node -p \"require('react-dom/package.json').version\")"
-            echo "eslint=$(node -p \"require('eslint/package.json').version\")"
-            echo "typescript=$(node -p \"require('typescript/package.json').version\")"
-          } | tee platform-versions.txt
+        run: npm ls next react react-dom eslint eslint-config-next typescript @types/node @types/react @types/react-dom --depth=0 > platform-versions.txt || true
 
       - name: Capture audit report
         run: npm audit --json > platform-audit.json || true
