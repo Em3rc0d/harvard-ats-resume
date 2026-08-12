@@ -11,8 +11,9 @@ interface RateLimitStore {
 
 const rateLimitStore: RateLimitStore = {};
 
-// Clean up old entries periodically (every 5 minutes)
-setInterval(() => {
+// Clean up old entries periodically (every 5 minutes). The housekeeping timer
+// must never keep a server/test process alive on its own.
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   Object.keys(rateLimitStore).forEach(key => {
     if (rateLimitStore[key].resetTime < now) {
@@ -20,6 +21,7 @@ setInterval(() => {
     }
   });
 }, 5 * 60 * 1000);
+cleanupTimer.unref();
 
 export interface RateLimitResult {
   success: boolean;
