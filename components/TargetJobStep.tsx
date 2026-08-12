@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowLeft, FileText, PencilLine, Search, ShieldCheck, Ta
 import type { ResumeRequest } from '@/lib/schemas';
 import { evaluateGenerationReadiness } from '@/lib/application/product/GenerationReadiness';
 import type { OpportunityAssessment } from '@/lib/application/opportunity/OpportunityAssessment';
+import { getOrCreateCareerVaultId } from '@/lib/client/CareerVaultCapability';
 import OpportunityAssessmentCard from '@/components/OpportunityAssessmentCard';
 import { useLanguage } from '@/components/LanguageProvider';
 
@@ -20,7 +21,16 @@ type TargetMode = 'TARGETED' | 'GENERAL' | null;
 
 type OpportunityAssessmentResponse = {
   readonly success?: boolean;
-  readonly data?: { readonly assessment?: OpportunityAssessment };
+  readonly data?: {
+    readonly assessment?: OpportunityAssessment;
+    readonly opportunityHistory?: {
+      readonly persistence: 'DURABLE_OPPORTUNITY_HISTORY';
+      readonly assessmentId: string;
+      readonly careerSnapshotId: string;
+      readonly jobSnapshotId: string;
+      readonly revision: number;
+    };
+  };
   readonly error?: string;
 };
 
@@ -179,14 +189,15 @@ export default function TargetJobStep({
         body: JSON.stringify({
           ...data,
           jobDescription: normalizedJobDescription,
+          careerVaultId: getOrCreateCareerVaultId(),
         }),
       });
       const result = await response.json() as OpportunityAssessmentResponse;
 
-      if (!response.ok || !result.success || !result.data?.assessment) {
+      if (!response.ok || !result.success || !result.data?.assessment || !result.data.opportunityHistory) {
         setAssessment(null);
         setAssessedJobDescription('');
-        setAssessmentError(result.error || 'Opportunity assessment could not be completed.');
+        setAssessmentError(result.error || 'Opportunity assessment could not be durably completed.');
         return;
       }
 
@@ -196,7 +207,7 @@ export default function TargetJobStep({
       console.error('Opportunity assessment request failed:', error);
       setAssessment(null);
       setAssessedJobDescription('');
-      setAssessmentError('Opportunity assessment could not be completed.');
+      setAssessmentError('Opportunity assessment could not be durably completed.');
     } finally {
       setIsAssessing(false);
     }

@@ -26,7 +26,7 @@
     "lib/application/resume/ResumeCompositionService.ts",
     "lib/application/career-vault/**/*.ts",
     "lib/application/product/**/*.ts",
-    "lib/infrastructure/persistence/UpstashCareerVaultRepository.ts",
+    "lib/infrastructure/persistence/**/*.ts",
     "lib/rate-limit.ts",
     "lib/schemas.ts"
   ]
