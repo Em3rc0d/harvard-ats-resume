@@ -11,7 +11,9 @@ import type {
 
 const IMPORTER_VERSION = 'native-text-gemini-v1';
 const GEMINI_IMPORT_MODEL = 'gemini-2.5-flash';
-const REQUEST_TIMEOUT_MS = 45_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 90_000;
+const MIN_REQUEST_TIMEOUT_MS = 30_000;
+const MAX_REQUEST_TIMEOUT_MS = 180_000;
 const MIN_MACHINE_READABLE_TEXT = 80;
 
 interface ExtractedTextPage {
@@ -23,6 +25,37 @@ export interface ExtractedResumeTextDocument {
   readonly format: 'PDF' | 'DOCX';
   readonly text: string;
   readonly pages: readonly ExtractedTextPage[];
+}
+
+export class ResumeImportTimeoutError extends Error {
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(`Resume extraction timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+    this.name = 'ResumeImportTimeoutError';
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+export function resolveResumeImportTimeoutMs(
+  rawValue: string | undefined = process.env.RESUME_IMPORT_TIMEOUT_MS,
+): number {
+  if (!rawValue?.trim()) {
+    return DEFAULT_REQUEST_TIMEOUT_MS;
+  }
+
+  const parsed = Number(rawValue);
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < MIN_REQUEST_TIMEOUT_MS ||
+    parsed > MAX_REQUEST_TIMEOUT_MS
+  ) {
+    throw new Error(
+      `RESUME_IMPORT_TIMEOUT_MS must be an integer between ${MIN_REQUEST_TIMEOUT_MS} and ${MAX_REQUEST_TIMEOUT_MS}.`,
+    );
+  }
+
+  return parsed;
 }
 
 const rawCandidateSchema = z.object({
@@ -522,8 +555,9 @@ async function extractStructuredCandidate(document: ExtractedResumeTextDocument)
   readonly evidenceMap: ImportedEvidence[];
 }> {
   const client = getGeminiClient();
+  const requestTimeoutMs = resolveResumeImportTimeoutMs();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
 
   try {
     const result = await client.models.generateContent({
@@ -563,6 +597,11 @@ async function extractStructuredCandidate(document: ExtractedResumeTextDocument)
       candidate,
       evidenceMap: validateAndMapEvidence(candidate, parsed.evidenceMap, document),
     };
+  } catch (error) {
+    if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      throw new ResumeImportTimeoutError(requestTimeoutMs);
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }
