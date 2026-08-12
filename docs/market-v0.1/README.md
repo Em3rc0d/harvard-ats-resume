@@ -157,17 +157,122 @@ This PR does not yet implement:
 
 Those belong to subsequent market iterations. The first objective is to make the initial commercial wedge real without weakening the truth architecture.
 
-## Next architectural step
+## MARKET-02 — Snapshot-bound Opportunity History
 
-After M1, the next market unit should make the comparison artifact durable and explicit:
+M2 makes an assessment a historical object instead of a transient answer.
 
 ```text
 CareerSnapshot
-      vs
-JobSnapshot
       |
-      v
-OpportunityAssessment
+      | exact candidate truth graph
+      |
+      +------------------+
+                         |
+                         v
+                OpportunityAssessment
+                         ^
+                         |
+      +------------------+
+      |
+      | exact job + requirements
+      |
+JobSnapshot
 ```
 
-That creates the stable boundary required before expanding into CareerTarget, OpportunitySpace, scenarios, labor-market intelligence, and learning from application outcomes.
+### CareerSnapshot
+
+A `CareerSnapshot` embeds the exact candidate graph used by the comparison:
+
+- CandidateProfile identity
+- CareerSources
+- CareerEvidence
+- CareerAssertions
+- semantic content hash
+- capture timestamp
+
+Its logical identity is content-addressed. Re-running the same career state does not manufacture a new professional state merely because the clock changed.
+
+### JobSnapshot
+
+A `JobSnapshot` embeds the exact market truth used by the comparison:
+
+- JobDescription
+- extracted JobRequirements
+- detected language
+- Job Intelligence version
+- semantic content hash
+- capture timestamp
+
+A later edit to a vacancy creates a different JobSnapshot; it does not rewrite the old market fact.
+
+### Persisted OpportunityAssessment
+
+The durable record binds:
+
+```text
+CareerSnapshotId
+JobSnapshotId
+MatchReport
+Match Engine version
+OpportunityAssessment
+Assessment Policy version
+```
+
+and receives its own content-addressed identity.
+
+The assessment remains a **Derived Analysis + Recommendation**. Persistence does not promote it into Career Fact or Market Fact.
+
+### History behavior
+
+- same semantic career + same semantic job + same engine/policy result => idempotent assessment identity
+- changed career => new CareerSnapshot; old assessment remains intact
+- changed job => new JobSnapshot; old assessment remains intact
+- history is candidate-scoped using the same opaque browser capability boundary as Career Vault
+- a corrupted historical hash or cross-snapshot reference is rejected before new history can be appended
+- durable save is reloaded and integrity-checked before the API claims persistence
+- missing durable storage fails closed instead of returning a false history claim
+
+### Gate M2 — SNAPSHOT_BOUND_OPPORTUNITY_HISTORY
+
+M2 is satisfied when:
+
+- every successful targeted OpportunityAssessment is bound to an immutable CareerSnapshot and JobSnapshot
+- both snapshot identities are content-addressed from semantic state rather than wall-clock time
+- the MatchReport can reference only requirements from its JobSnapshot and assertions from its CareerSnapshot
+- repeated unchanged assessment is idempotent
+- career evolution preserves the old assessment and creates a new CareerSnapshot
+- job evolution preserves the old assessment and creates a new JobSnapshot
+- tampering with historical content fails integrity validation
+- storage failure cannot produce a `DURABLE_OPPORTUNITY_HISTORY` claim
+- dependency audit, lint, typecheck, behavior tests and production build remain green
+
+## Explicit non-goals for MARKET-02
+
+M2 does not yet implement:
+
+- CareerTarget
+- OpportunitySpace / one-person-to-many-jobs ranking
+- market acquisition feeds
+- career scenarios
+- OpportunityUnlock
+- Application / Outcome tracking
+- causal learning from outcomes
+- institutional/cohort views
+
+Those depend on trustworthy historical comparisons, which M2 establishes first.
+
+## Next architectural step
+
+After M2, the next product boundary should add **CareerTarget** — the user's explicit desired direction and constraints — before expanding one-job comparison into OpportunitySpace.
+
+That preserves the market rule:
+
+```text
+CAN
++
+WANT
+=
+RELEVANT OPPORTUNITY DECISION
+```
+
+Without CareerTarget, a system can know that a person *could* match a job but still cannot know whether that opportunity is strategically relevant to the person.
