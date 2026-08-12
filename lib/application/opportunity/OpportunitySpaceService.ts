@@ -139,7 +139,10 @@ function toEntry(candidate: OpportunitySpaceCandidate): OpportunitySpaceEntry {
     opportunityAssessmentId: assessmentRecord.id,
     priority,
     recommendation: assessmentRecord.assessment.recommendation,
-    targetRelevance: targetRelevance.level,
+    targetRelevance: {
+      ...targetRelevance,
+      reasons: [...targetRelevance.reasons],
+    },
     eligibility: assessmentRecord.assessment.eligibility,
     criticalGapCount: assessmentRecord.assessment.criticalGaps.length,
     rationale: rationaleFor(assessmentRecord.assessment, targetRelevance, priority),
@@ -152,7 +155,7 @@ function sortEntries(entries: readonly OpportunitySpaceEntry[]): OpportunitySpac
     if (byPriority !== 0) return byPriority;
     const byRecommendation = RECOMMENDATION_ORDER[left.recommendation] - RECOMMENDATION_ORDER[right.recommendation];
     if (byRecommendation !== 0) return byRecommendation;
-    const byRelevance = RELEVANCE_ORDER[left.targetRelevance] - RELEVANCE_ORDER[right.targetRelevance];
+    const byRelevance = RELEVANCE_ORDER[left.targetRelevance.level] - RELEVANCE_ORDER[right.targetRelevance.level];
     if (byRelevance !== 0) return byRelevance;
     if (left.criticalGapCount !== right.criticalGapCount) return left.criticalGapCount - right.criticalGapCount;
     return left.jobSnapshotId.localeCompare(right.jobSnapshotId);
@@ -165,6 +168,10 @@ export function validateOpportunitySpace(space: OpportunitySpace): void {
   assertSpace(new Set(space.entries.map((entry) => entry.jobSnapshotId)).size === space.entries.length, 'duplicate JobSnapshot IDs.');
   assertSpace(new Set(space.entries.map((entry) => entry.opportunityAssessmentId)).size === space.entries.length, 'duplicate OpportunityAssessment IDs.');
   assertSpace(space.scopeBoundary === 'DERIVED_PRIORITY_NOT_CAREER_OR_MARKET_FACT', 'scope boundary changed.');
+  space.entries.forEach((entry) => assertSpace(
+    entry.targetRelevance.scopeBoundary === 'PREFERENCE_ALIGNMENT_NOT_CAPABILITY_EVIDENCE',
+    `entry ${entry.opportunityAssessmentId} target relevance crossed the evidence boundary.`,
+  ));
 
   const semantic = {
     candidateProfileId: space.candidateProfileId,
