@@ -14,14 +14,7 @@
     "types": ["node"]
   },
   "include": [
-    "tests/ats2/behavior.test.ts",
-    "tests/ats2/semantic-entailment.test.ts",
-    "tests/ats2/match-benchmark.test.ts",
-    "tests/ats2/resume-versioning.test.ts",
-    "tests/ats2/career-vault.test.ts",
-    "tests/ats2/resume-provenance-identity.test.ts",
-    "tests/ats2/product-evaluation.test.ts",
-    "tests/ats2/explainability-presenter.test.ts",
+    "tests/ats2/*.test.ts",
     "lib/domain/**/*.ts",
     "lib/application/import/**/*.ts",
     "lib/application/legacy/LegacyResumeAdapter.ts",
