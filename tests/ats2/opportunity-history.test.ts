@@ -87,7 +87,7 @@ function historyInput(
     capturedAt,
     truthClass: 'CANDIDATE_ASSERTED',
   });
-  const job = analyzeJobDescription(data.jobDescription, {
+  const job = analyzeJobDescription(data.jobDescription ?? '', {
     projectionKey: identity.jobProjectionKey!,
     capturedAt,
   });
