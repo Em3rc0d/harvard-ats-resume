@@ -38,7 +38,12 @@ function profileUrlSchema(expectedHost: string, message: string) {
       z.string().url(message).refine((value) => {
         try {
           const parsed = new URL(value);
-          return parsed.hostname.toLowerCase() === expectedHost.toLowerCase();
+          return (
+            parsed.protocol === 'https:' &&
+            parsed.hostname.toLowerCase() === expectedHost.toLowerCase() &&
+            !parsed.username &&
+            !parsed.password
+          );
         } catch {
           return false;
         }
