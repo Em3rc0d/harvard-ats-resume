@@ -102,7 +102,11 @@ function record(
   };
 }
 
-function build(target: CareerTargetId, rows: readonly [string, OpportunityAssessment, CareerTargetRelevance][], generatedAt: string) {
+function build(
+  target: CareerTargetId,
+  rows: readonly (readonly [string, OpportunityAssessment, CareerTargetRelevance])[],
+  generatedAt: string,
+) {
   return buildOpportunitySpace({
     candidateProfileId,
     careerSnapshotId,
