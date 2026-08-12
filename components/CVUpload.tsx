@@ -36,8 +36,8 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
         formData.append('file', file);
 
         try {
-            // The browser talks only to our server boundary. The external n8n
-            // webhook and its credentials/configuration remain server-side.
+            // The browser talks only to our server-side import boundary.
+            // File parsing, structured extraction, and provenance validation stay server-side.
             const response = await fetch('/api/import-resume', {
                 method: 'POST',
                 body: formData,
@@ -85,7 +85,7 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
                 <div className="relative">
                     <input
                         type="file"
-                        accept=".pdf,.doc,.docx"
+                        accept=".pdf,.docx"
                         onChange={handleFileUpload}
                         disabled={isUploading}
                         className="hidden"
