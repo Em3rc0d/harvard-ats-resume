@@ -35,11 +35,83 @@ jobs:
       - name: Migrate next lint to ESLint CLI
         run: npx --yes @next/codemod@canary next-lint-to-eslint-cli . --force
 
+      - name: Install strict Next.js flat lint contract
+        run: |
+          cat > eslint.config.mjs <<'EOF'
+          import { defineConfig, globalIgnores } from 'eslint/config';
+          import nextVitals from 'eslint-config-next/core-web-vitals';
+          import nextTs from 'eslint-config-next/typescript';
+
+          export default defineConfig([
+            ...nextVitals,
+            ...nextTs,
+            {
+              rules: {
+                // React Hook Form's watch API is intentionally not React-Compiler memoizable.
+                // This project does not enable the React Compiler; keep the runtime-safe library boundary.
+                'react-hooks/incompatible-library': 'off',
+              },
+            },
+            globalIgnores([
+              '.next/**',
+              'out/**',
+              'build/**',
+              '.test-dist/**',
+              'next-env.d.ts',
+            ]),
+          ]);
+          EOF
+          npm pkg set scripts.lint="eslint . --max-warnings=0"
+          rm -f .eslintrc.json
+
       - name: Preserve webpack compatibility boundary
         run: |
           npm pkg set scripts.dev="next dev --webpack"
           npm pkg set scripts.dev:https="next dev --webpack --experimental-https"
           npm pkg set scripts.build="next build --webpack"
+
+      - name: Clean legacy lint warnings
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          certificate_path = Path('components/CertificateUpload.tsx')
+          certificate = certificate_path.read_text()
+
+          marker = "import { useLanguage } from '@/components/LanguageProvider';\n"
+          assert marker in certificate
+          certificate = certificate.replace(marker, marker + "import Image from 'next/image';\n", 1)
+
+          old = "    const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {"
+          assert old in certificate
+          certificate = certificate.replace(old, "    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {", 1)
+
+          old = "    }, [allowMultiple, onBatchDataExtracted, onDataExtracted, processImage]);\n\n    const handleDrop = useCallback((e: React.DragEvent<HTMLButtonElement>) => {"
+          assert old in certificate
+          certificate = certificate.replace(old, "    };\n\n    const handleDrop = (e: React.DragEvent<HTMLButtonElement>) => {", 1)
+
+          old = "    }, [onDataExtracted]);\n\n    const handleDragOver"
+          assert old in certificate
+          certificate = certificate.replace(old, "    };\n\n    const handleDragOver", 1)
+
+          old = '                    <img src={preview} alt="Certificate preview" className="max-h-48 rounded-lg mx-auto shadow-sm" />'
+          assert old in certificate
+          certificate = certificate.replace(
+              old,
+              '                    <Image src={preview} alt="Certificate preview" width={640} height={360} unoptimized className="max-h-48 w-auto rounded-lg mx-auto shadow-sm" />',
+              1,
+          )
+          certificate_path.write_text(certificate)
+
+          form_path = Path('components/ResumeForm.tsx')
+          form = form_path.read_text()
+          assert 'interface ResumeFormProps {' in form
+          form = form.replace('interface ResumeFormProps {', "const YEAR_REGEX = /\\d{4}/;\n\ninterface ResumeFormProps {", 1)
+          form = form.replace("  const yearRegex = /\\d{4}/;\n", '', 1)
+          assert form.count('yearRegex.exec') == 2
+          form = form.replace('yearRegex.exec', 'YEAR_REGEX.exec')
+          form_path.write_text(form)
+          PY
 
       - name: Refresh Browserslist database
         run: npx --yes update-browserslist-db@latest
@@ -78,8 +150,12 @@ jobs:
           path: |
             package.json
             package-lock.json
-            eslint.config.*
-            next.config.*
+            eslint.config.mjs
+            next.config.js
             tsconfig.json
+            components/CertificateUpload.tsx
+            components/ResumeForm.tsx
+            components/LanguageProvider.tsx
+            components/VoiceInput.tsx
             platform-versions.txt
             platform-audit.json
