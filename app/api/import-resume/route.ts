@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { importResumeWithProvenance } from '@/lib/application/import/ResumeImportService';
-import { N8nResumeImportProvider } from '@/lib/infrastructure/import/N8nResumeImportProvider';
+import { NativeResumeImportProvider } from '@/lib/infrastructure/import/NativeResumeImportProvider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const provider = new N8nResumeImportProvider();
+    const provider = new NativeResumeImportProvider();
     const imported = await importResumeWithProvenance(provider, {
       originalFileName: file.name,
       suppliedMimeType: file.type,
@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
       message.includes('extension and MIME type') ||
       message.includes('file is empty') ||
       message.includes('10 MB limit') ||
-      message.includes('no usable candidate content');
+      message.includes('no usable candidate content') ||
+      message.includes('no usable machine-readable text');
 
     return NextResponse.json(
       {
