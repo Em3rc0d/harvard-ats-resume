@@ -164,6 +164,29 @@ test('changing CareerTarget changes OpportunitySpace identity without rewriting 
   );
 });
 
+test('target relevance provenance changes OpportunitySpace identity even when final level is unchanged', () => {
+  const firstHigh = relevance('HIGH');
+  const changedHigh: CareerTargetRelevance = {
+    ...firstHigh,
+    workModel: 'UNKNOWN',
+    reasons: [...firstHigh.reasons, 'Work model signal became unknown.'],
+  };
+  const sharedAssessment = assessment('READY_NOW', 91);
+  const first = build(targetId, [
+    ['one', sharedAssessment, firstHigh],
+    ['two', assessment('STRONG_STRETCH', 75), relevance('MEDIUM')],
+  ], '2026-08-12T16:00:00.000Z');
+  const changed = build(targetId, [
+    ['one', sharedAssessment, changedHigh],
+    ['two', assessment('STRONG_STRETCH', 75), relevance('MEDIUM')],
+  ], '2026-08-12T16:00:00.000Z');
+
+  assert.equal(first.entries[0].targetRelevance.level, 'HIGH');
+  assert.equal(changed.entries[0].targetRelevance.level, 'HIGH');
+  assert.notEqual(first.id, changed.id);
+  assert.notEqual(first.contentSha256, changed.contentSha256);
+});
+
 test('OpportunitySpace history is durable, immutable and idempotent', async () => {
   const repository = new MemoryOpportunitySpaceRepository();
   const firstSpace = build(targetId, [
