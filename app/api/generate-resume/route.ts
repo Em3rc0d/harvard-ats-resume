@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { resumeRequestSchema } from '@/lib/schemas';
 import { resumeImportContextSchema } from '@/lib/application/import/ResumeImportProvider';
+import { generationValidationIssues } from '@/lib/application/product/GenerationReadiness';
 import { generateResumeWithGemini, sanitizeResumeData } from '@/lib/gemini';
 import { extractKeywords, calculateATSScore, generateSuggestions } from '@/lib/ats-scoring';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
@@ -36,12 +37,49 @@ const resumeGenerationInputSchema = resumeRequestSchema.extend({
 /**
  * POST /api/generate-resume
  *
- * Main endpoint for generating ATS-optimized Harvard-style resumes.
- * Import provenance is accepted separately from candidate facts and is never
- * forwarded to the LLM or treated as Job Description content.
+ * Main endpoint for generating ATS-optimized resumes. Import provenance is
+ * accepted separately from candidate facts and is never forwarded to the LLM
+ * or treated as Job Description content.
  */
 export async function POST(request: NextRequest) {
   try {
+    // Validate before touching distributed infrastructure. Invalid candidate
+    // drafts should return a deterministic review instruction immediately and
+    // should neither consume rate-limit capacity nor wait on Redis connectivity.
+    const body = await request.json();
+    const validationResult = resumeGenerationInputSchema.safeParse(body);
+
+    if (!validationResult.success) {
+      const issues = generationValidationIssues(validationResult.error.issues);
+      console.warn(
+        'Resume generation input rejected:',
+        issues.map((issue) => `${issue.fieldPath}: ${issue.message}`),
+      );
+      const summary = issues
+        .slice(0, 5)
+        .map((issue) => `${issue.fieldPath} — ${issue.message}`)
+        .join('; ');
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: summary
+            ? `Review required before generation: ${summary}`
+            : 'Review required before generation because the request is incomplete.',
+          inputValidation: {
+            status: 'REVIEW_REQUIRED',
+            issues,
+          },
+        },
+        {
+          status: 400,
+          headers: {
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        },
+      );
+    }
+
     const ip = request.headers.get('x-forwarded-for') ||
       request.headers.get('x-real-ip') ||
       'unknown';
@@ -58,23 +96,6 @@ export async function POST(request: NextRequest) {
         },
         {
           status: 429,
-          headers: rateLimitHeaders,
-        }
-      );
-    }
-
-    const body = await request.json();
-    const validationResult = resumeGenerationInputSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid input data',
-          details: validationResult.error.errors,
-        },
-        {
-          status: 400,
           headers: rateLimitHeaders,
         }
       );

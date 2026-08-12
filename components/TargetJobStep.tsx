@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ArrowLeft, FileText, PencilLine, ShieldCheck, Target } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, FileText, PencilLine, ShieldCheck, Target } from 'lucide-react';
 import type { ResumeRequest } from '@/lib/schemas';
+import { evaluateGenerationReadiness } from '@/lib/application/product/GenerationReadiness';
 import { useLanguage } from '@/components/LanguageProvider';
 
 interface TargetJobStepProps {
@@ -27,6 +28,8 @@ const COPY = {
     label: 'Job description',
     placeholder: 'Paste the full job description here…',
     trust: 'Missing requirements stay missing. ATS v2 will not add a skill, responsibility, seniority level, metric, or credential just because the job asks for it.',
+    readinessTitle: 'Your imported career needs review before generation.',
+    readinessBody: 'The importer preserves missing or partial source data instead of inventing values. Complete these fields before generating:',
     back: 'Back to career review',
     edit: 'Edit career details',
     generate: 'Generate trusted resume',
@@ -43,6 +46,8 @@ const COPY = {
     label: 'Descripción de la vacante',
     placeholder: 'Pega aquí la descripción completa de la vacante…',
     trust: 'Los requisitos faltantes permanecen faltantes. ATS v2 no añadirá una habilidad, responsabilidad, seniority, métrica o credencial sólo porque la vacante la solicite.',
+    readinessTitle: 'Tu carrera importada necesita revisión antes de generar.',
+    readinessBody: 'El importador conserva datos faltantes o parciales en lugar de inventarlos. Completa estos campos antes de generar:',
     back: 'Volver a revisión de carrera',
     edit: 'Editar datos de carrera',
     generate: 'Generar CV confiable',
@@ -59,6 +64,8 @@ const COPY = {
     label: 'Description du poste',
     placeholder: 'Collez ici la description complète du poste…',
     trust: "Les exigences manquantes restent manquantes. ATS v2 n'ajoute pas une compétence, une responsabilité, un niveau, une métrique ou un diplôme uniquement parce que le poste le demande.",
+    readinessTitle: 'Votre carrière importée doit être revue avant la génération.',
+    readinessBody: "L'importateur conserve les données absentes ou partielles au lieu de les inventer. Complétez ces champs avant de générer :",
     back: 'Retour à la revue',
     edit: 'Modifier la carrière',
     generate: 'Générer le CV fiable',
@@ -75,6 +82,8 @@ const COPY = {
     label: 'Descrição da vaga',
     placeholder: 'Cole aqui a descrição completa da vaga…',
     trust: 'Requisitos ausentes continuam ausentes. ATS v2 não adicionará habilidade, responsabilidade, senioridade, métrica ou credencial só porque a vaga pede.',
+    readinessTitle: 'Sua carreira importada precisa de revisão antes da geração.',
+    readinessBody: 'O importador preserva dados ausentes ou parciais em vez de inventá-los. Complete estes campos antes de gerar:',
     back: 'Voltar à revisão da carreira',
     edit: 'Editar dados da carreira',
     generate: 'Gerar currículo confiável',
@@ -94,12 +103,13 @@ export default function TargetJobStep({
   const initialTarget = data.jobDescription?.trim() ?? '';
   const [mode, setMode] = useState<TargetMode>(initialTarget ? 'TARGETED' : null);
   const [jobDescription, setJobDescription] = useState(initialTarget);
+  const readiness = useMemo(() => evaluateGenerationReadiness(data), [data]);
 
   const canGenerate = useMemo(() => {
-    if (isLoading || mode === null) return false;
+    if (isLoading || mode === null || !readiness.ready) return false;
     if (mode === 'GENERAL') return true;
     return jobDescription.trim().length >= 20;
-  }, [isLoading, jobDescription, mode]);
+  }, [isLoading, jobDescription, mode, readiness.ready]);
 
   const generate = async () => {
     if (!canGenerate || mode === null) return;
@@ -115,6 +125,32 @@ export default function TargetJobStep({
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">{copy.eyebrow}</p>
         <h2 className="mt-2 text-3xl font-serif font-bold tracking-tight text-gray-950">{copy.title}</h2>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-500">{copy.description}</p>
+
+        {!readiness.ready && (
+          <div className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <div className="flex gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+              <div>
+                <p className="text-sm font-bold text-amber-950">{copy.readinessTitle}</p>
+                <p className="mt-1 text-xs leading-relaxed text-amber-900">{copy.readinessBody}</p>
+                <div className="mt-3 space-y-1.5">
+                  {readiness.issues.slice(0, 8).map((issue) => (
+                    <p key={`${issue.fieldPath}-${issue.message}`} className="rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-xs text-amber-950">
+                      <span className="font-mono font-bold">{issue.fieldPath}</span> — {issue.message}
+                    </p>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={onEditDetails}
+                  className="mt-4 inline-flex items-center gap-2 rounded-md bg-amber-900 px-4 py-2 text-sm font-bold text-white hover:bg-amber-800"
+                >
+                  <PencilLine className="h-4 w-4" /> {copy.edit}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-7 grid gap-4 md:grid-cols-2">
           <button
