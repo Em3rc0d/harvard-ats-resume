@@ -1,12 +1,26 @@
-import type { CandidateProfileId, CareerTarget, CareerTargetId } from '../../domain';
+import type {
+  CandidateProfileId,
+  CareerTarget,
+  CareerTargetId,
+  OpportunityAssessmentId,
+} from '../../domain';
+import type { CareerTargetRelevance } from './CareerTargetService';
 
 export const CAREER_TARGET_PORTFOLIO_SCHEMA = 'career-target-portfolio-v1' as const;
+
+export interface TargetOpportunityEvaluation {
+  readonly careerTargetId: CareerTargetId;
+  readonly opportunityAssessmentId: OpportunityAssessmentId;
+  readonly relevance: CareerTargetRelevance;
+  readonly createdAt: string;
+}
 
 export interface CareerTargetPortfolio {
   readonly schemaVersion: typeof CAREER_TARGET_PORTFOLIO_SCHEMA;
   readonly candidateProfileId: CandidateProfileId;
   readonly targets: readonly CareerTarget[];
   readonly activeTargetId: CareerTargetId;
+  readonly opportunityEvaluations: readonly TargetOpportunityEvaluation[];
   readonly revision: number;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -21,6 +35,10 @@ function assertPortfolio(condition: boolean, message: string): asserts condition
   if (!condition) throw new Error(`CareerTarget portfolio integrity: ${message}`);
 }
 
+function evaluationKey(evaluation: TargetOpportunityEvaluation): string {
+  return `${evaluation.careerTargetId}|${evaluation.opportunityAssessmentId}`;
+}
+
 export function validateCareerTargetPortfolio(portfolio: CareerTargetPortfolio): void {
   assertPortfolio(portfolio.schemaVersion === CAREER_TARGET_PORTFOLIO_SCHEMA, 'unsupported schema version.');
   assertPortfolio(Number.isInteger(portfolio.revision) && portfolio.revision >= 1, 'revision must be positive.');
@@ -31,6 +49,16 @@ export function validateCareerTargetPortfolio(portfolio: CareerTargetPortfolio):
     `target ${target.id} belongs to another candidate.`,
   ));
   assertPortfolio(portfolio.targets.some((target) => target.id === portfolio.activeTargetId), 'active target is missing.');
+
+  const targetIds = new Set(portfolio.targets.map((target) => target.id));
+  assertPortfolio(
+    new Set(portfolio.opportunityEvaluations.map(evaluationKey)).size === portfolio.opportunityEvaluations.length,
+    'duplicate target/opportunity evaluation links.',
+  );
+  portfolio.opportunityEvaluations.forEach((evaluation) => assertPortfolio(
+    targetIds.has(evaluation.careerTargetId),
+    `evaluation references missing target ${evaluation.careerTargetId}.`,
+  ));
 }
 
 /**
@@ -58,6 +86,7 @@ export async function persistCareerTarget(
     candidateProfileId: target.candidateProfileId,
     targets: priorTarget ? existing!.targets : [...(existing?.targets ?? []), target],
     activeTargetId: target.id,
+    opportunityEvaluations: existing?.opportunityEvaluations ?? [],
     revision: (existing?.revision ?? 0) + 1,
     createdAt: existing?.createdAt ?? capturedAt,
     updatedAt: capturedAt,
@@ -69,5 +98,52 @@ export async function persistCareerTarget(
   assertPortfolio(Boolean(reloaded), 'saved portfolio could not be reloaded.');
   validateCareerTargetPortfolio(reloaded!);
   assertPortfolio(reloaded!.activeTargetId === target.id, 'reloaded active target differs from committed target.');
+  return reloaded!;
+}
+
+export async function recordTargetOpportunityEvaluation(
+  repository: CareerTargetRepository,
+  target: CareerTarget,
+  opportunityAssessmentId: OpportunityAssessmentId,
+  relevance: CareerTargetRelevance,
+  capturedAt = new Date().toISOString(),
+): Promise<CareerTargetPortfolio> {
+  const existing = await repository.load(target.candidateProfileId);
+  assertPortfolio(Boolean(existing), 'target portfolio must exist before linking an opportunity assessment.');
+  validateCareerTargetPortfolio(existing!);
+  assertPortfolio(existing!.targets.some((item) => item.id === target.id), 'assessment link references an unpersisted target.');
+
+  const evaluation: TargetOpportunityEvaluation = {
+    careerTargetId: target.id,
+    opportunityAssessmentId,
+    relevance,
+    createdAt: capturedAt,
+  };
+  const prior = existing!.opportunityEvaluations.find((item) => evaluationKey(item) === evaluationKey(evaluation));
+  if (prior) {
+    assertPortfolio(
+      JSON.stringify(prior.relevance) === JSON.stringify(relevance),
+      'same target/opportunity link changed relevance semantics.',
+    );
+    return existing!;
+  }
+
+  const next: CareerTargetPortfolio = {
+    ...existing!,
+    activeTargetId: target.id,
+    opportunityEvaluations: [...existing!.opportunityEvaluations, evaluation],
+    revision: existing!.revision + 1,
+    updatedAt: capturedAt,
+  };
+  validateCareerTargetPortfolio(next);
+  await repository.save(next);
+
+  const reloaded = await repository.load(target.candidateProfileId);
+  assertPortfolio(Boolean(reloaded), 'linked target portfolio could not be reloaded.');
+  validateCareerTargetPortfolio(reloaded!);
+  assertPortfolio(
+    reloaded!.opportunityEvaluations.some((item) => evaluationKey(item) === evaluationKey(evaluation)),
+    'target/opportunity evaluation link was not durably committed.',
+  );
   return reloaded!;
 }
