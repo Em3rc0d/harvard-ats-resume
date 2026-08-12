@@ -77,3 +77,25 @@ test('target job step blocks generation until candidate generation readiness pas
   assert.match(target, /readiness\.issues/);
   assert.match(target, /disabled=!\{?canGenerate\}?|disabled=\{!canGenerate\}/);
 });
+
+test('targeted resume generation requires a current Opportunity Assessment before build', () => {
+  const target = readFileSync(join(process.cwd(), 'components/TargetJobStep.tsx'), 'utf8');
+
+  assert.match(target, /fetch\('\/api\/assess-opportunity'/);
+  assert.match(target, /return Boolean\(currentAssessment\)/);
+  assert.match(target, /mode === 'GENERAL'\) return true/);
+  assert.match(target, /currentAssessment && <OpportunityAssessmentCard assessment=\{currentAssessment\}/);
+});
+
+test('editing the target job invalidates the previous Opportunity Assessment', () => {
+  const target = readFileSync(join(process.cwd(), 'components/TargetJobStep.tsx'), 'utf8');
+  const updateStart = target.indexOf('const updateJobDescription =');
+  const assessStart = target.indexOf('const assess = async');
+  const updateBlock = target.slice(updateStart, assessStart);
+
+  assert.ok(updateStart >= 0);
+  assert.ok(assessStart > updateStart);
+  assert.match(updateBlock, /setJobDescription\(value\)/);
+  assert.match(updateBlock, /setAssessment\(null\)/);
+  assert.match(updateBlock, /setAssessedJobDescription\(''\)/);
+});

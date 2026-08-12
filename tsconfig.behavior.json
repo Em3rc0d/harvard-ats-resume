@@ -22,6 +22,7 @@
     "lib/application/grounding/SemanticEntailmentEvaluator.ts",
     "lib/application/job/JobIntelligenceEngine.ts",
     "lib/application/matching/JobMatchEngine.ts",
+    "lib/application/opportunity/**/*.ts",
     "lib/application/resume/ResumeCompositionService.ts",
     "lib/application/career-vault/**/*.ts",
     "lib/application/product/**/*.ts",
