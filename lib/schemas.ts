@@ -1,12 +1,59 @@
 import { z } from 'zod';
 
+const PROFILE_URL_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+export function normalizeProfileUrlInput(value: unknown, expectedHost: string): unknown {
+  if (typeof value !== 'string') return value;
+
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  const candidate = PROFILE_URL_SCHEME.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(candidate);
+    const hostname = parsed.hostname.toLowerCase();
+    const normalizedExpectedHost = expectedHost.toLowerCase();
+    const isAllowedHost =
+      hostname === normalizedExpectedHost || hostname === `www.${normalizedExpectedHost}`;
+    const isHttp = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+
+    if (!isAllowedHost || !isHttp || parsed.username || parsed.password) {
+      return trimmed;
+    }
+
+    parsed.protocol = 'https:';
+    parsed.hostname = normalizedExpectedHost;
+    return parsed.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+function profileUrlSchema(expectedHost: string, message: string) {
+  return z.preprocess(
+    (value) => normalizeProfileUrlInput(value, expectedHost),
+    z.union([
+      z.literal(''),
+      z.string().url(message).refine((value) => {
+        try {
+          const parsed = new URL(value);
+          return parsed.hostname.toLowerCase() === expectedHost.toLowerCase();
+        } catch {
+          return false;
+        }
+      }, message),
+    ]),
+  ).optional();
+}
+
 // Personal Information Schema
 export const personalInfoSchema = z.object({
   fullName: z.string().min(2, 'Full name is required').max(100),
   location: z.string().min(2, 'Location is required').max(100),
   email: z.string().email('Invalid email address'),
-  linkedin: z.string().url('Invalid LinkedIn URL').or(z.literal('')).optional(),
-  github: z.string().url('Invalid GitHub URL').or(z.literal('')).optional(),
+  linkedin: profileUrlSchema('linkedin.com', 'Invalid LinkedIn URL'),
+  github: profileUrlSchema('github.com', 'Invalid GitHub URL'),
 });
 
 // Work Experience Schema
