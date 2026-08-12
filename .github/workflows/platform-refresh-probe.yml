@@ -30,17 +30,30 @@ jobs:
         run: npm install --save-dev --save-exact eslint@latest eslint-config-next@latest @types/node@latest @types/react@latest @types/react-dom@latest typescript@latest
 
       - name: Migrate next lint to ESLint CLI
-        run: npx --yes @next/codemod@canary next-lint-to-eslint-cli .
+        run: npx --yes @next/codemod@canary next-lint-to-eslint-cli . --force
 
       - name: Refresh Browserslist database
         run: npx --yes update-browserslist-db@latest
+        continue-on-error: true
 
       - name: Apply safe audit fixes
         run: npm audit fix
-
-      - name: Audit dependency tree
-        run: npm audit --audit-level=moderate
         continue-on-error: true
+
+      - name: Record resolved versions
+        run: |
+          {
+            echo "node=$(node --version)"
+            echo "npm=$(npm --version)"
+            echo "next=$(node -p \"require('next/package.json').version\")"
+            echo "react=$(node -p \"require('react/package.json').version\")"
+            echo "react-dom=$(node -p \"require('react-dom/package.json').version\")"
+            echo "eslint=$(node -p \"require('eslint/package.json').version\")"
+            echo "typescript=$(node -p \"require('typescript/package.json').version\")"
+          } | tee platform-versions.txt
+
+      - name: Capture audit report
+        run: npm audit --json > platform-audit.json || true
 
       - name: Typecheck
         run: npm run typecheck
@@ -59,6 +72,7 @@ jobs:
         continue-on-error: true
 
       - name: Capture generated baseline
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: platform-refresh-baseline
@@ -69,3 +83,5 @@ jobs:
             eslint.config.*
             next.config.*
             tsconfig.json
+            platform-versions.txt
+            platform-audit.json
