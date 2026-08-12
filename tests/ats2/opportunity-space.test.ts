@@ -94,7 +94,7 @@ function record(
     matchReport: {} as PersistedOpportunityAssessment['matchReport'],
     matchScore: opportunityAssessment.jobMatchScore,
     matchBreakdown: {} as PersistedOpportunityAssessment['matchBreakdown'],
-    matchEngineVersion: 'job-match-v1',
+    matchEngineVersion: 'jm-g10-v1',
     assessment: opportunityAssessment,
     assessmentPolicyVersion: 'market-opportunity-assessment-v1',
     contentSha256: `hash-${suffix}`,
