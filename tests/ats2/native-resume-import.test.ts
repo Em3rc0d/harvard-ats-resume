@@ -6,6 +6,7 @@ import { PDFDocument, StandardFonts } from 'pdf-lib';
 import type { ImportedCandidateDraft } from '../../lib/application/import/ResumeImportProvider';
 import { resolveResumeMimeType } from '../../lib/application/import/ResumeImportService';
 import {
+  deriveCandidateEvidence,
   extractResumeText,
   materialCandidateFieldPaths,
   resolveResumeImportTimeoutMs,
@@ -107,6 +108,47 @@ test('native import requires source-backed evidence for every non-empty extracte
   assert.ok(mapped.every((item) => item.locator.granularity === 'PAGE'));
 });
 
+test('native import derives complete evidence deterministically from candidate values and source text', () => {
+  const candidate = candidateFixture();
+  const mapped = deriveCandidateEvidence(candidate, documentFixture());
+
+  assert.deepEqual(
+    mapped.map((item) => item.fieldPath).sort(),
+    materialCandidateFieldPaths(candidate).sort(),
+  );
+  assert.ok(mapped.every((item) => item.locator.scope === 'SOURCE_DOCUMENT'));
+  assert.ok(mapped.every((item) => item.locator.granularity === 'PAGE'));
+  assert.ok(mapped.every((item) => item.locator.page === 1));
+});
+
+test('deterministic evidence handles conservative PDF whitespace around URL punctuation', () => {
+  const candidate = candidateFixture();
+  candidate.personalInfo.linkedin = 'https://linkedin.com/in/jane-candidate';
+  const document = documentFixture();
+  const pageText = `${document.pages[0]?.text ?? ''} https : // linkedin . com / in / jane-candidate`;
+  const urlDocument: ExtractedResumeTextDocument = {
+    format: 'PDF',
+    text: `[PAGE 1]\n${pageText}`,
+    pages: [{ page: 1, text: pageText }],
+  };
+
+  const mapped = deriveCandidateEvidence(candidate, urlDocument);
+  assert.ok(mapped.some((item) => item.fieldPath === 'personalInfo.linkedin'));
+});
+
+test('deterministic evidence rejects an extracted candidate value absent from the source', () => {
+  const candidate = candidateFixture();
+  candidate.experience[0] = {
+    ...candidate.experience[0],
+    role: 'Principal Architect',
+  };
+
+  assert.throws(
+    () => deriveCandidateEvidence(candidate, documentFixture()),
+    /value is not present in source text for experience\[0\]\.role/,
+  );
+});
+
 test('native import rejects candidate values without source evidence', () => {
   const evidence = completeEvidence().filter((item) => item.fieldPath !== 'experience[0].role');
 
@@ -146,7 +188,7 @@ test('native resume import rejects unsafe timeout configuration', () => {
   assert.throws(() => resolveResumeImportTimeoutMs('not-a-number'), /between 30000 and 180000/);
 });
 
-test('runtime resume import is native and timeout failures are classified explicitly', () => {
+test('runtime resume import derives evidence in ATS instead of requiring the model to enumerate evidenceMap', () => {
   const route = readFileSync(join(process.cwd(), 'app/api/import-resume/route.ts'), 'utf8');
   const nativeProvider = readFileSync(
     join(process.cwd(), 'lib/infrastructure/import/NativeResumeImportProvider.ts'),
@@ -156,6 +198,8 @@ test('runtime resume import is native and timeout failures are classified explic
   assert.match(route, /NativeResumeImportProvider/);
   assert.match(route, /ResumeImportTimeoutError/);
   assert.match(route, /isTimeout \? 504/);
+  assert.match(nativeProvider, /deriveCandidateEvidence\(candidate, document\)/);
+  assert.doesNotMatch(nativeProvider, /rawImportExtractionSchema|evidenceMap: z\.array/);
   assert.doesNotMatch(route, /N8nResumeImportProvider|NEXT_PUBLIC_N8N_RESUME_URL/);
   assert.doesNotMatch(nativeProvider, /fetch\(.*N8N|NEXT_PUBLIC_N8N_RESUME_URL/);
 });
