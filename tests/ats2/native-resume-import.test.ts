@@ -8,6 +8,7 @@ import { resolveResumeMimeType } from '../../lib/application/import/ResumeImport
 import {
   extractResumeText,
   materialCandidateFieldPaths,
+  resolveResumeImportTimeoutMs,
   validateAndMapEvidence,
   type ExtractedResumeTextDocument,
 } from '../../lib/infrastructure/import/NativeResumeImportProvider';
@@ -135,7 +136,17 @@ test('legacy binary DOC is rejected rather than routed through an opaque convert
   );
 });
 
-test('runtime resume import is native and no longer references the n8n resume provider', () => {
+test('native resume import timeout defaults to 90 seconds and supports bounded override', () => {
+  assert.equal(resolveResumeImportTimeoutMs(undefined), 90_000);
+  assert.equal(resolveResumeImportTimeoutMs('120000'), 120_000);
+});
+
+test('native resume import rejects unsafe timeout configuration', () => {
+  assert.throws(() => resolveResumeImportTimeoutMs('1000'), /between 30000 and 180000/);
+  assert.throws(() => resolveResumeImportTimeoutMs('not-a-number'), /between 30000 and 180000/);
+});
+
+test('runtime resume import is native and timeout failures are classified explicitly', () => {
   const route = readFileSync(join(process.cwd(), 'app/api/import-resume/route.ts'), 'utf8');
   const nativeProvider = readFileSync(
     join(process.cwd(), 'lib/infrastructure/import/NativeResumeImportProvider.ts'),
@@ -143,6 +154,8 @@ test('runtime resume import is native and no longer references the n8n resume pr
   );
 
   assert.match(route, /NativeResumeImportProvider/);
+  assert.match(route, /ResumeImportTimeoutError/);
+  assert.match(route, /isTimeout \? 504/);
   assert.doesNotMatch(route, /N8nResumeImportProvider|NEXT_PUBLIC_N8N_RESUME_URL/);
   assert.doesNotMatch(nativeProvider, /fetch\(.*N8N|NEXT_PUBLIC_N8N_RESUME_URL/);
 });

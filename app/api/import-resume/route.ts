@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { importResumeWithProvenance } from '@/lib/application/import/ResumeImportService';
-import { NativeResumeImportProvider } from '@/lib/infrastructure/import/NativeResumeImportProvider';
+import {
+  NativeResumeImportProvider,
+  ResumeImportTimeoutError,
+} from '@/lib/infrastructure/import/NativeResumeImportProvider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,6 +41,7 @@ export async function POST(request: NextRequest) {
     console.error('Resume import error:', error);
 
     const message = error instanceof Error ? error.message : 'Resume import failed.';
+    const isTimeout = error instanceof ResumeImportTimeoutError;
     const isClientError =
       message.includes('Unsupported resume file type') ||
       message.includes('extension and MIME type') ||
@@ -46,15 +50,20 @@ export async function POST(request: NextRequest) {
       message.includes('no usable candidate content') ||
       message.includes('no usable machine-readable text');
 
+    const status = isTimeout ? 504 : isClientError ? 422 : 502;
+    const responseError = isTimeout
+      ? 'Resume extraction timed out while waiting for the AI parser. Please try again.'
+      : isClientError
+        ? message
+        : 'Failed to extract information from the resume. Please try again or fill it manually.';
+
     return NextResponse.json(
       {
         success: false,
-        error: isClientError
-          ? message
-          : 'Failed to extract information from the resume. Please try again or fill it manually.',
+        error: responseError,
       },
       {
-        status: isClientError ? 422 : 502,
+        status,
         headers: {
           'Cache-Control': 'no-store, max-age=0',
         },
