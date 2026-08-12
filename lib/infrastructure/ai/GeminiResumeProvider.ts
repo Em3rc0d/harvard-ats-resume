@@ -9,7 +9,38 @@ import type { ResumeRequest } from '../../schemas';
 export const GEMINI_RESUME_PROVIDER = 'google-gemini';
 export const GEMINI_RESUME_MODEL = 'gemini-2.5-flash';
 export const GEMINI_RESUME_CONTRACT_VERSION = 'ats2-structured-resume-v1';
-const REQUEST_TIMEOUT_MS = 45_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
+const MIN_REQUEST_TIMEOUT_MS = 30_000;
+const MAX_REQUEST_TIMEOUT_MS = 240_000;
+
+export class ResumeGenerationTimeoutError extends Error {
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(`Resume generation timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+    this.name = 'ResumeGenerationTimeoutError';
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+export function resolveResumeGenerationTimeoutMs(
+  rawValue: string | undefined = process.env.RESUME_GENERATION_TIMEOUT_MS,
+): number {
+  if (!rawValue?.trim()) return DEFAULT_REQUEST_TIMEOUT_MS;
+
+  const parsed = Number(rawValue);
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < MIN_REQUEST_TIMEOUT_MS ||
+    parsed > MAX_REQUEST_TIMEOUT_MS
+  ) {
+    throw new Error(
+      `RESUME_GENERATION_TIMEOUT_MS must be an integer between ${MIN_REQUEST_TIMEOUT_MS} and ${MAX_REQUEST_TIMEOUT_MS}.`,
+    );
+  }
+
+  return parsed;
+}
 
 const SYSTEM_INSTRUCTION = `You are a constrained professional resume rewriter.
 
@@ -45,7 +76,7 @@ const RESPONSE_JSON_SCHEMA = {
     },
     improvedResume: {
       type: 'string',
-      description: 'Optional alternative fact-preserving resume. Return an empty string when no separate alternative is needed.',
+      description: 'Deprecated compatibility field. Always return an empty string.',
     },
   },
   required: ['formattedResume', 'matchedKeywords', 'suggestions', 'improvedResume'],
@@ -76,14 +107,15 @@ Return:
 1. formattedResume: the complete plain-text resume.
 2. matchedKeywords: only target-job concepts that candidate data independently supports.
 3. suggestions: improvements or missing evidence the candidate may choose to verify and add.
-4. improvedResume: a second complete version only when meaningfully useful; otherwise return an empty string.`;
+4. improvedResume: always return an empty string; this compatibility field is no longer used.`;
 }
 
 export class GeminiResumeProvider implements AIResumeProvider {
   async generate(data: ResumeRequest): Promise<ResumeGenerationProposal> {
     const client = getGeminiClient();
+    const requestTimeoutMs = resolveResumeGenerationTimeoutMs();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
 
     try {
       const result = await client.models.generateContent({
@@ -115,6 +147,11 @@ export class GeminiResumeProvider implements AIResumeProvider {
       }
 
       return parseResumeGenerationProposal(decoded);
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw new ResumeGenerationTimeoutError(requestTimeoutMs);
+      }
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
