@@ -20,6 +20,8 @@ const CertificateUpload = dynamic(() => import('./CertificateUpload'), {
   ),
 });
 
+const YEAR_REGEX = /\d{4}/;
+
 interface ResumeFormProps {
   onSubmit: (data: ResumeRequest) => Promise<void>;
   isLoading: boolean;
@@ -221,7 +223,6 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
   };
 
   // Fix 1: Use RegExp.exec() instead of string.match() for efficiency and capture group access
-  const yearRegex = /\d{4}/;
 
   // Handle batch certificate upload
   const handleBatchCertificates = useCallback((certificates: Array<{
@@ -239,7 +240,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
     // Add an education entry for each certificate
     certificates.forEach(cert => {
       // Fix 1 applied: RegExp.exec() instead of string.match()
-      const yearMatch = yearRegex.exec(cert.graduationDate);
+      const yearMatch = YEAR_REGEX.exec(cert.graduationDate);
       const year = yearMatch?.[0];
 
       appendEducation({
@@ -309,7 +310,7 @@ export default function ResumeForm({ onSubmit, isLoading, initialData }: Readonl
     setValue(`education.${index}.degree`, data.degree, { shouldValidate: true });
 
     // Fix 1 applied: RegExp.exec() instead of string.match()
-    const yearMatch = yearRegex.exec(data.graduationDate);
+    const yearMatch = YEAR_REGEX.exec(data.graduationDate);
     const year = yearMatch?.[0];
     if (year) {
       setValue(`education.${index}.endDate`, year, { shouldValidate: true });
