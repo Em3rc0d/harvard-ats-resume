@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useSyncExternalStore, ReactNode } from 'react';
 import { translations } from '@/lib/translations';
 
 type Language = 'en' | 'es' | 'fr' | 'pt';
@@ -13,29 +13,58 @@ interface LanguageContextType {
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+const LANGUAGE_STORAGE_KEY = 'language';
+const LANGUAGE_CHANGE_EVENT = 'cvengine:language-change';
+const SUPPORTED_LANGUAGES: readonly Language[] = ['en', 'es', 'fr', 'pt'];
+
+function isLanguage(value: string | null): value is Language {
+    return value !== null && SUPPORTED_LANGUAGES.includes(value as Language);
+}
+
+function getLanguageSnapshot(): Language {
+    if (typeof window === 'undefined') return 'en';
+    const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return isLanguage(saved) ? saved : 'en';
+}
+
+function getServerLanguageSnapshot(): Language {
+    return 'en';
+}
+
+function subscribeToLanguage(callback: () => void) {
+    if (typeof window === 'undefined') return () => undefined;
+
+    const handleStorage = (event: StorageEvent) => {
+        if (event.key === LANGUAGE_STORAGE_KEY) callback();
+    };
+    const handleLocalChange = () => callback();
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener(LANGUAGE_CHANGE_EVENT, handleLocalChange);
+
+    return () => {
+        window.removeEventListener('storage', handleStorage);
+        window.removeEventListener(LANGUAGE_CHANGE_EVENT, handleLocalChange);
+    };
+}
 
 export function LanguageProvider({ children }: Readonly<{ children: ReactNode }>) {
-    // Default to English, but try to persist preference
-    const [language, setLanguage] = useState<Language>('en');
+    const language = useSyncExternalStore(
+        subscribeToLanguage,
+        getLanguageSnapshot,
+        getServerLanguageSnapshot,
+    );
 
-    useEffect(() => {
-        // Load saved language from localStorage if available
-        const saved = localStorage.getItem('language') as Language;
-        if (saved && ['en', 'es', 'fr', 'pt'].includes(saved)) {
-            setLanguage(saved);
-        }
+    const handleSetLanguage = useCallback((lang: Language) => {
+        window.localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+        window.dispatchEvent(new Event(LANGUAGE_CHANGE_EVENT));
     }, []);
-
-    const handleSetLanguage = (lang: Language) => {
-        setLanguage(lang);
-        localStorage.setItem('language', lang);
-    };
 
     const value = useMemo(() => ({
         language,
         setLanguage: handleSetLanguage,
         t: translations[language],
-    }), [language]);
+    }), [handleSetLanguage, language]);
 
     return (
         <LanguageContext.Provider value={value}>
