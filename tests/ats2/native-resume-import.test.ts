@@ -2,9 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import type { ImportedCandidateDraft } from '../../lib/application/import/ResumeImportProvider';
 import { resolveResumeMimeType } from '../../lib/application/import/ResumeImportService';
 import {
+  extractResumeText,
   materialCandidateFieldPaths,
   validateAndMapEvidence,
   type ExtractedResumeTextDocument,
@@ -68,6 +70,29 @@ function completeEvidence() {
     { fieldPath: 'skills.hardSkills[0]', excerpt: 'TypeScript', page: 1 },
   ];
 }
+
+test('native PDF text extraction executes in the Node runtime used by ATS', async () => {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const page = pdf.addPage([612, 792]);
+  page.drawText(
+    'Jane Candidate jane@example.com Lima Peru Backend Engineer TypeScript APIs 2023 2025',
+    { x: 48, y: 720, size: 12, font },
+  );
+  const bytes = await pdf.save();
+
+  const extracted = await extractResumeText({
+    originalFileName: 'candidate.pdf',
+    mimeType: 'application/pdf',
+    byteSize: bytes.byteLength,
+    bytes,
+  });
+
+  assert.equal(extracted.format, 'PDF');
+  assert.equal(extracted.pages.length, 1);
+  assert.match(extracted.pages[0]?.text ?? '', /Jane Candidate/);
+  assert.match(extracted.pages[0]?.text ?? '', /TypeScript APIs/);
+});
 
 test('native import requires source-backed evidence for every non-empty extracted candidate field', () => {
   const candidate = candidateFixture();
