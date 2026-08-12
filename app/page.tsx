@@ -6,6 +6,7 @@ import ResumeResults from '@/components/ResumeResults';
 import CVUpload from '@/components/CVUpload';
 import ImportedResumeReview from '@/components/ImportedResumeReview';
 import TargetJobStep from '@/components/TargetJobStep';
+import OpportunitySpaceStep from '@/components/OpportunitySpaceStep';
 import GenerationGuardrailPanel, {
   type GenerationFailurePayload,
 } from '@/components/GenerationGuardrailPanel';
@@ -14,13 +15,13 @@ import type { ResumeImportContext } from '@/lib/application/import/ResumeImportP
 import type { GeneratedResumeResult } from '@/lib/application/product/ProductResultContract';
 import { useLanguage } from '@/components/LanguageProvider';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { AlertCircle, FileSignature, ShieldCheck, Upload } from 'lucide-react';
+import { AlertCircle, BriefcaseBusiness, FileSignature, ShieldCheck, Upload } from 'lucide-react';
 
 const CAREER_VAULT_STORAGE_KEY = 'ats2:career-vault-id';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 let volatileCareerVaultId: string | undefined;
 
-type FlowStage = 'START' | 'UPLOAD' | 'IMPORTED_REVIEW' | 'EDIT' | 'TARGET' | 'RESULTS';
+type FlowStage = 'START' | 'UPLOAD' | 'IMPORTED_REVIEW' | 'EDIT' | 'TARGET' | 'SPACE' | 'RESULTS';
 
 type GenerationApiResponse = {
   readonly success?: boolean;
@@ -246,15 +247,34 @@ export default function Home() {
         )}
 
         {stage === 'TARGET' && initialResumeData && (
-          <TargetJobStep
+          <div className="space-y-5">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setStage('SPACE')}
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-800 hover:bg-blue-100"
+              >
+                <BriefcaseBusiness className="h-4 w-4" />
+                Compare multiple opportunities
+              </button>
+            </div>
+            <TargetJobStep
+              data={initialResumeData}
+              isLoading={isLoading}
+              onBack={() => {
+                setGenerationFailure(null);
+                setStage('IMPORTED_REVIEW');
+              }}
+              onEditDetails={editImportedDetails}
+              onGenerate={handleSubmit}
+            />
+          </div>
+        )}
+
+        {stage === 'SPACE' && initialResumeData && (
+          <OpportunitySpaceStep
             data={initialResumeData}
-            isLoading={isLoading}
-            onBack={() => {
-              setGenerationFailure(null);
-              setStage('IMPORTED_REVIEW');
-            }}
-            onEditDetails={editImportedDetails}
-            onGenerate={handleSubmit}
+            onBack={() => setStage('TARGET')}
           />
         )}
 
