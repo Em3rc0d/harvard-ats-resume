@@ -42,7 +42,7 @@ export interface CareerTargetRelevance {
 const SENIORITY_TERMS: Readonly<Record<Exclude<CareerTargetSeniority, 'ANY'>, readonly string[]>> = {
   ENTRY: ['entry level', 'entry-level', 'graduate', 'new grad'],
   JUNIOR: ['junior', 'jr. ', 'jr '],
-  MID: ['mid level', 'mid-level', 'mid level', 'intermediate'],
+  MID: ['mid level', 'mid-level', 'intermediate'],
   SENIOR: ['senior', 'sr. ', 'sr '],
   LEAD: ['lead ', 'technical lead', 'tech lead'],
   STAFF: ['staff '],
@@ -76,8 +76,12 @@ function normalize(value: string): string {
     .trim();
 }
 
-function normalizedList(values: readonly string[] | undefined): string[] {
+function displayList(values: readonly string[] | undefined): string[] {
   return Array.from(new Set((values ?? []).map((value) => value.trim()).filter(Boolean)));
+}
+
+function canonicalList(values: readonly string[]): string[] {
+  return Array.from(new Set(values.map(normalize).filter(Boolean))).sort();
 }
 
 function sha256(value: string): string {
@@ -92,23 +96,40 @@ export function createCareerTarget(
   const roleTitle = input.roleTitle.trim();
   if (roleTitle.length < 2) throw new Error('CareerTarget roleTitle is required.');
 
-  const semantic = {
+  const jobFamily = input.jobFamily?.trim() || undefined;
+  const preferredSeniority: CareerTargetSeniority = input.preferredSeniority ?? 'ANY';
+  const preferredLocations = displayList(input.preferredLocations);
+  const workModels: CareerTargetWorkModel[] = Array.from(new Set<CareerTargetWorkModel>(input.workModels ?? ['FLEXIBLE']));
+  const employmentTypes: CareerTargetEmploymentType[] = Array.from(new Set<CareerTargetEmploymentType>(input.employmentTypes ?? ['ANY']));
+  const industries = displayList(input.industries);
+  const relocation: CareerTargetRelocation = input.relocation ?? 'UNSPECIFIED';
+  const priority: 1 | 2 | 3 | 4 | 5 = input.priority ?? 3;
+
+  const contentSha256 = sha256(stableJson({
     candidateProfileId,
-    roleTitle,
-    jobFamily: input.jobFamily?.trim() || undefined,
-    preferredSeniority: input.preferredSeniority ?? 'ANY',
-    preferredLocations: normalizedList(input.preferredLocations),
-    workModels: Array.from(new Set(input.workModels ?? ['FLEXIBLE'])),
-    employmentTypes: Array.from(new Set(input.employmentTypes ?? ['ANY'])),
-    industries: normalizedList(input.industries),
-    relocation: input.relocation ?? 'UNSPECIFIED',
-    priority: input.priority ?? 3,
-  } as const;
-  const contentSha256 = sha256(stableJson(semantic));
+    roleTitle: normalize(roleTitle),
+    jobFamily: jobFamily ? normalize(jobFamily) : undefined,
+    preferredSeniority,
+    preferredLocations: canonicalList(preferredLocations),
+    workModels: [...workModels].sort(),
+    employmentTypes: [...employmentTypes].sort(),
+    industries: canonicalList(industries),
+    relocation,
+    priority,
+  }));
 
   return {
     id: domainId('CareerTarget', `career-target:${contentSha256.slice(0, 32)}`),
-    ...semantic,
+    candidateProfileId,
+    roleTitle,
+    jobFamily,
+    preferredSeniority,
+    preferredLocations,
+    workModels,
+    employmentTypes,
+    industries,
+    relocation,
+    priority,
     contentSha256,
     createdAt,
   };
@@ -121,10 +142,7 @@ function includesAny(text: string, terms: readonly string[]): boolean {
 function roleStatus(target: CareerTarget, headerText: string): TargetDimensionStatus {
   const targetRole = normalize(target.roleTitle);
   if (headerText.includes(targetRole)) return 'ALIGNED';
-
-  const tokens = targetRole
-    .split(' ')
-    .filter((token) => token.length >= 3 && !ROLE_STOPWORDS.has(token));
+  const tokens = targetRole.split(' ').filter((token) => token.length >= 3 && !ROLE_STOPWORDS.has(token));
   if (tokens.length === 0) return 'UNKNOWN';
   const matched = tokens.filter((token) => headerText.includes(token)).length;
   if (matched === tokens.length) return 'ALIGNED';
@@ -161,9 +179,7 @@ function employmentStatus(target: CareerTarget, text: string): TargetDimensionSt
 
 function locationStatus(target: CareerTarget, text: string): TargetDimensionStatus {
   if (target.preferredLocations.length === 0) return 'NOT_CONSTRAINED';
-  return target.preferredLocations.some((location) => text.includes(normalize(location)))
-    ? 'ALIGNED'
-    : 'UNKNOWN';
+  return target.preferredLocations.some((location) => text.includes(normalize(location))) ? 'ALIGNED' : 'UNKNOWN';
 }
 
 /**
@@ -171,10 +187,7 @@ function locationStatus(target: CareerTarget, text: string): TargetDimensionStat
  * Unknown is preferred over guessing. This result never changes Job Match or
  * satisfies a requirement; it is a separate decision-support dimension.
  */
-export function assessCareerTargetRelevance(
-  target: CareerTarget,
-  jobSourceText: string,
-): CareerTargetRelevance {
+export function assessCareerTargetRelevance(target: CareerTarget, jobSourceText: string): CareerTargetRelevance {
   const text = normalize(jobSourceText);
   const headerText = normalize(jobSourceText.split(/\n+/).slice(0, 6).join(' '));
   const role = roleStatus(target, headerText);
