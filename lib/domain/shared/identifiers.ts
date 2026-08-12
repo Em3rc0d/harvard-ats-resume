@@ -12,6 +12,7 @@ export type JobSnapshotId = DomainId<'JobSnapshot'>;
 export type RequirementMatchId = DomainId<'RequirementMatch'>;
 export type MatchReportId = DomainId<'MatchReport'>;
 export type OpportunityAssessmentId = DomainId<'OpportunityAssessment'>;
+export type OpportunitySpaceId = DomainId<'OpportunitySpace'>;
 export type ResumeClaimId = DomainId<'ResumeClaim'>;
 export type ResumeVersionId = DomainId<'ResumeVersion'>;
 export type ResumeManifestId = DomainId<'ResumeManifest'>;
