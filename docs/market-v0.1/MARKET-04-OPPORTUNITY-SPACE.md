@@ -107,7 +107,16 @@ ordered entries[]
   - opportunityAssessmentId
   - priority
   - recommendation
-  - target relevance level
+  - target relevance provenance
+      - policyVersion
+      - level
+      - role
+      - seniority
+      - location
+      - workModel
+      - employmentType
+      - reasons
+      - scopeBoundary
   - eligibility
   - critical gap count
   - explanation
@@ -116,7 +125,9 @@ scope boundary
 
 `generatedAt` does not participate in logical identity. Rebuilding the same semantic space at another time yields the same OpportunitySpace ID.
 
-Changing Career Truth, Career Target, selected JobSnapshots, assessment meaning or priority policy yields a new immutable space instead of rewriting the old one.
+Target relevance is stored with its full provenance, not just its final `HIGH` / `MEDIUM` / `LOW` / `UNKNOWN` level. If M3's interpretation changes while the final level happens to remain the same, the OpportunitySpace semantic identity still changes rather than hiding the change.
+
+Changing Career Truth, Career Target, selected JobSnapshots, assessment meaning, target-relevance meaning or priority policy yields a new immutable space instead of rewriting the old one.
 
 ## Durability
 
@@ -167,6 +178,7 @@ MARKET-04A is complete only when:
 - every entry references a durable OpportunityAssessment
 - priority remains separate from Job Match
 - changing target intent can change priority without rewriting assessment evidence
+- target-relevance provenance participates in OpportunitySpace identity even when its final relevance level is unchanged
 - input order and wall-clock time do not change semantic OpportunitySpace identity
 - mixed CareerSnapshots are rejected
 - historical OpportunitySpaces are immutable and idempotently persisted
