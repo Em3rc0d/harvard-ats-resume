@@ -1,3 +1,4 @@
+import type { OpportunityAssessment } from '../opportunity/OpportunityAssessment';
 import type { ProductEvaluation } from './ProductEvaluationService';
 
 export type ExplainableRequirementStatus = 'MATCH' | 'POTENTIAL_MATCH' | 'GAP' | 'UNKNOWN' | 'BLOCKER';
@@ -68,6 +69,7 @@ export interface GeneratedResumeResult {
   readonly formattedResume: string;
   readonly productEvaluation: ProductEvaluation;
   readonly jobMatch?: ExplainableJobMatchView;
+  readonly opportunityAssessment?: OpportunityAssessment;
   readonly claimTraceability: readonly ClaimTraceabilityView[];
   readonly resumeVersion: ResumeVersionView;
   readonly resumePersistence: 'DURABLE_CAREER_VAULT';
