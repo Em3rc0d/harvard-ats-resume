@@ -11,7 +11,6 @@ export const MAX_RESUME_FILE_BYTES = 10 * 1024 * 1024;
 
 const SUPPORTED_FILE_TYPES = new Map<string, string>([
   ['.pdf', 'application/pdf'],
-  ['.doc', 'application/msword'],
   ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
 ]);
 
@@ -28,7 +27,7 @@ function fileExtension(fileName: string): string {
 export function resolveResumeMimeType(fileName: string, suppliedMimeType: string): string {
   const expected = SUPPORTED_FILE_TYPES.get(fileExtension(fileName));
   if (!expected) {
-    throw new Error('Unsupported resume file type. Use PDF, DOC, or DOCX.');
+    throw new Error('Unsupported resume file type. Use PDF or DOCX.');
   }
 
   const supplied = suppliedMimeType.trim().toLowerCase();
