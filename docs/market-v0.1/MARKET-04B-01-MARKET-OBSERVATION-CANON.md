@@ -46,9 +46,10 @@ Derived Market Interpretation
 
 A `MarketSource` identifies the origin channel, not a concrete provider-specific domain type.
 
-Supported source classes in v1:
+Current source classes in the v1 market boundary are:
 
 - `MANUAL_TEXT`
+- `MANUAL_STRUCTURED` — added by M4B-02A to represent user-supplied structured origin without pretending it is a provider/feed
 - `JOB_URL`
 - `PROVIDER_API`
 - `COMPANY_CAREERS`

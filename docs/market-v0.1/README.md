@@ -43,6 +43,7 @@ CareerTarget != CareerEvidence
 TargetRelevance != JobMatch
 OpportunityPriority != JobMatch
 MarketObservation != DerivedMarketInterpretation
+MarketIntakeRequest != MarketObservation
 ```
 
 A market requirement can influence analysis. It can never authorize a new candidate assertion.
@@ -50,13 +51,14 @@ A market requirement can influence analysis. It can never authorize a new candid
 ## Current execution state
 
 ```text
-PLATFORM BASELINE                         COMPLETE
-MARKET-01 Application Intelligence       COMPLETE
-MARKET-02 Opportunity History            COMPLETE
-MARKET-03 CareerTarget / Relevance       COMPLETE
-MARKET-04A OpportunitySpace              COMPLETE
-MARKET-04B-01 Market Observation Canon   COMPLETE
-MARKET-04B-02 Structured Market Intake   NEXT
+PLATFORM BASELINE                              COMPLETE
+MARKET-01 Application Intelligence            COMPLETE
+MARKET-02 Opportunity History                 COMPLETE
+MARKET-03 CareerTarget / Relevance            COMPLETE
+MARKET-04A OpportunitySpace                   COMPLETE
+MARKET-04B-01 Market Observation Canon        COMPLETE
+MARKET-04B-02A Canonical Structured Intake    COMPLETE
+MARKET-04B-02B Durable Observation History    NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -64,6 +66,7 @@ The specific execution documents are the authoritative details for each later st
 - `MARKET-03-CAREER-TARGET.md`
 - `MARKET-04-OPPORTUNITY-SPACE.md`
 - `MARKET-04B-01-MARKET-OBSERVATION-CANON.md`
+- `MARKET-04B-02A-STRUCTURED-MARKET-INTAKE.md`
 
 ## MARKET-01 — Application Intelligence
 
@@ -202,18 +205,61 @@ Source-explicit fields carry source evidence. TEXT observations require an exact
 
 `MarketObservation` remains separate from Candidate Evidence, Career Assertions, Job Requirements and derived market interpretation. Fabricated provenance and content-addressed tampering are rejected.
 
-## Next architectural step — MARKET-04B-02
+## MARKET-04B-02A — Canonical Structured Market Intake
 
-The next product boundary is **Structured Market Intake**.
-
-Its job is not broad acquisition yet. It must make heterogeneous inputs converge on the Market Observation canon:
+M4B-02A establishes one controlled entry boundary for user-supplied market information:
 
 ```text
-Manual text ---------+
-Structured payload --+--> Market Intake --> MarketObservation
-Job URL -------------+
+Manual text -----------+
+                       |
+Structured payload ----+--> MarketIntakeService
+                              |
+                              v
+                        MarketObservation
 ```
 
-The next gate should prove that different input mechanisms preserve the same source/interpretation boundary before any provider-specific acquisition adapter is allowed to feed OpportunitySpace.
+Both representations use the same M4B-01 `createMarketObservation()` authority.
 
-Only after that boundary is trustworthy should MARKET-04C introduce provider adapters and broader Market Acquisition.
+Manual text remains raw text and creates no inferred structured market fields. A structured payload maps only caller-supplied fields to source-explicit values with adapter-owned JSON paths.
+
+`MANUAL_STRUCTURED` was added as a source origin so manually supplied structured data is not mislabeled as a provider API or partner feed. Payload representation remains independently represented as `TEXT` or `JSON`.
+
+An optional URL is only a user-supplied source reference in M4B-02A. The intake route performs no network fetch. Public callers also cannot supply `observedAt`; CV Engine assigns the runtime observation timestamp so provenance time is not caller-forgeable.
+
+The route explicitly makes no durability claim:
+
+```text
+persistence = NOT_PERSISTED_M4B_02A
+```
+
+### Gate M4B-02A — CANONICAL_PROVENANCE_PRESERVING_MARKET_INTAKE
+
+Manual text and structured payloads converge through one service, provenance remains controlled, caller key ordering is non-semantic for structured input, candidate truth remains disconnected, and no Job Intelligence, matching, ranking, persistence or market acquisition is performed.
+
+## Next architectural step — MARKET-04B-02B
+
+The next boundary is **Durable Observation History**.
+
+M4B-01 established semantic market state and M4B-02A established how controlled input becomes that state. M4B-02B must now distinguish the immutable semantic state from the fact that CV Engine observed it at one or more moments:
+
+```text
+MarketObservation
+      |
+      +-- ObservationOccurrence A
+      +-- ObservationOccurrence B
+      `-- ObservationOccurrence C
+```
+
+Required behavior:
+
+```text
+same semantic source content observed again
+=> same MarketObservation identity
+=> new observation occurrence
+
+changed source content
+=> new MarketObservation identity
+=> prior state remains preserved
+```
+
+This history boundary should be completed before URL acquisition/provider adapters so freshness, updates and later lifecycle status do not depend on overwritten or ambiguous source state.
