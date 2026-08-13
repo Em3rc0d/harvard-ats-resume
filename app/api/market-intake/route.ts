@@ -12,7 +12,10 @@ import { getRateLimitHeaders, rateLimitPublicApiRequest } from '@/lib/rate-limit
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const MAX_MARKET_INTAKE_REQUEST_BYTES = 512 * 1024;
+// The accepted text/description ceiling is character-based. Keep enough byte
+// headroom for UTF-8 and JSON framing while still rejecting obviously abusive
+// request bodies before JSON parsing when Content-Length is available.
+const MAX_MARKET_INTAKE_REQUEST_BYTES = 1024 * 1024;
 
 const nonBlankField = (maximum: number) => z.string()
   .max(maximum)
@@ -30,9 +33,6 @@ const sourceUrlSchema = z.string()
       return false;
     }
   }, 'Source URL must be an absolute HTTP(S) URL without embedded credentials.');
-
-const observedAtSchema = z.string()
-  .refine((value) => Number.isFinite(Date.parse(value)), 'observedAt must be a valid timestamp.');
 
 const structuredJobSchema = z.object({
   companyName: nonBlankField(MAX_MARKET_INTAKE_FIELD_CHARS).optional(),
@@ -55,13 +55,11 @@ const marketIntakeSchema = z.discriminatedUnion('kind', [
     kind: z.literal('MANUAL_TEXT'),
     text: nonBlankField(MAX_MARKET_INTAKE_TEXT_CHARS),
     sourceUrl: sourceUrlSchema.optional(),
-    observedAt: observedAtSchema.optional(),
   }).strict(),
   z.object({
     kind: z.literal('STRUCTURED_PAYLOAD'),
     job: structuredJobSchema,
     sourceUrl: sourceUrlSchema.optional(),
-    observedAt: observedAtSchema.optional(),
   }).strict(),
 ]);
 
@@ -70,7 +68,9 @@ const marketIntakeSchema = z.discriminatedUnion('kind', [
  *
  * M4B-02A converts controlled user-supplied market inputs into the canonical
  * MarketObservation truth boundary. This route does not fetch URLs, invoke Job
- * Intelligence, compare a candidate, or claim persistence.
+ * Intelligence, compare a candidate, or claim persistence. observedAt is never
+ * accepted from the public caller: the MarketObservation service assigns the
+ * server runtime observation time.
  */
 export async function POST(request: NextRequest) {
   const contentLength = request.headers.get('content-length');
