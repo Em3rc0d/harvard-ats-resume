@@ -56,7 +56,7 @@ Supported source classes in v1:
 
 Concrete provider names remain data (`provider`) so Greenhouse, Lever, Ashby, or future sources do not become central domain enums.
 
-`MarketSource` identity is deterministic and content-addressed from source type, provider and label.
+`MarketSource` identity is deterministic and content-addressed from source type, provider and label. A `PROVIDER_API` source must identify its provider; the generic class alone is not sufficient provenance.
 
 ### MarketObservation
 
@@ -114,6 +114,15 @@ sourcePath?    // structured provider path when available
 sourceExcerpt? // exact supporting fragment when available
 ```
 
+The provenance claim itself is validated:
+
+- every explicit field must identify where its source value came from
+- a TEXT observation requires an exact `sourceExcerpt`
+- that excerpt must exist in the raw payload
+- the raw field value must exist inside that excerpt
+- a JSON-labeled payload must contain valid JSON
+- structured JSON fields may use a source path; path resolution belongs to the later structured-intake adapter contract
+
 Observation-level provenance records:
 
 - capture method
@@ -121,7 +130,9 @@ Observation-level provenance records:
 - provider-native external ID when present
 - adapter ID/version for provider adapters
 
-A `PROVIDER_ADAPTER` observation is invalid without adapter provenance.
+A `PROVIDER_ADAPTER` observation is invalid without adapter provenance and provider identity. A `PUBLIC_URL_FETCH` observation is invalid without source URL provenance.
+
+`observedAt` must be a valid timestamp even though it is not part of semantic identity.
 
 ## Semantic identity
 
@@ -165,6 +176,7 @@ MarketObservation != CareerAssertion
 MarketObservation != JobRequirement
 ObservedMarketFact != DerivedMarketInterpretation
 absence of an explicit field != inferred value
+claimed provenance without source support != observed fact
 ```
 
 The scope boundary is encoded as:
@@ -182,7 +194,11 @@ M4B-01 is complete when:
 - wall-clock observation time does not change semantic identity
 - changed market content creates a new semantic observation
 - source-explicit fields cannot silently create inferred seniority/work model/etc.
-- provider adapter capture requires adapter provenance
+- source-explicit TEXT facts must be traceable to exact raw source excerpts
+- fabricated source excerpts are rejected
+- provider adapter capture requires adapter provenance and provider identity
+- public URL capture requires source URL provenance
+- invalid JSON payload labeling and invalid observation timestamps are rejected
 - MarketObservation contains no candidate identity/evidence references
 - tampering breaks content-addressed validation
 - no existing Job Match or Career Truth path is modified
@@ -200,6 +216,7 @@ M4B-01 does not yet implement:
 - provider-level deduplication
 - freshness / active / stale / closed lifecycle
 - structured intake API
+- JSON source-path resolution
 - migration of JobIntelligenceEngine to consume MarketObservation
 - broad market acquisition
 - Opportunity Discovery
