@@ -24,6 +24,7 @@ import {
 } from '@/lib/application/target/CareerTargetPortfolio';
 import { createOpportunityHistoryRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashOpportunityHistoryRepository';
 import { createCareerTargetRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashCareerTargetRepository';
+import { getRateLimitHeaders, rateLimitPublicApiRequest } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -94,6 +95,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const rateLimitResult = await rateLimitPublicApiRequest(request.headers, 'assess-opportunity');
+    const rateLimitHeaders = getRateLimitHeaders(rateLimitResult);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Rate limit exceeded. Please try the opportunity assessment again later.',
+          retryAfter: new Date(rateLimitResult.reset).toISOString(),
+        },
+        {
+          status: 429,
+          headers: {
+            ...rateLimitHeaders,
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        },
+      );
+    }
+
     const capturedAt = new Date().toISOString();
     const vaultIdentity = deriveCareerVaultIdentity(data, careerVaultId);
     const careerTarget = createCareerTarget(vaultIdentity.candidateProfileId, targetInput, capturedAt);
@@ -113,7 +133,7 @@ export async function POST(request: NextRequest) {
         },
         {
           status: 503,
-          headers: { 'Cache-Control': 'no-store, max-age=0' },
+          headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' },
         },
       );
     }
@@ -133,7 +153,7 @@ export async function POST(request: NextRequest) {
         },
         {
           status: 422,
-          headers: { 'Cache-Control': 'no-store, max-age=0' },
+          headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' },
         },
       );
     }
@@ -152,7 +172,7 @@ export async function POST(request: NextRequest) {
         },
         {
           status: 422,
-          headers: { 'Cache-Control': 'no-store, max-age=0' },
+          headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' },
         },
       );
     }
@@ -181,7 +201,7 @@ export async function POST(request: NextRequest) {
           },
           {
             status: 503,
-            headers: { 'Cache-Control': 'no-store, max-age=0' },
+            headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' },
           },
         );
       }
@@ -219,7 +239,7 @@ export async function POST(request: NextRequest) {
         },
         {
           status: integrityFailure ? 500 : 503,
-          headers: { 'Cache-Control': 'no-store, max-age=0' },
+          headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' },
         },
       );
     }
@@ -243,7 +263,7 @@ export async function POST(request: NextRequest) {
         },
         {
           status: 503,
-          headers: { 'Cache-Control': 'no-store, max-age=0' },
+          headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' },
         },
       );
     }
@@ -270,7 +290,7 @@ export async function POST(request: NextRequest) {
       },
       {
         status: 200,
-        headers: { 'Cache-Control': 'no-store, max-age=0' },
+        headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' },
       },
     );
   } catch (error) {

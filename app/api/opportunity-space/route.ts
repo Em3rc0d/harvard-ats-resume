@@ -17,6 +17,7 @@ import {
 import { createOpportunityHistoryRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashOpportunityHistoryRepository';
 import { createCareerTargetRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashCareerTargetRepository';
 import { createOpportunitySpaceRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashOpportunitySpaceRepository';
+import { getRateLimitHeaders, rateLimitPublicApiRequest } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,6 +60,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const rateLimitResult = await rateLimitPublicApiRequest(request.headers, 'opportunity-space');
+    const rateLimitHeaders = getRateLimitHeaders(rateLimitResult);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Rate limit exceeded. Please rebuild the Opportunity Space later.',
+          retryAfter: new Date(rateLimitResult.reset).toISOString(),
+        },
+        {
+          status: 429,
+          headers: {
+            ...rateLimitHeaders,
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        },
+      );
+    }
+
     const candidateProfileId = candidateProfileIdFromCareerVaultCapability(careerVaultId);
 
     let opportunityHistoryRepository;
@@ -76,7 +96,7 @@ export async function POST(request: NextRequest) {
           error: 'Durable Opportunity Space storage is not configured. CV Engine will not emit a non-durable ranking.',
           persistence: { status: 'UNAVAILABLE' },
         },
-        { status: 503, headers: { 'Cache-Control': 'no-store, max-age=0' } },
+        { status: 503, headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' } },
       );
     }
 
@@ -91,7 +111,7 @@ export async function POST(request: NextRequest) {
           success: false,
           error: 'Opportunity Space requires durable opportunity history and an active Career Target.',
         },
-        { status: 422, headers: { 'Cache-Control': 'no-store, max-age=0' } },
+        { status: 422, headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' } },
       );
     }
 
@@ -102,7 +122,7 @@ export async function POST(request: NextRequest) {
     if (!activeTarget) {
       return NextResponse.json(
         { success: false, error: 'The active Career Target could not be resolved.' },
-        { status: 422, headers: { 'Cache-Control': 'no-store, max-age=0' } },
+        { status: 422, headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' } },
       );
     }
 
@@ -149,7 +169,7 @@ export async function POST(request: NextRequest) {
           scopeBoundary: 'PRIORITY_DOES_NOT_CHANGE_JOB_MATCH_OR_CANDIDATE_EVIDENCE',
         },
       },
-      { status: 200, headers: { 'Cache-Control': 'no-store, max-age=0' } },
+      { status: 200, headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' } },
     );
   } catch (error) {
     console.error('OpportunitySpace error:', error);
