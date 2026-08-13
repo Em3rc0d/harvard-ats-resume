@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { normalizeCandidatePresentationText } from '@/lib/application/presentation/InlineCandidateTextCleanup';
+import { getRateLimitHeaders, rateLimitPublicApiRequest } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,19 +25,45 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Content must contain at least 10 characters.' },
-        { status: 400 },
+        { status: 400, headers: { 'Cache-Control': 'no-store, max-age=0' } },
       );
     }
 
-    return NextResponse.json({
-      output: normalizeCandidatePresentationText(parsed.data.summary),
-      mode: 'PRESENTATION_ONLY',
-    });
+    const rateLimitResult = await rateLimitPublicApiRequest(request.headers, 'optimize-content');
+    const rateLimitHeaders = getRateLimitHeaders(rateLimitResult);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        {
+          error: 'Rate limit exceeded. Please try content cleanup again later.',
+          retryAfter: new Date(rateLimitResult.reset).toISOString(),
+        },
+        {
+          status: 429,
+          headers: {
+            ...rateLimitHeaders,
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        output: normalizeCandidatePresentationText(parsed.data.summary),
+        mode: 'PRESENTATION_ONLY',
+      },
+      {
+        headers: {
+          ...rateLimitHeaders,
+          'Cache-Control': 'no-store, max-age=0',
+        },
+      },
+    );
   } catch (error) {
     console.error('Presentation cleanup error:', error);
     return NextResponse.json(
       { error: 'Unable to clean up content.' },
-      { status: 500 },
+      { status: 500, headers: { 'Cache-Control': 'no-store, max-age=0' } },
     );
   }
 }
