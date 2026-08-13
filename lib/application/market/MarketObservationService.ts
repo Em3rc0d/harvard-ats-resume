@@ -54,20 +54,47 @@ function normalizedOptional(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function validateObservedField(field: ObservedMarketField, label: string): void {
-  assertMarket(Boolean(field.value.trim()), `${label} cannot be empty.`);
-  assertMarket(field.evidence.origin === 'SOURCE_EXPLICIT', `${label} must be explicitly sourced.`);
-  if (field.evidence.sourcePath !== undefined) {
-    assertMarket(Boolean(field.evidence.sourcePath.trim()), `${label} sourcePath cannot be blank.`);
-  }
-  if (field.evidence.sourceExcerpt !== undefined) {
-    assertMarket(Boolean(field.evidence.sourceExcerpt.trim()), `${label} sourceExcerpt cannot be blank.`);
+function validatePayload(payload: MarketObservationPayload): void {
+  assertMarket(Boolean(payload.content.trim()), 'source payload cannot be empty.');
+  assertMarket(payload.format === 'TEXT' || payload.format === 'JSON', 'unsupported payload format.');
+  if (payload.format === 'JSON') {
+    try {
+      JSON.parse(payload.content);
+    } catch {
+      throw new Error('MarketObservation integrity: JSON payload must contain valid JSON source material.');
+    }
   }
 }
 
-function validateExplicitFields(fields: ObservedJobFields): void {
+function validateObservedField(
+  field: ObservedMarketField,
+  label: string,
+  payload: MarketObservationPayload,
+): void {
+  assertMarket(Boolean(field.value.trim()), `${label} cannot be empty.`);
+  assertMarket(field.evidence.origin === 'SOURCE_EXPLICIT', `${label} must be explicitly sourced.`);
+
+  const sourcePath = normalizedOptional(field.evidence.sourcePath);
+  const sourceExcerpt = normalizedOptional(field.evidence.sourceExcerpt);
+  assertMarket(Boolean(sourcePath || sourceExcerpt), `${label} must identify where the explicit source value came from.`);
+
+  if (field.evidence.sourcePath !== undefined) {
+    assertMarket(Boolean(sourcePath), `${label} sourcePath cannot be blank.`);
+  }
+  if (field.evidence.sourceExcerpt !== undefined) {
+    assertMarket(Boolean(sourceExcerpt), `${label} sourceExcerpt cannot be blank.`);
+    assertMarket(payload.content.includes(sourceExcerpt!), `${label} sourceExcerpt is not present in the raw source payload.`);
+    assertMarket(sourceExcerpt!.includes(field.value), `${label} raw value is not present in its sourceExcerpt.`);
+  }
+
+  if (payload.format === 'TEXT') {
+    assertMarket(Boolean(sourceExcerpt), `${label} from TEXT payload requires an exact sourceExcerpt.`);
+  }
+}
+
+function validateExplicitFields(fields: ObservedJobFields, payload: MarketObservationPayload): void {
   Object.entries(fields).forEach(([key, field]) => {
-    if (field) validateObservedField(field, key);
+    if (field) validateObservedField(field, key, payload);
   });
 }
 
@@ -81,6 +108,9 @@ function marketSourceSemantic(input: MarketSourceInput) {
 
 export function createMarketSource(input: MarketSourceInput): MarketSource {
   const semantic = marketSourceSemantic(input);
+  if (semantic.type === 'PROVIDER_API') {
+    assertMarket(Boolean(semantic.provider), 'PROVIDER_API source requires a provider identity.');
+  }
   const hash = sha256(stableJson(semantic));
   return {
     id: domainId('MarketSource', `market-source:${hash.slice(0, 32)}`),
@@ -109,26 +139,36 @@ function observationSemantic(input: {
   };
 }
 
+function validateProvenance(source: MarketSource, provenance: MarketObservationProvenance): void {
+  if (provenance.sourceUrl !== undefined) {
+    assertMarket(Boolean(provenance.sourceUrl.trim()), 'sourceUrl cannot be blank.');
+  }
+  if (provenance.externalId !== undefined) {
+    assertMarket(Boolean(provenance.externalId.trim()), 'externalId cannot be blank.');
+  }
+  if (provenance.adapter) {
+    assertMarket(Boolean(provenance.adapter.adapterId.trim()), 'adapterId cannot be blank.');
+    assertMarket(Boolean(provenance.adapter.adapterVersion.trim()), 'adapterVersion cannot be blank.');
+  }
+  if (provenance.captureMethod === 'PROVIDER_ADAPTER') {
+    assertMarket(Boolean(provenance.adapter), 'provider-adapter capture requires adapter provenance.');
+    assertMarket(Boolean(source.provider), 'provider-adapter capture requires provider identity.');
+  }
+  if (provenance.captureMethod === 'PUBLIC_URL_FETCH') {
+    assertMarket(Boolean(normalizedOptional(provenance.sourceUrl)), 'public URL capture requires sourceUrl provenance.');
+  }
+}
+
 export function validateMarketObservation(observation: MarketObservation): void {
   assertMarket(observation.schemaVersion === MARKET_OBSERVATION_SCHEMA_VERSION, 'unsupported schema version.');
-  assertMarket(Boolean(observation.payload.content.trim()), 'source payload cannot be empty.');
-  assertMarket(observation.payload.format === 'TEXT' || observation.payload.format === 'JSON', 'unsupported payload format.');
+  validatePayload(observation.payload);
   assertMarket(observation.source.id === expectedSourceId(observation.source), 'MarketSource identity is not content-addressed.');
-  validateExplicitFields(observation.explicitFields);
-
-  if (observation.provenance.sourceUrl !== undefined) {
-    assertMarket(Boolean(observation.provenance.sourceUrl.trim()), 'sourceUrl cannot be blank.');
+  if (observation.source.type === 'PROVIDER_API') {
+    assertMarket(Boolean(normalizedOptional(observation.source.provider)), 'PROVIDER_API source requires a provider identity.');
   }
-  if (observation.provenance.externalId !== undefined) {
-    assertMarket(Boolean(observation.provenance.externalId.trim()), 'externalId cannot be blank.');
-  }
-  if (observation.provenance.adapter) {
-    assertMarket(Boolean(observation.provenance.adapter.adapterId.trim()), 'adapterId cannot be blank.');
-    assertMarket(Boolean(observation.provenance.adapter.adapterVersion.trim()), 'adapterVersion cannot be blank.');
-  }
-  if (observation.provenance.captureMethod === 'PROVIDER_ADAPTER') {
-    assertMarket(Boolean(observation.provenance.adapter), 'provider-adapter capture requires adapter provenance.');
-  }
+  validateExplicitFields(observation.explicitFields, observation.payload);
+  validateProvenance(observation.source, observation.provenance);
+  assertMarket(Number.isFinite(Date.parse(observation.observedAt)), 'observedAt must be a valid timestamp.');
 
   assertMarket(
     observation.scopeBoundary === 'OBSERVED_MARKET_FACT_NOT_CANDIDATE_EVIDENCE_OR_DERIVED_INTERPRETATION',
@@ -168,9 +208,12 @@ export function createMarketObservation(input: CreateMarketObservationInput): Ma
         }
       : undefined,
   };
+  const observedAt = input.observedAt ?? new Date().toISOString();
 
-  assertMarket(Boolean(payload.content.trim()), 'source payload cannot be empty.');
-  validateExplicitFields(explicitFields);
+  validatePayload(payload);
+  validateExplicitFields(explicitFields, payload);
+  validateProvenance(source, provenance);
+  assertMarket(Number.isFinite(Date.parse(observedAt)), 'observedAt must be a valid timestamp.');
 
   const semantic = observationSemantic({ source, payload, explicitFields, provenance });
   const contentSha256 = sha256(stableJson(semantic));
@@ -178,7 +221,7 @@ export function createMarketObservation(input: CreateMarketObservationInput): Ma
     ...semantic,
     id: domainId('MarketObservation', `market-observation:${contentSha256.slice(0, 32)}`),
     contentSha256,
-    observedAt: input.observedAt ?? new Date().toISOString(),
+    observedAt,
   };
   validateMarketObservation(observation);
   return observation;
