@@ -37,10 +37,22 @@ test('MarketObservation identity is semantic and excludes observation wall-clock
 
 test('changing raw source material creates a new MarketObservation without rewriting the prior one', () => {
   const first = manualObservation('2026-08-12T18:00:00.000Z');
-  const changed = manualObservation(
-    '2026-08-13T18:00:00.000Z',
-    'Senior Backend Engineer\nHybrid in Lima\nTypeScript and AWS required.',
-  );
+  const changed = createMarketObservation({
+    source: { type: 'MANUAL_TEXT', label: 'Candidate supplied vacancy text' },
+    payload: { format: 'TEXT', content: 'Senior Backend Engineer\nHybrid in Lima\nTypeScript and AWS required.' },
+    explicitFields: {
+      roleTitle: {
+        value: 'Senior Backend Engineer',
+        evidence: { origin: 'SOURCE_EXPLICIT', sourceExcerpt: 'Senior Backend Engineer' },
+      },
+      location: {
+        value: 'Lima',
+        evidence: { origin: 'SOURCE_EXPLICIT', sourceExcerpt: 'Hybrid in Lima' },
+      },
+    },
+    provenance: { captureMethod: 'USER_SUPPLIED_TEXT' },
+    observedAt: '2026-08-13T18:00:00.000Z',
+  });
 
   assert.notEqual(changed.id, first.id);
   assert.notEqual(changed.contentSha256, first.contentSha256);
@@ -115,25 +127,80 @@ test('provider adapter capture requires adapter provenance', () => {
   }), /requires adapter provenance/);
 });
 
-test('blank explicit evidence metadata is rejected instead of pretending provenance exists', () => {
+test('PROVIDER_API source requires provider identity instead of an anonymous provider class', () => {
+  assert.throws(() => createMarketSource({ type: 'PROVIDER_API' }), /requires a provider identity/);
+});
+
+test('public URL capture requires the observed source URL', () => {
+  assert.throws(() => createMarketObservation({
+    source: { type: 'JOB_URL' },
+    payload: { format: 'TEXT', content: 'Backend Engineer' },
+    provenance: { captureMethod: 'PUBLIC_URL_FETCH' },
+  }), /requires sourceUrl provenance/);
+});
+
+test('TEXT explicit facts require an exact source excerpt instead of a provenance assertion alone', () => {
   assert.throws(() => createMarketObservation({
     source: { type: 'MANUAL_TEXT' },
     payload: { format: 'TEXT', content: 'Backend Engineer' },
     explicitFields: {
       roleTitle: {
         value: 'Backend Engineer',
-        evidence: { origin: 'SOURCE_EXPLICIT', sourceExcerpt: '   ' },
+        evidence: { origin: 'SOURCE_EXPLICIT' },
       },
     },
     provenance: { captureMethod: 'USER_SUPPLIED_TEXT' },
-  }), /sourceExcerpt cannot be blank/);
+  }), /must identify where the explicit source value came from/);
 });
 
-test('tampering with MarketObservation content is rejected by content-addressed validation', () => {
+test('fabricated source excerpt is rejected when it is absent from the raw payload', () => {
+  assert.throws(() => createMarketObservation({
+    source: { type: 'MANUAL_TEXT' },
+    payload: { format: 'TEXT', content: 'Backend Engineer' },
+    explicitFields: {
+      roleTitle: {
+        value: 'Principal Engineer',
+        evidence: { origin: 'SOURCE_EXPLICIT', sourceExcerpt: 'Principal Engineer' },
+      },
+    },
+    provenance: { captureMethod: 'USER_SUPPLIED_TEXT' },
+  }), /sourceExcerpt is not present in the raw source payload/);
+});
+
+test('source excerpt must actually contain the raw explicit value', () => {
+  assert.throws(() => createMarketObservation({
+    source: { type: 'MANUAL_TEXT' },
+    payload: { format: 'TEXT', content: 'Backend Engineer in Lima' },
+    explicitFields: {
+      roleTitle: {
+        value: 'Principal Engineer',
+        evidence: { origin: 'SOURCE_EXPLICIT', sourceExcerpt: 'Backend Engineer' },
+      },
+    },
+    provenance: { captureMethod: 'USER_SUPPLIED_TEXT' },
+  }), /raw value is not present in its sourceExcerpt/);
+});
+
+test('JSON-labeled payload must be valid JSON source material', () => {
+  assert.throws(() => createMarketObservation({
+    source: { type: 'PROVIDER_API', provider: 'Example ATS' },
+    payload: { format: 'JSON', content: '{not-json' },
+    provenance: {
+      captureMethod: 'PROVIDER_ADAPTER',
+      adapter: { adapterId: 'example-ats', adapterVersion: '1.0.0' },
+    },
+  }), /JSON payload must contain valid JSON source material/);
+});
+
+test('invalid observation timestamp is rejected even though time is excluded from semantic identity', () => {
+  assert.throws(() => manualObservation('not-a-time'), /observedAt must be a valid timestamp/);
+});
+
+test('tampering with MarketObservation semantic hash is rejected by content-addressed validation', () => {
   const observation = manualObservation('2026-08-12T18:00:00.000Z');
   const tampered: MarketObservation = {
     ...observation,
-    payload: { ...observation.payload, content: 'Tampered vacancy content' },
+    contentSha256: '0'.repeat(64),
   };
 
   assert.throws(() => validateMarketObservation(tampered), /content hash mismatch/);
