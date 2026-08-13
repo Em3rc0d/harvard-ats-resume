@@ -21,6 +21,7 @@
     "lib/application/grounding/GroundingValidator.ts",
     "lib/application/grounding/SemanticEntailmentEvaluator.ts",
     "lib/application/job/JobIntelligenceEngine.ts",
+    "lib/application/market/**/*.ts",
     "lib/application/matching/JobMatchEngine.ts",
     "lib/application/opportunity/**/*.ts",
     "lib/application/target/**/*.ts",
