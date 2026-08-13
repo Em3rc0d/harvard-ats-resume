@@ -155,6 +155,14 @@ test('MarketIntake result has no candidate identity and makes no durability or d
   );
 });
 
+test('market-intake public API keeps observedAt server-owned instead of accepting caller provenance', () => {
+  const route = source('app/api/market-intake/route.ts');
+
+  assert.doesNotMatch(route, /const observedAtSchema/);
+  assert.doesNotMatch(route, /observedAt:\s*observedAtSchema/);
+  assert.match(route, /server runtime observation time/);
+});
+
 test('market-intake API is bounded and does not fetch URLs or invoke downstream intelligence', () => {
   const route = source('app/api/market-intake/route.ts');
   const contentLengthAt = route.indexOf("request.headers.get('content-length')");
@@ -166,6 +174,7 @@ test('market-intake API is bounded and does not fetch URLs or invoke downstream 
   assert.ok(contentLengthAt < rateLimitAt);
   assert.ok(rateLimitAt < jsonAt);
   assert.ok(jsonAt < intakeAt);
+  assert.match(route, /1024 \* 1024/);
   assert.doesNotMatch(route, /\bfetch\s*\(/);
   assert.doesNotMatch(route, /analyzeJobDescription|matchJobToCandidate|persistMarket|persistOpportunity/);
   assert.match(route, /NOT_PERSISTED|does not fetch URLs|does not fetch/);
