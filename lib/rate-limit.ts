@@ -117,9 +117,14 @@ function requestAddress(headers: Pick<Headers, 'get'>): string {
   return (forwardedFor || realIp || 'unknown').slice(0, 256);
 }
 
+function storageRateLimitIdentifier(identifier: string): string {
+  const digest = createHash('sha256').update(identifier, 'utf8').digest('hex');
+  return `sha256:${digest.slice(0, 40)}`;
+}
+
 /**
  * Produces an endpoint-scoped, non-reversible request identity. Raw client IPs
- * are not used as Redis/in-memory keys, and one endpoint cannot consume another
+ * are never returned from this helper, and one endpoint cannot consume another
  * endpoint's quota simply because both originate from the same address.
  */
 export function requestRateLimitIdentifier(
@@ -141,6 +146,10 @@ export function requestRateLimitIdentifier(
  * Rate limit requests using Redis when selected, otherwise use in-memory.
  * Redis failures degrade to memory by design. This fallback must never be
  * confused with Career Vault persistence, which has no memory fallback.
+ *
+ * Every identifier is hashed again at the storage boundary, so legacy callers
+ * that still supply a raw network identifier cannot place that raw value into a
+ * Redis or in-memory rate-limit key.
  */
 export async function rateLimit(
   identifier: string,
@@ -149,6 +158,7 @@ export async function rateLimit(
 ): Promise<RateLimitResult> {
   const environment = processRateLimitEnvironment();
   const redis = createRateLimitRedis(environment);
+  const storageIdentifier = storageRateLimitIdentifier(identifier);
 
   if (redis) {
     try {
@@ -161,7 +171,7 @@ export async function rateLimit(
         prefix: '@upstash/ratelimit',
       });
 
-      const { success, limit: l, remaining, reset } = await ratelimit.limit(identifier);
+      const { success, limit: l, remaining, reset } = await ratelimit.limit(storageIdentifier);
 
       return {
         success,
@@ -178,7 +188,7 @@ export async function rateLimit(
   }
 
   const now = Date.now();
-  const key = `ratelimit:${identifier}`;
+  const key = `ratelimit:${storageIdentifier}`;
 
   if (!rateLimitStore[key] || rateLimitStore[key].resetTime < now) {
     rateLimitStore[key] = {
