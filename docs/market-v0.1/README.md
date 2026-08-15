@@ -67,8 +67,8 @@ MARKET-04B-01 Market Observation Canon        COMPLETE
 MARKET-04B-02A Canonical Structured Intake    COMPLETE
 MARKET-04B-02B Durable Observation History    COMPLETE
 MARKET-04B-03 Controlled Source Acquisition   COMPLETE
-MARKET-04B-04 Derived Market Interpretation   IMPLEMENTED / VALIDATION GATE
-MARKET-04B-05 Job Intelligence Projection     NEXT AFTER M4B-04 CLOSES
+MARKET-04B-04 Derived Market Interpretation   COMPLETE
+MARKET-04B-05 Job Intelligence Projection     NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -412,7 +412,7 @@ and accepts only a canonical `MarketObservationId`. Public callers cannot provid
 
 ### Gate M4B-04 — EVIDENCE_BOUND_DERIVED_MARKET_INTERPRETATION
 
-M4B-04 closes when interpretation identity, evidence linkage, explicit UNKNOWN semantics, deterministic re-validation, durable history, server-owned derivation inputs and the no-Job-Intelligence boundary are all executable and CI-green.
+M4B-04 is complete: interpretation identity, evidence linkage, explicit UNKNOWN semantics, deterministic re-validation, durable history, server-owned derivation inputs and the no-Job-Intelligence boundary are executable and CI-green.
 
 ## Next architectural step — MARKET-04B-05
 
