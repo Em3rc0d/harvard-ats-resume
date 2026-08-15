@@ -46,6 +46,8 @@ MarketObservation != DerivedMarketInterpretation
 MarketIntakeRequest != MarketObservation
 ObservationOccurrence != MarketObservation
 ObservationOccurrence != DerivedMarketInterpretation
+ProviderPayload != MarketObservation
+ProviderPayload != JobRequirement
 ```
 
 A market requirement can influence analysis. It can never authorize a new candidate assertion.
@@ -61,7 +63,8 @@ MARKET-04A OpportunitySpace                   COMPLETE
 MARKET-04B-01 Market Observation Canon        COMPLETE
 MARKET-04B-02A Canonical Structured Intake    COMPLETE
 MARKET-04B-02B Durable Observation History    COMPLETE
-MARKET-04B-03 Controlled Source Acquisition   NEXT
+MARKET-04B-03 Controlled Source Acquisition   COMPLETE
+MARKET-04B-04 Derived Market Interpretation   NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -71,6 +74,7 @@ The specific execution documents are the authoritative details for each later st
 - `MARKET-04B-01-MARKET-OBSERVATION-CANON.md`
 - `MARKET-04B-02A-STRUCTURED-MARKET-INTAKE.md`
 - `MARKET-04B-02B-DURABLE-OBSERVATION-HISTORY.md`
+- `MARKET-04B-03-CONTROLLED-SOURCE-ACQUISITION.md`
 
 ## MARKET-01 — Application Intelligence
 
@@ -312,40 +316,89 @@ Missing durable storage configuration fails closed instead of falling back to a 
 
 Semantic market state and observation events are now independently addressable, historical states are append-preserving, exact replay is idempotent, persistence is reload-verified, and no candidate/Job Intelligence/Opportunity decision boundary is crossed.
 
-## Next architectural step — MARKET-04B-03
+## MARKET-04B-03 — Controlled Source Acquisition
 
-The market foundation can now begin **Controlled Source Acquisition**.
-
-The next adapters must enter through the existing source-aware boundary rather than bypass it:
+M4B-03 opens the first real external market boundary through three documented public provider interfaces:
 
 ```text
-External Source
-      |
-      v
-Source Adapter
-      |
-      v
-Canonical Market Intake
-      |
-      v
+Greenhouse ----+
+Lever ----------+--> Controlled Provider Adapter
+Ashby ----------+            |
+                             v
+                    Canonical Market Intake
+                             |
+                             v
+                      MarketObservation
+                             |
+                             v
+                   ObservationOccurrence History
+```
+
+The first runtime contract is intentionally one-listing-at-a-time and manually triggered. It is not a crawler, provider poller or synchronization worker.
+
+Supported provider-native locators:
+
+```text
+GREENHOUSE: boardToken + jobId
+LEVER:      site + postingId + GLOBAL/EU
+ASHBY:      jobBoardName + hosted jobUrl selector
+```
+
+The caller cannot provide an arbitrary network destination. Provider adapters construct only fixed HTTPS endpoints on the documented provider API hosts, reject redirects, use JSON-only responses, enforce an 8-second timeout and stop responses beyond 2 MiB.
+
+Provider adapters remain infrastructure. The application service receives a `ControlledProviderSourceAcquirer` port and therefore does not import provider HTTP mechanics.
+
+Adapters also cannot create `MarketObservation` directly. They return source-explicit provider intake to the canonical Market Intake application boundary, which creates a `PROVIDER_API` MarketObservation with `PROVIDER_ADAPTER` provenance and adapter versioning. M4B-02B then persists and reload-verifies the observation plus occurrence before HTTP success.
+
+Provider mappings are deliberately conservative. Provider fields whose semantics do not exactly match the market domain are left in the preserved payload rather than silently relabeled. For example, Greenhouse `updated_at` and Ashby `publishedAt` do not become `postedAt` in this gate.
+
+### Gate M4B-03 — CONTROLLED_PROVIDER_ACQUISITION
+
+A supported public provider listing can now enter CV Engine through a bounded, source-aware, provenance-preserving acquisition path while arbitrary URL fetch, candidate coupling, Job Intelligence, matching, OpportunityAssessment and OpportunitySpace remain outside the acquisition boundary.
+
+## Next architectural step — MARKET-04B-04
+
+M4B-03 answers:
+
+```text
+Where can trustworthy market source material enter?
+```
+
+The next missing question is:
+
+```text
+How may CV Engine interpret that observed material without confusing interpretation with source fact?
+```
+
+The next boundary is therefore:
+
+```text
+MARKET-04B-04 — Derived Market Interpretation Boundary
+```
+
+Required direction:
+
+```text
 MarketObservation
       |
       v
-ObservationOccurrence History
+Derived Market Interpretation
+      |
+      v
+Job Intelligence
+      |
+      v
+JobSnapshot
 ```
 
-The first controlled provider/source integrations can then be added one by one, keeping exact payload/provenance and durable occurrence history before any derived interpretation.
+The next gate must define typed derived concepts, evidence links back to exact MarketObservation fields/payload, interpretation policy/versioning, explicit unknown/absence semantics, and the controlled bridge into existing Job Intelligence.
 
-Hard rule for M4B-03:
+It must still preserve:
 
 ```text
-provider data
-!=
-JobRequirement
-!=
-CandidateEvidence
+observed source fact != derived interpretation
+missing source fact != invented value
+derived job truth != candidate truth
 ```
 
-Provider acquisition may create source observations. It may not directly create candidate truth, Job Match, OpportunityAssessment, ranking, or recommendations.
-
-Derived Market Interpretation and the formal `MarketObservation -> Job Intelligence -> JobSnapshot` bridge remain a later gate after acquisition itself is trustworthy.
+Broad provider polling, cross-source deduplication, lifecycle status and high-volume synchronization remain later work; the M4B-02B single-snapshot history store is not approved for those workloads yet.
