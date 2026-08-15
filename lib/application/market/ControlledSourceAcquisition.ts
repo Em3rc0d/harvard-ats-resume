@@ -49,6 +49,10 @@ export interface AcquiredProviderMarketIntake {
   readonly adapterVersion: string;
 }
 
+export type ControlledProviderSourceAcquirer = (
+  request: ControlledSourceAcquisitionRequest,
+) => Promise<AcquiredProviderMarketIntake>;
+
 export interface ControlledSourceAcquisitionResult {
   readonly policyVersion: typeof CONTROLLED_SOURCE_ACQUISITION_POLICY_VERSION;
   readonly provider: ControlledMarketProvider;
@@ -68,7 +72,7 @@ export interface ControlledSourceAcquisitionResult {
 
 export interface ControlledSourceAcquisitionDependencies {
   readonly repository: MarketObservationHistoryRepository;
-  readonly fetcher?: typeof fetch;
+  readonly acquirer: ControlledProviderSourceAcquirer;
   readonly observedAt?: string;
 }
 
