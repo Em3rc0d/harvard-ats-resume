@@ -14,6 +14,10 @@ export type MarketJobProjectionTextOrigin =
 /**
  * Immutable authorization record for the exact text allowed to cross from the
  * market-truth graph into Job Intelligence.
+ *
+ * policyVersion is stored as a string so historical projections remain readable
+ * after a future projection policy is introduced. New projection creation/full
+ * validation still pins to MARKET_JOB_PROJECTION_POLICY_VERSION.
  */
 export interface MarketJobProjection {
   readonly schemaVersion: typeof MARKET_JOB_PROJECTION_SCHEMA_VERSION;
@@ -22,7 +26,7 @@ export interface MarketJobProjection {
   readonly derivedMarketInterpretationId: DerivedMarketInterpretationId;
   readonly observationContentSha256: string;
   readonly interpretationContentSha256: string;
-  readonly policyVersion: typeof MARKET_JOB_PROJECTION_POLICY_VERSION;
+  readonly policyVersion: string;
   readonly sourceText: string;
   readonly sourceTextOrigin: MarketJobProjectionTextOrigin;
   readonly sourceTextSha256: string;
