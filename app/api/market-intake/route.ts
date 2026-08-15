@@ -7,6 +7,11 @@ import {
   MAX_MARKET_SOURCE_URL_CHARS,
 } from '@/lib/application/market/MarketIntake';
 import { intakeMarketObservation } from '@/lib/application/market/MarketIntakeService';
+import {
+  MarketObservationHistoryUnavailableError,
+  persistMarketObservationHistory,
+} from '@/lib/application/market/MarketObservationHistory';
+import { createMarketObservationHistoryRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashMarketObservationHistoryRepository';
 import { getRateLimitHeaders, rateLimitPublicApiRequest } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -67,10 +72,12 @@ const marketIntakeSchema = z.discriminatedUnion('kind', [
  * POST /api/market-intake
  *
  * M4B-02A converts controlled user-supplied market inputs into the canonical
- * MarketObservation truth boundary. This route does not fetch URLs, invoke Job
- * Intelligence, compare a candidate, or claim persistence. observedAt is never
- * accepted from the public caller: the MarketObservation service assigns the
- * server runtime observation time.
+ * MarketObservation truth boundary. M4B-02B then persists that semantic state
+ * plus a separate ObservationOccurrence and reload-verifies durability before
+ * HTTP 200. The route still does not fetch URLs, invoke Job Intelligence,
+ * compare a candidate, rank opportunities, or derive market interpretation.
+ * observedAt is never accepted from the public caller: the MarketObservation
+ * service assigns the server runtime observation time.
  */
 export async function POST(request: NextRequest) {
   const contentLength = request.headers.get('content-length');
@@ -142,10 +149,29 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = intakeMarketObservation(validation.data);
+    const repository = createMarketObservationHistoryRepositoryFromEnv();
+    const historyResult = await persistMarketObservationHistory({
+      observation: result.observation,
+      repository,
+    });
+
     return NextResponse.json(
       {
         success: true,
-        data: result,
+        data: {
+          ...result,
+          persistence: 'DURABLE_OBSERVATION_HISTORY_M4B_02B',
+          observationOccurrence: historyResult.occurrence,
+          observationHistory: {
+            schemaVersion: historyResult.snapshot.schemaVersion,
+            revision: historyResult.snapshot.revision,
+            observationCount: historyResult.snapshot.observations.length,
+            occurrenceCount: historyResult.snapshot.occurrences.length,
+            observationAdded: historyResult.observationAdded,
+            occurrenceAdded: historyResult.occurrenceAdded,
+          },
+          scopeBoundary: 'INTAKE_PERSISTS_OBSERVED_MARKET_FACT_AND_TEMPORAL_OCCURRENCE_ONLY_NO_DERIVED_INTERPRETATION',
+        },
       },
       {
         status: 200,
@@ -158,13 +184,19 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Market intake error:', error);
     const isInputError = error instanceof Error && error.message.startsWith('MarketIntake validation:');
+    const isStorageUnavailable = error instanceof MarketObservationHistoryUnavailableError;
+    const status = isInputError ? 400 : isStorageUnavailable ? 503 : 500;
     return NextResponse.json(
       {
         success: false,
-        error: isInputError ? error.message : 'Market intake could not be completed safely.',
+        error: isInputError
+          ? error.message
+          : isStorageUnavailable
+            ? 'Durable market observation history is temporarily unavailable.'
+            : 'Market intake could not be completed safely.',
       },
       {
-        status: isInputError ? 400 : 500,
+        status,
         headers: {
           ...rateLimitHeaders,
           'Cache-Control': 'no-store, max-age=0',
