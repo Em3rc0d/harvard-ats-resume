@@ -6,7 +6,6 @@ import {
 } from './ControlledSourceAcquisition';
 import { intakeAcquiredProviderObservation } from './MarketIntakeService';
 import { persistMarketObservationHistory } from './MarketObservationHistory';
-import { acquireProviderMarketIntake } from '../../infrastructure/market/ControlledProviderSourceAdapters';
 
 /**
  * M4B-03 orchestration boundary.
@@ -14,15 +13,14 @@ import { acquireProviderMarketIntake } from '../../infrastructure/market/Control
  * External source -> provider adapter -> canonical market intake -> immutable
  * MarketObservation -> durable ObservationOccurrence history.
  *
- * No provider response can invoke Job Intelligence, candidate matching,
- * OpportunityAssessment, OpportunitySpace, recommendation, or resume generation
- * through this service.
+ * The concrete HTTP/provider adapter is injected as an application port so this
+ * layer remains independent from provider infrastructure.
  */
 export async function acquireControlledMarketSource(
   request: ControlledSourceAcquisitionRequest,
   dependencies: ControlledSourceAcquisitionDependencies,
 ): Promise<ControlledSourceAcquisitionResult> {
-  const acquired = await acquireProviderMarketIntake(request, dependencies.fetcher ?? fetch);
+  const acquired = await dependencies.acquirer(request);
   const intake = intakeAcquiredProviderObservation(acquired, dependencies.observedAt);
   const historyResult = await persistMarketObservationHistory({
     observation: intake.observation,
