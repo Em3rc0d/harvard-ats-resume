@@ -10,6 +10,7 @@ export type MarketSourceId = DomainId<'MarketSource'>;
 export type MarketObservationId = DomainId<'MarketObservation'>;
 export type ObservationOccurrenceId = DomainId<'ObservationOccurrence'>;
 export type DerivedMarketInterpretationId = DomainId<'DerivedMarketInterpretation'>;
+export type MarketJobProjectionId = DomainId<'MarketJobProjection'>;
 export type JobDescriptionId = DomainId<'JobDescription'>;
 export type JobRequirementId = DomainId<'JobRequirement'>;
 export type JobSnapshotId = DomainId<'JobSnapshot'>;
