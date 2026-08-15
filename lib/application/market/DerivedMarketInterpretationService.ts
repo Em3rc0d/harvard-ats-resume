@@ -78,6 +78,13 @@ function evidenceFor(
   };
 }
 
+function sourceFieldForEvidence(
+  observation: MarketObservation,
+  evidence: DerivedMarketEvidence,
+): ObservedMarketField | undefined {
+  return observation.explicitFields[evidence.sourceField];
+}
+
 function silentUnknown(): DerivedMarketField {
   return { status: 'UNKNOWN', reason: 'SOURCE_SILENT' };
 }
@@ -374,20 +381,24 @@ export function validateDerivedMarketInterpretation(
   );
 
   Object.values(interpretation.fields).forEach((field) => {
-    if (!field.evidence) return;
+    const derivedField = field as DerivedMarketField;
+    if (!derivedField.evidence) return;
     requireInterpretation(
-      field.evidence.marketObservationId === observation.id,
+      derivedField.evidence.marketObservationId === observation.id,
       'derived evidence points to a different MarketObservation.',
     );
-    const sourceField = observation.explicitFields[field.evidence.sourceField];
-    requireInterpretation(Boolean(sourceField), `derived evidence references absent source field ${field.evidence.sourceField}.`);
-    requireInterpretation(sourceField!.value === field.evidence.sourceValue, 'derived evidence changed the source value.');
+    const sourceField = sourceFieldForEvidence(observation, derivedField.evidence);
     requireInterpretation(
-      sourceField!.evidence.sourcePath === field.evidence.sourcePath,
+      Boolean(sourceField),
+      `derived evidence references absent source field ${derivedField.evidence.sourceField}.`,
+    );
+    requireInterpretation(sourceField!.value === derivedField.evidence.sourceValue, 'derived evidence changed the source value.');
+    requireInterpretation(
+      sourceField!.evidence.sourcePath === derivedField.evidence.sourcePath,
       'derived evidence sourcePath differs from MarketObservation evidence.',
     );
     requireInterpretation(
-      sourceField!.evidence.sourceExcerpt === field.evidence.sourceExcerpt,
+      sourceField!.evidence.sourceExcerpt === derivedField.evidence.sourceExcerpt,
       'derived evidence sourceExcerpt differs from MarketObservation evidence.',
     );
   });
