@@ -81,7 +81,8 @@ export interface DerivedMarketInterpretation {
   readonly id: DerivedMarketInterpretationId;
   readonly marketObservationId: MarketObservationId;
   readonly observationContentSha256: string;
-  readonly policyVersion: typeof MARKET_INTERPRETATION_POLICY_VERSION;
+  /** Stored as data so older policy versions remain readable after upgrades. */
+  readonly policyVersion: string;
   readonly fields: DerivedMarketInterpretationFields;
   readonly contentSha256: string;
   /** Runtime creation provenance; excluded from semantic identity. */
