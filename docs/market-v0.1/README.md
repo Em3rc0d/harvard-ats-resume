@@ -49,6 +49,9 @@ ObservationOccurrence != DerivedMarketInterpretation
 ProviderPayload != MarketObservation
 ProviderPayload != JobRequirement
 DerivedMarketInterpretation != JobRequirement
+MarketJobProjection != JobRequirement
+MarketMetadata != SyntheticRequirementText
+JobSnapshotMarketProvenance != CandidateTruth
 UNKNOWN != FALSE
 SOURCE_SILENT != INFERRED_VALUE
 ```
@@ -68,7 +71,8 @@ MARKET-04B-02A Canonical Structured Intake    COMPLETE
 MARKET-04B-02B Durable Observation History    COMPLETE
 MARKET-04B-03 Controlled Source Acquisition   COMPLETE
 MARKET-04B-04 Derived Market Interpretation   COMPLETE
-MARKET-04B-05 Job Intelligence Projection     NEXT
+MARKET-04B-05 Job Intelligence Projection     IMPLEMENTED / VALIDATION GATE
+MARKET-04B-06 Market Assessment Integration   NEXT AFTER M4B-05 CLOSES
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -80,6 +84,7 @@ The specific execution documents are the authoritative details for each later st
 - `MARKET-04B-02B-DURABLE-OBSERVATION-HISTORY.md`
 - `MARKET-04B-03-CONTROLLED-SOURCE-ACQUISITION.md`
 - `MARKET-04B-04-DERIVED-MARKET-INTERPRETATION.md`
+- `MARKET-04B-05-JOB-INTELLIGENCE-PROJECTION.md`
 
 ## MARKET-01 — Application Intelligence
 
@@ -414,23 +419,9 @@ and accepts only a canonical `MarketObservationId`. Public callers cannot provid
 
 M4B-04 is complete: interpretation identity, evidence linkage, explicit UNKNOWN semantics, deterministic re-validation, durable history, server-owned derivation inputs and the no-Job-Intelligence boundary are executable and CI-green.
 
-## Next architectural step — MARKET-04B-05
+## MARKET-04B-05 — Interpretation → Job Intelligence Projection Bridge
 
-M4B-04 answers:
-
-```text
-What may CV Engine safely derive from an observed market fact?
-```
-
-It still does not create requirements or JobSnapshots.
-
-The next boundary is therefore:
-
-```text
-MARKET-04B-05 — Interpretation → Job Intelligence Projection Bridge
-```
-
-Required direction:
+M4B-05 introduces the explicit authorization artifact between market truth and the existing ATS v2 parser:
 
 ```text
 MarketObservation
@@ -439,7 +430,7 @@ MarketObservation
 DerivedMarketInterpretation
       |
       v
-Controlled Job Projection
+MarketJobProjection
       |
       v
 Job Intelligence
@@ -448,9 +439,82 @@ Job Intelligence
 JobDescription + JobRequirements
       |
       v
-JobSnapshot
+market-provenanced JobSnapshot
 ```
 
-That gate must define exactly which source/derived dimensions may enter Job Intelligence, retain both MarketObservation and interpretation provenance, version the projection policy, and prevent extracted job requirements from ever feeding backward into candidate truth.
+`MarketJobProjection` is content-addressed and policy-versioned. It records the exact text that Job Intelligence is allowed to analyze, together with observation and interpretation identities/hashes.
 
-Broad provider polling, cross-source deduplication, lifecycle status and high-volume synchronization remain later work; the current single-snapshot market/interpretation history stores are not approved for those workloads yet.
+There are exactly two legal source-text paths:
+
+```text
+TEXT observation
+  -> exact MarketObservation.payload.content
+
+JSON observation
+  -> M4B-04 description must be KNOWN
+  -> exact description.evidence.sourceValue
+```
+
+A JSON observation with no source-explicit description fails closed.
+
+Structured metadata is not parser text. Role title and company may decorate `JobDescription` metadata, but title, company, work model, seniority, employment type, compensation and other dimensions are never concatenated into `sourceText` merely to increase parser signal.
+
+The existing deterministic `JobIntelligenceEngine` remains the only requirement extractor. M4B-05 does not create a parallel parser.
+
+Market-derived `JobSnapshot` adds optional `marketProvenance` linking:
+
+```text
+MarketObservationId
+DerivedMarketInterpretationId
+MarketJobProjectionId
+projectionPolicyVersion
+```
+
+Legacy/manual JobSnapshots remain structurally valid without market provenance.
+
+Projection history persists `MarketJobProjection + JobSnapshot` and is keyed semantically by projection + analyzer version, allowing future analyzer versions to preserve multiple historical parser results from the same authorized text. Intrinsic history validation accepts historical version strings; creation/full validation remains pinned to current policies.
+
+The runtime requires an already-durable M4B-02B observation and an already-durable current-policy M4B-04 interpretation. It does not silently create a missing interpretation.
+
+The public endpoint is:
+
+```text
+POST /api/market-job-projection
+```
+
+and accepts only `marketObservationId`. Public callers cannot provide source text, requirements, policy versions, analyzer version or JobSnapshot content.
+
+### Gate M4B-05 — PROVENANCE_BOUND_JOB_INTELLIGENCE_PROJECTION
+
+M4B-05 closes when exact-text authorization, provenance-bound JobSnapshot creation, analyzer-version history, durable prerequisite enforcement, metadata non-injection, reload-verified persistence and the no-candidate/no-match boundary are all executable and CI-green.
+
+## Next architectural step — MARKET-04B-06
+
+M4B-05 produces the first market-provenanced JobSnapshot, but deliberately does not yet feed it into application decisions.
+
+The next boundary is:
+
+```text
+MARKET-04B-06 — Market JobSnapshot → Opportunity Assessment Integration
+```
+
+Required direction:
+
+```text
+Market-provenanced JobSnapshot
+        +
+CareerSnapshot
+        |
+        v
+existing Job Match
+        |
+        v
+OpportunityAssessment
+        |
+        v
+Application Intelligence
+```
+
+M4B-06 must consume the prebuilt market JobSnapshot rather than reconstructing another snapshot, preserve the observation → interpretation → projection provenance chain through assessment history, and keep all candidate evidence authority on the CareerSnapshot side.
+
+Broad provider polling, cross-source deduplication, lifecycle status and high-volume synchronization remain later work; the current single-snapshot market/interpretation/projection history stores are not approved for those workloads yet.
