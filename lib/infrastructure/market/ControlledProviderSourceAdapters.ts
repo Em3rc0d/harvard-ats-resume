@@ -303,7 +303,17 @@ function canonicalAshbyJobUrl(value: string, boardName: string): string {
   }
 
   const segments = parsed.pathname.split('/').filter(Boolean);
-  if (segments.length < 2 || decodeURIComponent(segments[0]) !== boardName) {
+  if (segments.length < 2) {
+    throw new ControlledSourceAcquisitionError('INVALID_LOCATOR', 'Ashby jobUrl must identify a job inside the requested job board.');
+  }
+
+  let decodedBoardName: string;
+  try {
+    decodedBoardName = decodeURIComponent(segments[0]);
+  } catch {
+    throw new ControlledSourceAcquisitionError('INVALID_LOCATOR', 'Ashby jobUrl contains invalid URL path encoding.');
+  }
+  if (decodedBoardName !== boardName) {
     throw new ControlledSourceAcquisitionError('INVALID_LOCATOR', 'Ashby jobUrl must belong to the requested job board.');
   }
 
