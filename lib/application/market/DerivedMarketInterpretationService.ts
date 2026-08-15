@@ -198,6 +198,10 @@ function normalizedDate(
   const evidence = evidenceFor(observation, sourceField, field);
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const parsedDate = Date.parse(`${value}T00:00:00.000Z`);
+    if (!Number.isFinite(parsedDate) || new Date(parsedDate).toISOString().slice(0, 10) !== value) {
+      return { status: 'UNKNOWN', reason: 'INVALID_SOURCE_VALUE', evidence };
+    }
     return {
       status: 'KNOWN',
       value,
@@ -302,14 +306,28 @@ export function validateDerivedMarketInterpretationIntegrity(
     `unsupported schema version: ${interpretation.schemaVersion}`,
   );
   requireInterpretation(Boolean(interpretation.policyVersion.trim()), 'policyVersion cannot be blank.');
-  requireInterpretation(Boolean(interpretation.observationContentSha256.trim()), 'observationContentSha256 cannot be blank.');
+  requireInterpretation(
+    /^[a-f0-9]{64}$/.test(interpretation.observationContentSha256),
+    'observationContentSha256 must be a canonical SHA-256 digest.',
+  );
   requireInterpretation(Number.isFinite(Date.parse(interpretation.generatedAt)), 'generatedAt must be a valid timestamp.');
   requireInterpretation(
     interpretation.scopeBoundary === 'DERIVED_MARKET_INTERPRETATION_NOT_SOURCE_FACT_OR_JOB_REQUIREMENT',
     'scope boundary changed.',
   );
 
-  Object.entries(interpretation.fields).forEach(([label, field]) => validateFieldShape(field, label));
+  Object.entries(interpretation.fields).forEach(([label, field]) => {
+    validateFieldShape(field, label);
+    if (!field.evidence) return;
+    requireInterpretation(
+      field.evidence.marketObservationId === interpretation.marketObservationId,
+      `${label} evidence points to a different MarketObservation.`,
+    );
+    requireInterpretation(
+      field.evidence.sourceField === label,
+      `${label} evidence points to a different source field.`,
+    );
+  });
 
   const semantic = interpretationSemantic({
     marketObservationId: interpretation.marketObservationId,
