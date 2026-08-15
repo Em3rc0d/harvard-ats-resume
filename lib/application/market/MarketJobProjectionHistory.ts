@@ -47,6 +47,10 @@ function requireTimestamp(value: string, label: string): void {
   requireHistory(Number.isFinite(Date.parse(value)), `${label} must be a valid timestamp.`);
 }
 
+function semanticKey(record: MarketJobProjectionHistoryRecord): string {
+  return `${record.projection.id}:${record.jobSnapshot.analyzerVersion}`;
+}
+
 export function validateMarketJobProjectionHistorySnapshot(
   snapshot: MarketJobProjectionHistorySnapshot,
 ): void {
@@ -61,9 +65,12 @@ export function validateMarketJobProjectionHistorySnapshot(
   requireTimestamp(snapshot.createdAt, 'Market job projection history createdAt');
   requireTimestamp(snapshot.updatedAt, 'Market job projection history updatedAt');
 
-  const projectionIds = snapshot.records.map((item) => item.projection.id);
+  const semanticKeys = snapshot.records.map(semanticKey);
   const snapshotIds = snapshot.records.map((item) => item.jobSnapshot.id);
-  requireHistory(new Set(projectionIds).size === projectionIds.length, 'Projection history contains duplicate projection ids.');
+  requireHistory(
+    new Set(semanticKeys).size === semanticKeys.length,
+    'Projection history contains duplicate projection + analyzer-version records.',
+  );
   requireHistory(new Set(snapshotIds).size === snapshotIds.length, 'Projection history contains duplicate JobSnapshot ids.');
 
   snapshot.records.forEach(({ projection, jobSnapshot }) => {
@@ -132,7 +139,8 @@ export async function persistMarketJobProjection(
   const existing = await input.repository.load();
   if (existing) validateMarketJobProjectionHistorySnapshot(existing);
 
-  const prior = existing?.records.find((item) => item.projection.id === input.projection.id);
+  const key = semanticKey(incoming);
+  const prior = existing?.records.find((item) => semanticKey(item) === key);
   if (prior) {
     requireHistory(
       prior.projection.contentSha256 === input.projection.contentSha256,
@@ -141,7 +149,7 @@ export async function persistMarketJobProjection(
     requireHistory(
       prior.jobSnapshot.id === input.jobSnapshot.id
         && prior.jobSnapshot.contentSha256 === input.jobSnapshot.contentSha256,
-      'The same projection produced a different JobSnapshot under the same analyzer version.',
+      'The same projection + analyzer version produced a different JobSnapshot.',
     );
     return { snapshot: existing!, record: prior, recordAdded: false };
   }
@@ -167,7 +175,7 @@ export async function persistMarketJobProjection(
     reloaded!.revision === next.revision,
     `Expected market job projection history revision ${next.revision} but reloaded ${reloaded!.revision}.`,
   );
-  const persisted = reloaded!.records.find((item) => item.projection.id === input.projection.id);
+  const persisted = reloaded!.records.find((item) => semanticKey(item) === key);
   requireHistory(Boolean(persisted), 'Reload could not find the persisted market job projection record.');
   requireHistory(
     persisted!.jobSnapshot.id === input.jobSnapshot.id,
