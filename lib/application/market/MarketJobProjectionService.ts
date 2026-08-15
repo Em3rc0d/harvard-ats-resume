@@ -147,15 +147,13 @@ export function createMarketJobProjection(
   return projection;
 }
 
+/** Intrinsic validation accepts historical policy versions. */
 export function validateMarketJobProjectionIntegrity(projection: MarketJobProjection): void {
   requireProjection(
     projection.schemaVersion === MARKET_JOB_PROJECTION_SCHEMA_VERSION,
     `unsupported schema version: ${projection.schemaVersion}`,
   );
-  requireProjection(
-    projection.policyVersion === MARKET_JOB_PROJECTION_POLICY_VERSION,
-    `unsupported projection policy: ${projection.policyVersion}`,
-  );
+  requireProjection(Boolean(projection.policyVersion.trim()), 'projection policyVersion cannot be blank.');
   requireProjection(Boolean(projection.sourceText.trim()), 'sourceText cannot be blank.');
   requireProjection(
     projection.sourceTextOrigin === 'RAW_TEXT_PAYLOAD'
@@ -194,6 +192,7 @@ export function validateMarketJobProjectionIntegrity(projection: MarketJobProjec
   );
 }
 
+/** Full validation pins new/current projection semantics to the active policy. */
 export function validateMarketJobProjection(
   projection: MarketJobProjection,
   observation: MarketObservation,
@@ -202,6 +201,10 @@ export function validateMarketJobProjection(
   validateMarketObservation(observation);
   validateDerivedMarketInterpretation(interpretation, observation);
   validateMarketJobProjectionIntegrity(projection);
+  requireProjection(
+    projection.policyVersion === MARKET_JOB_PROJECTION_POLICY_VERSION,
+    `unsupported current projection policy: ${projection.policyVersion}`,
+  );
   requireProjection(projection.marketObservationId === observation.id, 'projection points to another MarketObservation.');
   requireProjection(
     projection.derivedMarketInterpretationId === interpretation.id,
@@ -257,16 +260,15 @@ function jobSnapshotSemantic(input: {
   };
 }
 
+/** Intrinsic validation accepts historical analyzer versions. */
 export function validateMarketProjectedJobSnapshotIntegrity(snapshot: JobSnapshot): void {
   requireProjection(Boolean(snapshot.marketProvenance), 'market-projected JobSnapshot requires market provenance.');
   requireProjection(
     snapshot.marketProvenance!.scopeBoundary === 'JOB_SNAPSHOT_MARKET_PROVENANCE_NOT_CANDIDATE_TRUTH',
     'JobSnapshot market provenance boundary changed.',
   );
-  requireProjection(
-    snapshot.analyzerVersion === JOB_INTELLIGENCE_PERSISTENCE_VERSION,
-    `unsupported Job Intelligence analyzer version: ${snapshot.analyzerVersion}`,
-  );
+  requireProjection(Boolean(snapshot.analyzerVersion.trim()), 'JobSnapshot analyzerVersion cannot be blank.');
+  requireProjection(Boolean(snapshot.marketProvenance!.projectionPolicyVersion.trim()), 'projectionPolicyVersion cannot be blank.');
   requireProjection(Boolean(snapshot.jobDescription.sourceText.trim()), 'JobSnapshot sourceText cannot be blank.');
   requireProjection(Number.isFinite(Date.parse(snapshot.capturedAt)), 'JobSnapshot capturedAt must be valid.');
 
