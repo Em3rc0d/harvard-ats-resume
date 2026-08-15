@@ -71,8 +71,8 @@ MARKET-04B-02A Canonical Structured Intake    COMPLETE
 MARKET-04B-02B Durable Observation History    COMPLETE
 MARKET-04B-03 Controlled Source Acquisition   COMPLETE
 MARKET-04B-04 Derived Market Interpretation   COMPLETE
-MARKET-04B-05 Job Intelligence Projection     IMPLEMENTED / VALIDATION GATE
-MARKET-04B-06 Market Assessment Integration   NEXT AFTER M4B-05 CLOSES
+MARKET-04B-05 Job Intelligence Projection     COMPLETE
+MARKET-04B-06 Market Assessment Integration   NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -484,9 +484,11 @@ POST /api/market-job-projection
 
 and accepts only `marketObservationId`. Public callers cannot provide source text, requirements, policy versions, analyzer version or JobSnapshot content.
 
+M4B-05 deliberately preserves the exact authorized description text. It does not silently strip or rewrite provider markup. If provider HTML materially reduces Job Intelligence quality, a future text transform must be separately versioned, source-reversible and benchmarked rather than hidden inside this bridge.
+
 ### Gate M4B-05 — PROVENANCE_BOUND_JOB_INTELLIGENCE_PROJECTION
 
-M4B-05 closes when exact-text authorization, provenance-bound JobSnapshot creation, analyzer-version history, durable prerequisite enforcement, metadata non-injection, reload-verified persistence and the no-candidate/no-match boundary are all executable and CI-green.
+M4B-05 is complete: exact-text authorization, provenance-bound JobSnapshot creation, analyzer-version history, durable prerequisite enforcement, metadata non-injection, reload-verified persistence and the no-candidate/no-match boundary are executable and CI-green.
 
 ## Next architectural step — MARKET-04B-06
 
