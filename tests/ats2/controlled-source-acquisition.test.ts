@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { MAX_SOURCE_ACQUISITION_RESPONSE_BYTES } from '../../lib/application/market/ControlledSourceAcquisition';
 import type {
   MarketObservationHistoryRepository,
   MarketObservationHistorySnapshot,
@@ -183,7 +184,76 @@ test('invalid provider-native locators fail before any network request can happe
     /jobs\.ashbyhq\.com/,
   );
 
+  await assert.rejects(
+    acquireAshbySource(
+      {
+        provider: 'ASHBY',
+        jobBoardName: 'Acme',
+        jobUrl: 'https://jobs.ashbyhq.com/%E0%A4%A/job',
+      },
+      fetcher,
+    ),
+    /invalid URL path encoding/,
+  );
+
   assert.equal(calls, 0);
+});
+
+test('provider network fetch applies GET, no-store, redirect rejection and abortable timeout policy', async () => {
+  const expectedUrl = 'https://boards-api.greenhouse.io/v1/boards/acme/jobs/12345';
+  let capturedInit: RequestInit = {};
+  const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+    const actual = typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : input.url;
+    assert.equal(actual, expectedUrl);
+    capturedInit = init ?? {};
+    return new Response(JSON.stringify(greenhousePayload), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  await acquireGreenhouseSource(
+    { provider: 'GREENHOUSE', boardToken: 'acme', jobId: '12345' },
+    fetcher,
+  );
+
+  assert.equal(capturedInit.method, 'GET');
+  assert.equal(capturedInit.redirect, 'error');
+  assert.equal(capturedInit.cache, 'no-store');
+  assert.ok(capturedInit.signal instanceof AbortSignal);
+  const headers = new Headers(capturedInit.headers);
+  assert.equal(headers.get('accept'), 'application/json');
+});
+
+test('provider response declared above the 2 MiB ceiling is rejected before canonical intake', async () => {
+  const expectedUrl = 'https://boards-api.greenhouse.io/v1/boards/acme/jobs/12345';
+  const fetcher = (async (input: string | URL | Request) => {
+    const actual = typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : input.url;
+    assert.equal(actual, expectedUrl);
+    return new Response('{}', {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        'content-length': String(MAX_SOURCE_ACQUISITION_RESPONSE_BYTES + 1),
+      },
+    });
+  }) as typeof fetch;
+
+  await assert.rejects(
+    acquireGreenhouseSource(
+      { provider: 'GREENHOUSE', boardToken: 'acme', jobId: '12345' },
+      fetcher,
+    ),
+    /Provider response exceeds/,
+  );
 });
 
 test('provider responses must be JSON and must match the requested provider identity', async () => {
