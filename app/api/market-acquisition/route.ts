@@ -6,6 +6,7 @@ import {
 } from '@/lib/application/market/ControlledSourceAcquisition';
 import { acquireControlledMarketSource } from '@/lib/application/market/ControlledSourceAcquisitionService';
 import { MarketObservationHistoryUnavailableError } from '@/lib/application/market/MarketObservationHistory';
+import { acquireProviderMarketIntake } from '@/lib/infrastructure/market/ControlledProviderSourceAdapters';
 import { createMarketObservationHistoryRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashMarketObservationHistoryRepository';
 import { getRateLimitHeaders, rateLimitPublicApiRequest } from '@/lib/rate-limit';
 
@@ -150,7 +151,10 @@ export async function POST(request: NextRequest) {
     const repository = createMarketObservationHistoryRepositoryFromEnv();
     const result = await acquireControlledMarketSource(
       validation.data as ControlledSourceAcquisitionRequest,
-      { repository },
+      {
+        repository,
+        acquirer: (sourceRequest) => acquireProviderMarketIntake(sourceRequest, fetch),
+      },
     );
 
     return NextResponse.json(
