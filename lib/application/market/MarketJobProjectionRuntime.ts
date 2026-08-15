@@ -1,5 +1,7 @@
 import {
   MARKET_INTERPRETATION_POLICY_VERSION,
+  type JobSnapshot,
+  type MarketJobProjection,
   type MarketObservationId,
 } from '../../domain';
 import {
@@ -14,8 +16,8 @@ import {
 } from './MarketJobProjectionHistory';
 import {
   projectMarketToJobIntelligence,
-  type MarketJobProjectionResult,
 } from './MarketJobProjectionService';
+import type { JobIntelligenceResult } from '../job/JobIntelligenceEngine';
 import {
   validateMarketObservationHistorySnapshot,
   type MarketObservationHistoryRepository,
@@ -38,7 +40,10 @@ export interface MarketJobProjectionRuntimeDependencies {
   readonly projectedAt?: string;
 }
 
-export interface MarketJobProjectionRuntimeResult extends MarketJobProjectionResult {
+export interface MarketJobProjectionRuntimeResult {
+  readonly projection: MarketJobProjection;
+  readonly jobIntelligence: JobIntelligenceResult;
+  readonly jobSnapshot: JobSnapshot;
   readonly projectionHistory: PersistMarketJobProjectionResult;
   readonly persistence: 'DURABLE_MARKET_JOB_PROJECTION_M4B_05';
   readonly scopeBoundary: 'DURABLE_JOB_INTELLIGENCE_PROJECTION_NOT_CANDIDATE_TRUTH_OR_MATCH';
@@ -99,7 +104,9 @@ export async function projectDurableMarketObservationToJobIntelligence(
   });
 
   return {
-    ...projected,
+    projection: projected.projection,
+    jobIntelligence: projected.jobIntelligence,
+    jobSnapshot: projected.jobSnapshot,
     projectionHistory,
     persistence: 'DURABLE_MARKET_JOB_PROJECTION_M4B_05',
     scopeBoundary: 'DURABLE_JOB_INTELLIGENCE_PROJECTION_NOT_CANDIDATE_TRUTH_OR_MATCH',
