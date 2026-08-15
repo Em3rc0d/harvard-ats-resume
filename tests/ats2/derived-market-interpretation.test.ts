@@ -12,6 +12,7 @@ import {
 import {
   deriveMarketInterpretation,
   validateDerivedMarketInterpretation,
+  validateDerivedMarketInterpretationIntegrity,
 } from '../../lib/application/market/DerivedMarketInterpretationService';
 import { interpretMarketObservation } from '../../lib/application/market/MarketInterpretationService';
 import {
@@ -99,6 +100,18 @@ function providerObservation(overrides: {
   });
 }
 
+function textOnlyObservation() {
+  return createMarketObservation({
+    source: { type: 'MANUAL_TEXT', label: 'Text-only job description' },
+    payload: {
+      format: 'TEXT',
+      content: 'Senior Remote Engineer\nThis is a full-time remote role requiring TypeScript.',
+    },
+    provenance: { captureMethod: 'USER_SUPPLIED_TEXT' },
+    observedAt: '2026-08-15T15:00:00.000Z',
+  });
+}
+
 test('M4B-04 normalizes only source-explicit fields and keeps exact evidence links', () => {
   const observation = providerObservation({
     workModel: 'Híbrido',
@@ -150,12 +163,20 @@ test('source silence remains UNKNOWN even when title or description contains tem
   assert.equal(interpretation.fields.description.status, 'KNOWN');
 });
 
+test('text-only observations remain structurally UNKNOWN instead of mining free text for fields', () => {
+  const interpretation = deriveMarketInterpretation(textOnlyObservation());
+
+  Object.values(interpretation.fields).forEach((field) => {
+    assert.deepEqual(field, { status: 'UNKNOWN', reason: 'SOURCE_SILENT' });
+  });
+});
+
 test('unrecognized and invalid source values remain UNKNOWN with evidence instead of being guessed', () => {
   const observation = providerObservation({
     workModel: 'Flexible anywhere-ish',
     employmentType: 'Permanent-ish',
     seniority: 'Staff',
-    postedAt: 'sometime next week',
+    postedAt: '2026-99-99',
   });
   const interpretation = deriveMarketInterpretation(observation);
 
@@ -191,6 +212,9 @@ test('changed source semantic state produces a different derived interpretation 
 test('tampered derived values fail full validation against the authoritative observation', () => {
   const observation = providerObservation({ workModel: 'remote' });
   const interpretation = deriveMarketInterpretation(observation);
+  if (interpretation.fields.workModel.status !== 'KNOWN') {
+    assert.fail('fixture must produce a known workModel');
+  }
   const tampered = {
     ...interpretation,
     fields: {
@@ -199,9 +223,7 @@ test('tampered derived values fail full validation against the authoritative obs
         status: 'KNOWN' as const,
         value: 'ONSITE' as const,
         derivation: 'CONTROLLED_CLASSIFICATION' as const,
-        evidence: interpretation.fields.workModel.status === 'KNOWN'
-          ? interpretation.fields.workModel.evidence
-          : undefined!,
+        evidence: interpretation.fields.workModel.evidence,
       },
     },
   };
@@ -209,6 +231,32 @@ test('tampered derived values fail full validation against the authoritative obs
   assert.throws(
     () => validateDerivedMarketInterpretation(tampered, observation),
     /content hash mismatch|derived fields do not match deterministic policy output/,
+  );
+});
+
+test('intrinsic interpretation integrity rejects evidence that points to another source field', () => {
+  const observation = providerObservation({ workModel: 'remote' });
+  const interpretation = deriveMarketInterpretation(observation);
+  if (interpretation.fields.workModel.status !== 'KNOWN') {
+    assert.fail('fixture must produce a known workModel');
+  }
+  const corrupted = {
+    ...interpretation,
+    fields: {
+      ...interpretation.fields,
+      workModel: {
+        ...interpretation.fields.workModel,
+        evidence: {
+          ...interpretation.fields.workModel.evidence,
+          sourceField: 'roleTitle' as const,
+        },
+      },
+    },
+  };
+
+  assert.throws(
+    () => validateDerivedMarketInterpretationIntegrity(corrupted),
+    /evidence points to a different source field/,
   );
 });
 
