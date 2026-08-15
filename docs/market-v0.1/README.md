@@ -48,6 +48,9 @@ ObservationOccurrence != MarketObservation
 ObservationOccurrence != DerivedMarketInterpretation
 ProviderPayload != MarketObservation
 ProviderPayload != JobRequirement
+DerivedMarketInterpretation != JobRequirement
+UNKNOWN != FALSE
+SOURCE_SILENT != INFERRED_VALUE
 ```
 
 A market requirement can influence analysis. It can never authorize a new candidate assertion.
@@ -64,7 +67,8 @@ MARKET-04B-01 Market Observation Canon        COMPLETE
 MARKET-04B-02A Canonical Structured Intake    COMPLETE
 MARKET-04B-02B Durable Observation History    COMPLETE
 MARKET-04B-03 Controlled Source Acquisition   COMPLETE
-MARKET-04B-04 Derived Market Interpretation   NEXT
+MARKET-04B-04 Derived Market Interpretation   COMPLETE
+MARKET-04B-05 Job Intelligence Projection     NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -75,6 +79,7 @@ The specific execution documents are the authoritative details for each later st
 - `MARKET-04B-02A-STRUCTURED-MARKET-INTAKE.md`
 - `MARKET-04B-02B-DURABLE-OBSERVATION-HISTORY.md`
 - `MARKET-04B-03-CONTROLLED-SOURCE-ACQUISITION.md`
+- `MARKET-04B-04-DERIVED-MARKET-INTERPRETATION.md`
 
 ## MARKET-01 — Application Intelligence
 
@@ -356,24 +361,73 @@ Provider mappings are deliberately conservative. Provider fields whose semantics
 
 A supported public provider listing can now enter CV Engine through a bounded, source-aware, provenance-preserving acquisition path while arbitrary URL fetch, candidate coupling, Job Intelligence, matching, OpportunityAssessment and OpportunitySpace remain outside the acquisition boundary.
 
-## Next architectural step — MARKET-04B-04
+## MARKET-04B-04 — Derived Market Interpretation Boundary
 
-M4B-03 answers:
-
-```text
-Where can trustworthy market source material enter?
-```
-
-The next missing question is:
+M4B-04 introduces the first explicit object for what CV Engine derives from market truth:
 
 ```text
-How may CV Engine interpret that observed material without confusing interpretation with source fact?
+MarketObservation
+      |
+      v
+DerivedMarketInterpretation
 ```
+
+The interpretation is bound to the exact `MarketObservationId`, its content hash and an explicit interpretation policy version. Semantic identity is content-addressed while `generatedAt` remains runtime provenance and cannot manufacture a new interpretation.
+
+Every derived dimension is explicitly either `KNOWN` or `UNKNOWN`.
+
+UNKNOWN is not a generic null. It records why the engine refused to manufacture a value:
+
+```text
+SOURCE_SILENT
+UNRECOGNIZED_SOURCE_VALUE
+INVALID_SOURCE_VALUE
+```
+
+Every KNOWN value retains the exact source field, source value and source-path/excerpt evidence from the authoritative MarketObservation.
+
+The deterministic v1 policy admits only:
+
+```text
+NORMALIZED_EXPLICIT
+CONTROLLED_CLASSIFICATION
+ISO_DATE_NORMALIZATION
+```
+
+Current controlled classifications cover explicit work model, employment type and seniority values. Text normalization covers source-explicit company/title/location/compensation/description. Date normalization is limited to unambiguous date-only values or timezone-aware ISO timestamps.
+
+M4B-04 deliberately forbids cross-field inference. A role title containing `Senior` or `Remote` does not fill missing seniority/work-model fields; free description text cannot fill missing structured dimensions. A text-only MarketObservation can therefore produce many UNKNOWN fields and still be a correct interpretation.
+
+Full validation re-derives the interpretation against the authoritative MarketObservation. This prevents a caller from changing a derived value and merely recomputing a content hash.
+
+A separate durable interpretation-history aggregate preserves what policy vN derived from each observation, distinct from the observation history that preserves what the source actually said. Exact regeneration is idempotent; changed source state or future policy versions preserve prior interpretation history.
+
+The runtime endpoint is:
+
+```text
+POST /api/market-interpretation
+```
+
+and accepts only a canonical `MarketObservationId`. Public callers cannot provide derived values, policy version, evidence or generation time.
+
+### Gate M4B-04 — EVIDENCE_BOUND_DERIVED_MARKET_INTERPRETATION
+
+M4B-04 is complete: interpretation identity, evidence linkage, explicit UNKNOWN semantics, deterministic re-validation, durable history, server-owned derivation inputs and the no-Job-Intelligence boundary are executable and CI-green.
+
+## Next architectural step — MARKET-04B-05
+
+M4B-04 answers:
+
+```text
+What may CV Engine safely derive from an observed market fact?
+```
+
+It still does not create requirements or JobSnapshots.
 
 The next boundary is therefore:
 
 ```text
-MARKET-04B-04 — Derived Market Interpretation Boundary
+MARKET-04B-05 — Interpretation → Job Intelligence Projection Bridge
 ```
 
 Required direction:
@@ -382,23 +436,21 @@ Required direction:
 MarketObservation
       |
       v
-Derived Market Interpretation
+DerivedMarketInterpretation
+      |
+      v
+Controlled Job Projection
       |
       v
 Job Intelligence
       |
       v
+JobDescription + JobRequirements
+      |
+      v
 JobSnapshot
 ```
 
-The next gate must define typed derived concepts, evidence links back to exact MarketObservation fields/payload, interpretation policy/versioning, explicit unknown/absence semantics, and the controlled bridge into existing Job Intelligence.
+That gate must define exactly which source/derived dimensions may enter Job Intelligence, retain both MarketObservation and interpretation provenance, version the projection policy, and prevent extracted job requirements from ever feeding backward into candidate truth.
 
-It must still preserve:
-
-```text
-observed source fact != derived interpretation
-missing source fact != invented value
-derived job truth != candidate truth
-```
-
-Broad provider polling, cross-source deduplication, lifecycle status and high-volume synchronization remain later work; the M4B-02B single-snapshot history store is not approved for those workloads yet.
+Broad provider polling, cross-source deduplication, lifecycle status and high-volume synchronization remain later work; the current single-snapshot market/interpretation history stores are not approved for those workloads yet.
