@@ -137,7 +137,7 @@ test('structured intake rejects empty or blank-only market facts', () => {
   }), /roleTitle cannot be blank/);
 });
 
-test('MarketIntake result has no candidate identity and makes no durability or derived-analysis claim', () => {
+test('MarketIntake pure result has no candidate identity and makes no durability or derived-analysis claim', () => {
   const result = intakeMarketObservation({
     kind: 'STRUCTURED_PAYLOAD',
     job: { roleTitle: 'Backend Engineer' },
@@ -163,19 +163,22 @@ test('market-intake public API keeps observedAt server-owned instead of acceptin
   assert.match(route, /server runtime observation time/);
 });
 
-test('market-intake API is bounded and does not fetch URLs or invoke downstream intelligence', () => {
+test('market-intake API is bounded, persists history after canonical intake, and still invokes no downstream intelligence', () => {
   const route = source('app/api/market-intake/route.ts');
   const contentLengthAt = route.indexOf("request.headers.get('content-length')");
   const rateLimitAt = route.indexOf("await rateLimitPublicApiRequest(request.headers, 'market-intake')");
   const jsonAt = route.indexOf('await request.json()');
   const intakeAt = route.indexOf('intakeMarketObservation(validation.data)');
+  const persistAt = route.indexOf('await persistMarketObservationHistory');
 
-  assert.ok(contentLengthAt >= 0 && rateLimitAt >= 0 && jsonAt >= 0 && intakeAt >= 0);
+  assert.ok(contentLengthAt >= 0 && rateLimitAt >= 0 && jsonAt >= 0 && intakeAt >= 0 && persistAt >= 0);
   assert.ok(contentLengthAt < rateLimitAt);
   assert.ok(rateLimitAt < jsonAt);
   assert.ok(jsonAt < intakeAt);
+  assert.ok(intakeAt < persistAt);
   assert.match(route, /1024 \* 1024/);
   assert.doesNotMatch(route, /\bfetch\s*\(/);
-  assert.doesNotMatch(route, /analyzeJobDescription|matchJobToCandidate|persistMarket|persistOpportunity/);
-  assert.match(route, /NOT_PERSISTED|does not fetch URLs|does not fetch/);
+  assert.doesNotMatch(route, /analyzeJobDescription|matchJobToCandidate|persistOpportunity/);
+  assert.match(route, /DURABLE_OBSERVATION_HISTORY_M4B_02B/);
+  assert.match(route, /reload-verifies durability|reload-verif/i);
 });

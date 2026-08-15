@@ -44,6 +44,8 @@ TargetRelevance != JobMatch
 OpportunityPriority != JobMatch
 MarketObservation != DerivedMarketInterpretation
 MarketIntakeRequest != MarketObservation
+ObservationOccurrence != MarketObservation
+ObservationOccurrence != DerivedMarketInterpretation
 ```
 
 A market requirement can influence analysis. It can never authorize a new candidate assertion.
@@ -58,7 +60,8 @@ MARKET-03 CareerTarget / Relevance            COMPLETE
 MARKET-04A OpportunitySpace                   COMPLETE
 MARKET-04B-01 Market Observation Canon        COMPLETE
 MARKET-04B-02A Canonical Structured Intake    COMPLETE
-MARKET-04B-02B Durable Observation History    NEXT
+MARKET-04B-02B Durable Observation History    COMPLETE
+MARKET-04B-03 Controlled Source Acquisition   NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -67,6 +70,7 @@ The specific execution documents are the authoritative details for each later st
 - `MARKET-04-OPPORTUNITY-SPACE.md`
 - `MARKET-04B-01-MARKET-OBSERVATION-CANON.md`
 - `MARKET-04B-02A-STRUCTURED-MARKET-INTAKE.md`
+- `MARKET-04B-02B-DURABLE-OBSERVATION-HISTORY.md`
 
 ## MARKET-01 — Application Intelligence
 
@@ -226,21 +230,21 @@ Manual text remains raw text and creates no inferred structured market fields. A
 
 An optional URL is only a user-supplied source reference in M4B-02A. The intake route performs no network fetch. Public callers also cannot supply `observedAt`; CV Engine assigns the runtime observation timestamp so provenance time is not caller-forgeable.
 
-The route explicitly makes no durability claim:
+The pure M4B-02A application service deliberately still returns:
 
 ```text
 persistence = NOT_PERSISTED_M4B_02A
 ```
 
+because canonicalization and durability remain separate application responsibilities. After M4B-02B, the public HTTP route composes canonical intake with durable observation history before returning success.
+
 ### Gate M4B-02A — CANONICAL_PROVENANCE_PRESERVING_MARKET_INTAKE
 
-Manual text and structured payloads converge through one service, provenance remains controlled, caller key ordering is non-semantic for structured input, candidate truth remains disconnected, and no Job Intelligence, matching, ranking, persistence or market acquisition is performed.
+Manual text and structured payloads converge through one service, provenance remains controlled, caller key ordering is non-semantic for structured input, candidate truth remains disconnected, and no Job Intelligence, matching, ranking or market acquisition is performed.
 
-## Next architectural step — MARKET-04B-02B
+## MARKET-04B-02B — Durable Observation History
 
-The next boundary is **Durable Observation History**.
-
-M4B-01 established semantic market state and M4B-02A established how controlled input becomes that state. M4B-02B must now distinguish the immutable semantic state from the fact that CV Engine observed it at one or more moments:
+M4B-02B separates immutable semantic market state from temporal observation events:
 
 ```text
 MarketObservation
@@ -250,16 +254,98 @@ MarketObservation
       `-- ObservationOccurrence C
 ```
 
-Required behavior:
+Required behavior is now explicit and executable:
 
 ```text
 same semantic source content observed again
 => same MarketObservation identity
-=> new observation occurrence
+=> new ObservationOccurrence
 
 changed source content
 => new MarketObservation identity
-=> prior state remains preserved
+=> prior MarketObservation remains preserved
+
+same semantic observation + exact same observedAt replay
+=> same ObservationOccurrence
+=> no duplicate / no revision increment
 ```
 
-This history boundary should be completed before URL acquisition/provider adapters so freshness, updates and later lifecycle status do not depend on overwritten or ambiguous source state.
+`ObservationOccurrence` is content-addressed from the semantic observation identity plus the server-owned observation timestamp. It carries the boundary:
+
+```text
+OBSERVATION_EVENT_NOT_SEMANTIC_MARKET_STATE
+```
+
+The durable aggregate stores validated `MarketObservation[]` and `ObservationOccurrence[]`. Every occurrence must reference a stored observation, every observation must have at least one occurrence, duplicate identifiers are rejected, and loaded history is revalidated before any merge.
+
+The first persistence adapter stores one versioned history snapshot in Upstash and reload-verifies the exact revision, observation and occurrence before success is claimed.
+
+The public `/api/market-intake` flow is now:
+
+```text
+bounded request
+      ↓
+rate limit
+      ↓
+strict intake schema
+      ↓
+MarketIntakeService
+      ↓
+MarketObservation
+      ↓
+Durable Observation History
+      ↓
+reload + integrity verification
+      ↓
+HTTP 200
+```
+
+A successful public response reports:
+
+```text
+persistence = DURABLE_OBSERVATION_HISTORY_M4B_02B
+```
+
+Missing durable storage configuration fails closed instead of falling back to a false durability claim.
+
+### Gate M4B-02B — DURABLE_SEMANTIC_STATE_AND_OCCURRENCE_HISTORY
+
+Semantic market state and observation events are now independently addressable, historical states are append-preserving, exact replay is idempotent, persistence is reload-verified, and no candidate/Job Intelligence/Opportunity decision boundary is crossed.
+
+## Next architectural step — MARKET-04B-03
+
+The market foundation can now begin **Controlled Source Acquisition**.
+
+The next adapters must enter through the existing source-aware boundary rather than bypass it:
+
+```text
+External Source
+      |
+      v
+Source Adapter
+      |
+      v
+Canonical Market Intake
+      |
+      v
+MarketObservation
+      |
+      v
+ObservationOccurrence History
+```
+
+The first controlled provider/source integrations can then be added one by one, keeping exact payload/provenance and durable occurrence history before any derived interpretation.
+
+Hard rule for M4B-03:
+
+```text
+provider data
+!=
+JobRequirement
+!=
+CandidateEvidence
+```
+
+Provider acquisition may create source observations. It may not directly create candidate truth, Job Match, OpportunityAssessment, ranking, or recommendations.
+
+Derived Market Interpretation and the formal `MarketObservation -> Job Intelligence -> JobSnapshot` bridge remain a later gate after acquisition itself is trustworthy.

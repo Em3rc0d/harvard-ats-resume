@@ -9,6 +9,7 @@ export * from './job/JobRequirement';
 export * from './job/JobSnapshot';
 export * from './market/MarketObservation';
 export * from './market/MarketSource';
+export * from './market/ObservationOccurrence';
 export * from './matching/MatchReport';
 export * from './matching/RequirementMatch';
 export * from './opportunity/OpportunitySpace';
