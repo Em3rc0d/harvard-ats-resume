@@ -52,6 +52,7 @@ DerivedMarketInterpretation != JobRequirement
 MarketJobProjection != JobRequirement
 MarketMetadata != SyntheticRequirementText
 JobSnapshotMarketProvenance != CandidateTruth
+OpportunityAssessment != CandidateTruth
 UNKNOWN != FALSE
 SOURCE_SILENT != INFERRED_VALUE
 ```
@@ -72,7 +73,8 @@ MARKET-04B-02B Durable Observation History    COMPLETE
 MARKET-04B-03 Controlled Source Acquisition   COMPLETE
 MARKET-04B-04 Derived Market Interpretation   COMPLETE
 MARKET-04B-05 Job Intelligence Projection     COMPLETE
-MARKET-04B-06 Market Assessment Integration   NEXT
+MARKET-04B-06 Market Assessment Integration   COMPLETE
+MARKET-04B-07 Opportunity Identity/Lifecycle  NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -85,6 +87,7 @@ The specific execution documents are the authoritative details for each later st
 - `MARKET-04B-03-CONTROLLED-SOURCE-ACQUISITION.md`
 - `MARKET-04B-04-DERIVED-MARKET-INTERPRETATION.md`
 - `MARKET-04B-05-JOB-INTELLIGENCE-PROJECTION.md`
+- `MARKET-04B-06-MARKET-ASSESSMENT-INTEGRATION.md`
 
 ## MARKET-01 — Application Intelligence
 
@@ -490,33 +493,72 @@ M4B-05 deliberately preserves the exact authorized description text. It does not
 
 M4B-05 is complete: exact-text authorization, provenance-bound JobSnapshot creation, analyzer-version history, durable prerequisite enforcement, metadata non-injection, reload-verified persistence and the no-candidate/no-match boundary are executable and CI-green.
 
-## Next architectural step — MARKET-04B-06
+## MARKET-04B-06 — Market JobSnapshot → Opportunity Assessment Integration
 
-M4B-05 produces the first market-provenanced JobSnapshot, but deliberately does not yet feed it into application decisions.
-
-The next boundary is:
+M4B-06 makes the exact durable M4B-05 `JobSnapshot` the job-side authority for Application Intelligence:
 
 ```text
-MARKET-04B-06 — Market JobSnapshot → Opportunity Assessment Integration
+market-provenanced JobSnapshot
+             +
+      CareerAssertions
+             |
+             v
+          Job Match
+             |
+             v
+   OpportunityAssessment
+             |
+             v
+     OpportunityHistory
 ```
 
-Required direction:
+The governing rule is:
 
 ```text
-Market-provenanced JobSnapshot
-        +
-CareerSnapshot
-        |
-        v
-existing Job Match
-        |
-        v
-OpportunityAssessment
-        |
-        v
-Application Intelligence
+CONSUME THE EXACT JOB SNAPSHOT; DO NOT REPARSE OR REBUILD IT.
 ```
 
-M4B-06 must consume the prebuilt market JobSnapshot rather than reconstructing another snapshot, preserve the observation → interpretation → projection provenance chain through assessment history, and keep all candidate evidence authority on the CareerSnapshot side.
+A dedicated `POST /api/assess-market-opportunity` route accepts candidate data, Career Target and an exact content-addressed `jobSnapshotId`. It does not accept `jobDescription`, source text, requirements, analyzer version, projection policy or market observation overrides.
 
-Broad provider polling, cross-source deduplication, lifecycle status and high-volume synchronization remain later work; the current single-snapshot market/interpretation/projection history stores are not approved for those workloads yet.
+The runtime resolves the exact snapshot from durable M4B-05 projection history and validates the projection/snapshot graph before matching. The assessment service builds only a read-only Job Intelligence view over the stored `jobDescription`, `requirements` and `language`; it never calls the Job Intelligence parser.
+
+Candidate authority remains separate. Existing `CareerAssertion[]` are read-only inputs to Job Match, and job requirements never become candidate assertions or evidence.
+
+OpportunityHistory now has an additive market-snapshot path. Legacy/manual assessments preserve their prior hash semantics, while market-provenanced snapshots are validated using the stricter M4B-05 content address. The market path rejects requirement-set mismatch and persists/reload-verifies the same `JobSnapshotId` rather than manufacturing a replacement snapshot.
+
+Stable market MatchReport identity derives from semantic candidate snapshot state + exact market JobSnapshot content + Job Match engine version, so repeated assessment of unchanged semantic state remains history-idempotent across runtime timestamps.
+
+### Gate M4B-06 — EXACT_MARKET_JOB_SNAPSHOT_ASSESSMENT_INTEGRATION
+
+M4B-06 is complete: an exact durable M4B-05 JobSnapshot can be selected by id, matched against candidate assertions without re-parsing, preserved unchanged in OpportunityHistory, linked to a durable OpportunityAssessment, and target relevance remains separate from capability matching.
+
+## Next architectural step — MARKET-04B-07
+
+The first trust-preserving market-to-decision chain now exists:
+
+```text
+External Source
+→ MarketObservation
+→ DerivedMarketInterpretation
+→ MarketJobProjection
+→ JobSnapshot
+→ Job Match
+→ OpportunityAssessment
+```
+
+The next major gap is no longer parser integration. It is:
+
+```text
+MARKET-04B-07 — Logical Opportunity Identity + Lifecycle / Freshness
+```
+
+CV Engine currently preserves immutable source states, but it still needs a controlled model for:
+
+- when multiple observations/snapshots are states of the same logical opportunity;
+- whether a listing is `OPEN`, `STALE`, `CLOSED` or `UNKNOWN`;
+- how recency and source evidence affect lifecycle state;
+- how material changes create new state without rewriting history;
+- when OpportunitySpace must refuse to prioritize a stale/closed opportunity;
+- how cross-source identity can remain conservative instead of fuzzy/guessed.
+
+Provider-scale polling and high-concurrency synchronization remain later work; the current single-snapshot market/interpretation/projection persistence stores are still not approved for parallel provider workers.
