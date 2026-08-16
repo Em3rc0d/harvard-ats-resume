@@ -17,6 +17,9 @@ import {
   stableJson,
 } from '../career-vault/CareerVaultIdentity';
 import type { JobIntelligenceResult } from '../job/JobIntelligenceEngine';
+import {
+  validateMarketProjectedJobSnapshotIntegrity,
+} from '../market/MarketJobProjectionService';
 import type { JobMatchBreakdown, JobMatchResult } from '../matching/JobMatchEngine';
 import {
   OPPORTUNITY_ASSESSMENT_POLICY_VERSION,
@@ -63,15 +66,23 @@ export interface OpportunityHistoryRepository {
   save(snapshot: OpportunityHistorySnapshot): Promise<void>;
 }
 
-export interface BuildOpportunityHistoryInput {
+interface CandidateHistoryTruthInput {
   readonly candidate: CandidateProfile;
   readonly sources: readonly CareerSource[];
   readonly evidence: readonly CareerEvidence[];
   readonly assertions: readonly CareerAssertion[];
-  readonly jobIntelligence: JobIntelligenceResult;
   readonly jobMatch: JobMatchResult;
   readonly assessment: OpportunityAssessment;
   readonly capturedAt: string;
+}
+
+export interface BuildOpportunityHistoryInput extends CandidateHistoryTruthInput {
+  readonly jobIntelligence: JobIntelligenceResult;
+}
+
+export interface BuildOpportunityHistoryFromJobSnapshotInput extends CandidateHistoryTruthInput {
+  /** Exact prebuilt snapshot. M4B-06 must not reconstruct this object. */
+  readonly jobSnapshot: JobSnapshot;
 }
 
 export interface OpportunityHistoryArtifacts {
@@ -81,6 +92,10 @@ export interface OpportunityHistoryArtifacts {
 }
 
 export interface PersistOpportunityHistoryInput extends BuildOpportunityHistoryInput {
+  readonly repository: OpportunityHistoryRepository;
+}
+
+export interface PersistOpportunityHistoryFromJobSnapshotInput extends BuildOpportunityHistoryFromJobSnapshotInput {
   readonly repository: OpportunityHistoryRepository;
 }
 
@@ -166,9 +181,7 @@ function assessmentRecordHash(input: {
   });
 }
 
-export function buildOpportunityHistoryArtifacts(
-  input: BuildOpportunityHistoryInput,
-): OpportunityHistoryArtifacts {
+function validateAssessmentInput(input: CandidateHistoryTruthInput, jobDescriptionId: string): void {
   requireHistory(
     input.assessment.policyVersion === OPPORTUNITY_ASSESSMENT_POLICY_VERSION,
     'OpportunityAssessment policy version is not supported by this history writer.',
@@ -178,10 +191,12 @@ export function buildOpportunityHistoryArtifacts(
     'Job Match belongs to a different candidate than the CareerSnapshot.',
   );
   requireHistory(
-    input.jobMatch.report.jobDescriptionId === input.jobIntelligence.jobDescription.id,
+    input.jobMatch.report.jobDescriptionId === jobDescriptionId,
     'Job Match belongs to a different job than the JobSnapshot.',
   );
+}
 
+function buildCareerSnapshot(input: CandidateHistoryTruthInput): CareerSnapshot {
   const careerHash = careerSnapshotHash({
     candidate: input.candidate,
     sources: input.sources,
@@ -198,21 +213,15 @@ export function buildOpportunityHistoryArtifacts(
     contentSha256: careerHash,
     capturedAt: input.capturedAt,
   };
+  validateCareerSnapshot(careerSnapshot);
+  return careerSnapshot;
+}
 
-  const jobHash = jobSnapshotHash({
-    jobIntelligence: input.jobIntelligence,
-    analyzerVersion: JOB_INTELLIGENCE_PERSISTENCE_VERSION,
-  });
-  const jobSnapshot: JobSnapshot = {
-    id: domainId('JobSnapshot', `job-snapshot:${jobHash.slice(0, 32)}`),
-    jobDescription: input.jobIntelligence.jobDescription,
-    requirements: [...input.jobIntelligence.requirements],
-    language: input.jobIntelligence.language,
-    analyzerVersion: JOB_INTELLIGENCE_PERSISTENCE_VERSION,
-    contentSha256: jobHash,
-    capturedAt: input.capturedAt,
-  };
-
+function buildAssessmentRecord(
+  input: CandidateHistoryTruthInput,
+  careerSnapshot: CareerSnapshot,
+  jobSnapshot: JobSnapshot,
+): PersistedOpportunityAssessment {
   const recordHash = assessmentRecordHash({
     careerSnapshotId: careerSnapshot.id,
     jobSnapshotId: jobSnapshot.id,
@@ -232,16 +241,65 @@ export function buildOpportunityHistoryArtifacts(
     contentSha256: recordHash,
     createdAt: input.capturedAt,
   };
-
-  validateCareerSnapshot(careerSnapshot);
-  validateJobSnapshot(jobSnapshot);
   validatePersistedOpportunityAssessment(
     assessmentRecord,
     new Map([[careerSnapshot.id, careerSnapshot]]),
     new Map([[jobSnapshot.id, jobSnapshot]]),
   );
+  return assessmentRecord;
+}
 
+export function buildOpportunityHistoryArtifacts(
+  input: BuildOpportunityHistoryInput,
+): OpportunityHistoryArtifacts {
+  validateAssessmentInput(input, input.jobIntelligence.jobDescription.id);
+  const careerSnapshot = buildCareerSnapshot(input);
+
+  const jobHash = jobSnapshotHash({
+    jobIntelligence: input.jobIntelligence,
+    analyzerVersion: JOB_INTELLIGENCE_PERSISTENCE_VERSION,
+  });
+  const jobSnapshot: JobSnapshot = {
+    id: domainId('JobSnapshot', `job-snapshot:${jobHash.slice(0, 32)}`),
+    jobDescription: input.jobIntelligence.jobDescription,
+    requirements: [...input.jobIntelligence.requirements],
+    language: input.jobIntelligence.language,
+    analyzerVersion: JOB_INTELLIGENCE_PERSISTENCE_VERSION,
+    contentSha256: jobHash,
+    capturedAt: input.capturedAt,
+  };
+  validateJobSnapshot(jobSnapshot);
+
+  const assessmentRecord = buildAssessmentRecord(input, careerSnapshot, jobSnapshot);
   return { careerSnapshot, jobSnapshot, assessmentRecord };
+}
+
+/**
+ * M4B-06 history bridge. The supplied market-provenanced JobSnapshot is the
+ * authority for the job side of the assessment. It is validated and linked
+ * directly; no Job Intelligence parser or replacement snapshot is invoked.
+ */
+export function buildOpportunityHistoryArtifactsFromJobSnapshot(
+  input: BuildOpportunityHistoryFromJobSnapshotInput,
+): OpportunityHistoryArtifacts {
+  validateAssessmentInput(input, input.jobSnapshot.jobDescription.id);
+  validateJobSnapshot(input.jobSnapshot);
+  requireHistory(
+    Boolean(input.jobSnapshot.marketProvenance),
+    'M4B-06 requires a market-provenanced JobSnapshot from M4B-05.',
+  );
+  requireHistory(
+    semanticHash(input.jobMatch.requirements) === semanticHash(input.jobSnapshot.requirements),
+    'Job Match requirements differ from the exact prebuilt market JobSnapshot.',
+  );
+
+  const careerSnapshot = buildCareerSnapshot(input);
+  const assessmentRecord = buildAssessmentRecord(input, careerSnapshot, input.jobSnapshot);
+  return {
+    careerSnapshot,
+    jobSnapshot: input.jobSnapshot,
+    assessmentRecord,
+  };
 }
 
 function validateCareerSnapshot(snapshot: CareerSnapshot): void {
@@ -287,6 +345,18 @@ function validateJobSnapshot(snapshot: JobSnapshot): void {
     `JobSnapshot ${snapshot.id} requirement ${requirement.id} references another JobDescription.`,
   ));
 
+  if (snapshot.marketProvenance) {
+    try {
+      validateMarketProjectedJobSnapshotIntegrity(snapshot);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown market snapshot integrity failure';
+      throw new OpportunityHistoryIntegrityError(
+        `JobSnapshot ${snapshot.id} failed market provenance validation: ${message}`,
+      );
+    }
+    return;
+  }
+
   const expectedHash = semanticHash({
     jobDescription: snapshot.jobDescription,
     requirements: snapshot.requirements,
@@ -313,6 +383,10 @@ function validatePersistedOpportunityAssessment(
 
   const requirementIds = new Set(job!.requirements.map((item) => item.id));
   const assertionIds = new Set(career!.assertions.map((item) => item.id));
+  requireHistory(
+    record.matchReport.matches.length === job!.requirements.length,
+    `OpportunityAssessment ${record.id} MatchReport does not cover the exact JobSnapshot requirement set.`,
+  );
   record.matchReport.matches.forEach((match) => {
     requireHistory(requirementIds.has(match.requirementId), `OpportunityAssessment ${record.id} MatchReport references requirement outside its JobSnapshot.`);
     match.assertionIds.forEach((id) => requireHistory(assertionIds.has(id), `OpportunityAssessment ${record.id} MatchReport references assertion outside its CareerSnapshot.`));
@@ -361,31 +435,28 @@ function mergeImmutable<T extends { readonly id: string; readonly contentSha256:
   return { items: existing, added: false };
 }
 
-/**
- * Persists the exact CareerSnapshot ↔ JobSnapshot comparison before resume
- * generation. Repeating the same semantic comparison is idempotent; changing
- * either side creates a new immutable history node and leaves prior nodes intact.
- */
-export async function persistOpportunityAssessmentHistory(
-  input: PersistOpportunityHistoryInput,
-): Promise<OpportunityHistorySnapshot> {
-  const artifacts = buildOpportunityHistoryArtifacts(input);
-  const existing = await input.repository.load(input.candidate.id);
+async function persistOpportunityArtifacts(input: {
+  readonly repository: OpportunityHistoryRepository;
+  readonly candidateProfileId: CandidateProfileId;
+  readonly capturedAt: string;
+  readonly artifacts: OpportunityHistoryArtifacts;
+}): Promise<OpportunityHistorySnapshot> {
+  const existing = await input.repository.load(input.candidateProfileId);
   if (existing) {
     validateOpportunityHistorySnapshot(existing);
-    requireHistory(existing.candidateProfileId === input.candidate.id, 'Cannot merge opportunity histories from different candidates.');
+    requireHistory(existing.candidateProfileId === input.candidateProfileId, 'Cannot merge opportunity histories from different candidates.');
   }
 
-  const careerMerge = mergeImmutable(existing?.careerSnapshots ?? [], artifacts.careerSnapshot, 'CareerSnapshot');
-  const jobMerge = mergeImmutable(existing?.jobSnapshots ?? [], artifacts.jobSnapshot, 'JobSnapshot');
-  const assessmentMerge = mergeImmutable(existing?.assessments ?? [], artifacts.assessmentRecord, 'OpportunityAssessment');
+  const careerMerge = mergeImmutable(existing?.careerSnapshots ?? [], input.artifacts.careerSnapshot, 'CareerSnapshot');
+  const jobMerge = mergeImmutable(existing?.jobSnapshots ?? [], input.artifacts.jobSnapshot, 'JobSnapshot');
+  const assessmentMerge = mergeImmutable(existing?.assessments ?? [], input.artifacts.assessmentRecord, 'OpportunityAssessment');
   const changed = careerMerge.added || jobMerge.added || assessmentMerge.added;
 
   if (existing && !changed) return existing;
 
   const next: OpportunityHistorySnapshot = {
     schemaVersion: OPPORTUNITY_HISTORY_SCHEMA_VERSION,
-    candidateProfileId: input.candidate.id,
+    candidateProfileId: input.candidateProfileId,
     careerSnapshots: careerMerge.items,
     jobSnapshots: jobMerge.items,
     assessments: assessmentMerge.items,
@@ -396,13 +467,48 @@ export async function persistOpportunityAssessmentHistory(
   validateOpportunityHistorySnapshot(next);
   await input.repository.save(next);
 
-  const reloaded = await input.repository.load(input.candidate.id);
+  const reloaded = await input.repository.load(input.candidateProfileId);
   requireHistory(Boolean(reloaded), 'Opportunity history save could not be reloaded for verification.');
   validateOpportunityHistorySnapshot(reloaded!);
   requireHistory(reloaded!.revision === next.revision, `Opportunity history expected revision ${next.revision} but reloaded ${reloaded!.revision}.`);
   requireHistory(
-    reloaded!.assessments.some((item) => item.id === artifacts.assessmentRecord.id),
+    reloaded!.assessments.some((item) => item.id === input.artifacts.assessmentRecord.id),
     'Opportunity history reload could not find the persisted assessment.',
   );
+  requireHistory(
+    reloaded!.jobSnapshots.some((item) => item.id === input.artifacts.jobSnapshot.id),
+    'Opportunity history reload could not find the exact assessed JobSnapshot.',
+  );
   return reloaded!;
+}
+
+/**
+ * Persists the exact CareerSnapshot ↔ legacy/manual JobSnapshot comparison.
+ */
+export async function persistOpportunityAssessmentHistory(
+  input: PersistOpportunityHistoryInput,
+): Promise<OpportunityHistorySnapshot> {
+  const artifacts = buildOpportunityHistoryArtifacts(input);
+  return persistOpportunityArtifacts({
+    repository: input.repository,
+    candidateProfileId: input.candidate.id,
+    capturedAt: input.capturedAt,
+    artifacts,
+  });
+}
+
+/**
+ * M4B-06 persistence path. The market JobSnapshot identity entering this method
+ * is the same identity stored in OpportunityHistory after reload verification.
+ */
+export async function persistOpportunityAssessmentHistoryFromJobSnapshot(
+  input: PersistOpportunityHistoryFromJobSnapshotInput,
+): Promise<OpportunityHistorySnapshot> {
+  const artifacts = buildOpportunityHistoryArtifactsFromJobSnapshot(input);
+  return persistOpportunityArtifacts({
+    repository: input.repository,
+    candidateProfileId: input.candidate.id,
+    capturedAt: input.capturedAt,
+    artifacts,
+  });
 }
