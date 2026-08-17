@@ -4,6 +4,7 @@ import {
   type CandidateProfileId,
   type CareerSnapshotId,
   type CareerTargetId,
+  type MarketOpportunityLifecycle,
   type OpportunityPriorityBand,
   type OpportunitySpace,
   type OpportunitySpaceEntry,
@@ -17,6 +18,7 @@ export const OPPORTUNITY_SPACE_POLICY_VERSION = 'opportunity-space-v1' as const;
 export interface OpportunitySpaceCandidate {
   readonly assessmentRecord: PersistedOpportunityAssessment;
   readonly targetRelevance: CareerTargetRelevance;
+  readonly marketLifecycle?: MarketOpportunityLifecycle;
 }
 
 export interface BuildOpportunitySpaceInput {
@@ -60,17 +62,22 @@ function assertSpace(condition: boolean, message: string): asserts condition {
 }
 
 /**
- * Priority is decision support only. It combines two already-derived dimensions
- * without changing either one: evidence readiness (OpportunityAssessment) and
- * user intent (CareerTargetRelevance). It never changes Job Match.
+ * Priority is decision support only. Lifecycle can suppress stale/closed market
+ * opportunities, but it never rewrites Job Match, CareerTarget relevance, or
+ * the historical OpportunityAssessment itself.
  */
 export function classifyOpportunityPriority(
   assessment: PersistedOpportunityAssessment['assessment'],
   relevance: CareerTargetRelevance,
+  lifecycle?: MarketOpportunityLifecycle,
 ): OpportunityPriorityBand {
+  if (lifecycle?.status === 'CLOSED') return 'DEPRIORITIZE';
+
   if (assessment.eligibility === 'BLOCKED' || assessment.recommendation === 'LOW_ALIGNMENT') {
     return 'DEPRIORITIZE';
   }
+
+  if (lifecycle?.status === 'STALE') return 'INSUFFICIENT_SIGNAL';
 
   if (
     relevance.level === 'UNKNOWN' &&
@@ -106,7 +113,14 @@ function rationaleFor(
   assessment: PersistedOpportunityAssessment['assessment'],
   relevance: CareerTargetRelevance,
   priority: OpportunityPriorityBand,
+  lifecycle?: MarketOpportunityLifecycle,
 ): string {
+  if (lifecycle?.status === 'CLOSED') {
+    return `The logical market opportunity is CLOSED under ${lifecycle.basis}; historical evidence fit is preserved but the listing is not prioritized as a current application target.`;
+  }
+  if (lifecycle?.status === 'STALE') {
+    return `The last direct source observation is stale under ${lifecycle.basis}. Re-observe the source before using this historical fit result as a current application priority.`;
+  }
   if (priority === 'PRIORITIZE_NOW') {
     return 'Evidence supports a ready-now application and the opportunity is highly aligned with the active Career Target.';
   }
@@ -132,8 +146,8 @@ function rationaleFor(
 }
 
 function toEntry(candidate: OpportunitySpaceCandidate): OpportunitySpaceEntry {
-  const { assessmentRecord, targetRelevance } = candidate;
-  const priority = classifyOpportunityPriority(assessmentRecord.assessment, targetRelevance);
+  const { assessmentRecord, targetRelevance, marketLifecycle } = candidate;
+  const priority = classifyOpportunityPriority(assessmentRecord.assessment, targetRelevance, marketLifecycle);
   return {
     jobSnapshotId: assessmentRecord.jobSnapshotId,
     opportunityAssessmentId: assessmentRecord.id,
@@ -143,9 +157,18 @@ function toEntry(candidate: OpportunitySpaceCandidate): OpportunitySpaceEntry {
       ...targetRelevance,
       reasons: [...targetRelevance.reasons],
     },
+    ...(marketLifecycle ? {
+      marketLifecycle: {
+        marketOpportunityId: marketLifecycle.marketOpportunityId,
+        currentMarketObservationId: marketLifecycle.currentMarketObservationId,
+        status: marketLifecycle.status,
+        basis: marketLifecycle.basis,
+        lastObservedAt: marketLifecycle.lastObservedAt,
+      },
+    } : {}),
     eligibility: assessmentRecord.assessment.eligibility,
     criticalGapCount: assessmentRecord.assessment.criticalGaps.length,
-    rationale: rationaleFor(assessmentRecord.assessment, targetRelevance, priority),
+    rationale: rationaleFor(assessmentRecord.assessment, targetRelevance, priority, marketLifecycle),
   };
 }
 
@@ -168,10 +191,24 @@ export function validateOpportunitySpace(space: OpportunitySpace): void {
   assertSpace(new Set(space.entries.map((entry) => entry.jobSnapshotId)).size === space.entries.length, 'duplicate JobSnapshot IDs.');
   assertSpace(new Set(space.entries.map((entry) => entry.opportunityAssessmentId)).size === space.entries.length, 'duplicate OpportunityAssessment IDs.');
   assertSpace(space.scopeBoundary === 'DERIVED_PRIORITY_NOT_CAREER_OR_MARKET_FACT', 'scope boundary changed.');
-  space.entries.forEach((entry) => assertSpace(
-    entry.targetRelevance.scopeBoundary === 'PREFERENCE_ALIGNMENT_NOT_CAPABILITY_EVIDENCE',
-    `entry ${entry.opportunityAssessmentId} target relevance crossed the evidence boundary.`,
-  ));
+  space.entries.forEach((entry) => {
+    assertSpace(
+      entry.targetRelevance.scopeBoundary === 'PREFERENCE_ALIGNMENT_NOT_CAPABILITY_EVIDENCE',
+      `entry ${entry.opportunityAssessmentId} target relevance crossed the evidence boundary.`,
+    );
+    if (entry.marketLifecycle) {
+      assertSpace(Number.isFinite(Date.parse(entry.marketLifecycle.lastObservedAt)), `entry ${entry.opportunityAssessmentId} lifecycle timestamp is invalid.`);
+      if (entry.marketLifecycle.status === 'CLOSED') {
+        assertSpace(entry.priority === 'DEPRIORITIZE', `entry ${entry.opportunityAssessmentId} closed opportunity was prioritized.`);
+      }
+      if (entry.marketLifecycle.status === 'STALE') {
+        assertSpace(
+          entry.priority === 'INSUFFICIENT_SIGNAL' || entry.priority === 'DEPRIORITIZE',
+          `entry ${entry.opportunityAssessmentId} stale opportunity was prioritized.`,
+        );
+      }
+    }
+  });
 
   const semantic = {
     candidateProfileId: space.candidateProfileId,
@@ -186,10 +223,6 @@ export function validateOpportunitySpace(space: OpportunitySpace): void {
   assertSpace(space.id === `opportunity-space:${expectedHash.slice(0, 32)}`, 'identity is not content-addressed.');
 }
 
-/**
- * Builds one explainable comparison space for ONE immutable CareerSnapshot,
- * ONE explicit CareerTarget and MANY immutable JobSnapshot assessments.
- */
 export function buildOpportunitySpace(input: BuildOpportunitySpaceInput): OpportunitySpace {
   assertSpace(input.candidates.length >= 2, 'compare at least two opportunities.');
   input.candidates.forEach(({ assessmentRecord }) => assertSpace(
