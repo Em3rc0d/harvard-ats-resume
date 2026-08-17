@@ -3,9 +3,15 @@ import type {
   CareerSnapshotId,
   CareerTargetId,
   JobSnapshotId,
+  MarketObservationId,
+  MarketOpportunityId,
   OpportunityAssessmentId,
   OpportunitySpaceId,
 } from '../shared/identifiers';
+import type {
+  MarketOpportunityLifecycleBasis,
+  MarketOpportunityLifecycleStatus,
+} from '../market/MarketOpportunity';
 
 export type OpportunityPriorityBand =
   | 'PRIORITIZE_NOW'
@@ -34,12 +40,21 @@ export interface OpportunitySpaceTargetRelevance {
   readonly scopeBoundary: 'PREFERENCE_ALIGNMENT_NOT_CAPABILITY_EVIDENCE';
 }
 
+export interface OpportunitySpaceMarketLifecycle {
+  readonly marketOpportunityId: MarketOpportunityId;
+  readonly currentMarketObservationId: MarketObservationId;
+  readonly status: MarketOpportunityLifecycleStatus;
+  readonly basis: MarketOpportunityLifecycleBasis;
+  readonly lastObservedAt: string;
+}
+
 export interface OpportunitySpaceEntry {
   readonly jobSnapshotId: JobSnapshotId;
   readonly opportunityAssessmentId: OpportunityAssessmentId;
   readonly priority: OpportunityPriorityBand;
   readonly recommendation: 'READY_NOW' | 'STRONG_STRETCH' | 'BUILDABLE' | 'ASPIRATIONAL' | 'LOW_ALIGNMENT';
   readonly targetRelevance: OpportunitySpaceTargetRelevance;
+  readonly marketLifecycle?: OpportunitySpaceMarketLifecycle;
   readonly eligibility: 'CLEAR' | 'UNCERTAIN' | 'BLOCKED';
   readonly criticalGapCount: number;
   readonly rationale: string;
