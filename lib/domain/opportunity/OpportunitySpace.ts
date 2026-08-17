@@ -43,6 +43,7 @@ export interface OpportunitySpaceTargetRelevance {
 export interface OpportunitySpaceMarketLifecycle {
   readonly marketOpportunityId: MarketOpportunityId;
   readonly currentMarketObservationId: MarketObservationId;
+  readonly assessmentObservationIsCurrent: boolean;
   readonly status: MarketOpportunityLifecycleStatus;
   readonly basis: MarketOpportunityLifecycleBasis;
   readonly lastObservedAt: string;
