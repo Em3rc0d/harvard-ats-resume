@@ -10,6 +10,7 @@ export * from './job/JobSnapshot';
 export * from './market/DerivedMarketInterpretation';
 export * from './market/MarketJobProjection';
 export * from './market/MarketObservation';
+export * from './market/MarketOpportunity';
 export * from './market/MarketSource';
 export * from './market/ObservationOccurrence';
 export * from './matching/MatchReport';
