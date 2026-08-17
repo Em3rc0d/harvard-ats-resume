@@ -53,6 +53,9 @@ MarketJobProjection != JobRequirement
 MarketMetadata != SyntheticRequirementText
 JobSnapshotMarketProvenance != CandidateTruth
 OpportunityAssessment != CandidateTruth
+MarketObservation != MarketOpportunity
+MarketOpportunityLifecycle != MarketFact
+OPEN != CURRENT_ASSESSMENT
 UNKNOWN != FALSE
 SOURCE_SILENT != INFERRED_VALUE
 ```
@@ -74,7 +77,8 @@ MARKET-04B-03 Controlled Source Acquisition   COMPLETE
 MARKET-04B-04 Derived Market Interpretation   COMPLETE
 MARKET-04B-05 Job Intelligence Projection     COMPLETE
 MARKET-04B-06 Market Assessment Integration   COMPLETE
-MARKET-04B-07 Opportunity Identity/Lifecycle  NEXT
+MARKET-04B-07 Opportunity Identity/Lifecycle  COMPLETE
+MARKET-04B-08 Partitioned Market Persistence  NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -88,6 +92,7 @@ The specific execution documents are the authoritative details for each later st
 - `MARKET-04B-04-DERIVED-MARKET-INTERPRETATION.md`
 - `MARKET-04B-05-JOB-INTELLIGENCE-PROJECTION.md`
 - `MARKET-04B-06-MARKET-ASSESSMENT-INTEGRATION.md`
+- `MARKET-04B-07-OPPORTUNITY-IDENTITY-LIFECYCLE.md`
 
 ## MARKET-01 — Application Intelligence
 
@@ -532,33 +537,76 @@ Stable market MatchReport identity derives from semantic candidate snapshot stat
 
 M4B-06 is complete: an exact durable M4B-05 JobSnapshot can be selected by id, matched against candidate assertions without re-parsing, preserved unchanged in OpportunityHistory, linked to a durable OpportunityAssessment, and target relevance remains separate from capability matching.
 
-## Next architectural step — MARKET-04B-07
+## MARKET-04B-07 — Logical Opportunity Identity + Lifecycle / Freshness
 
-The first trust-preserving market-to-decision chain now exists:
+M4B-07 separates immutable source states from logical vacancy identity and current-market confidence:
+
+```text
+MarketObservation A ─┐
+MarketObservation B ─┼──> MarketOpportunityId
+MarketObservation C ─┘            │
+                                  ├── OPEN
+                                  ├── STALE
+                                  ├── CLOSED
+                                  └── UNKNOWN
+```
+
+Provider-native identity is deliberately conservative. Two provider observations are grouped only when `PROVIDER_API + provider + sourceUrl + externalId` reproduces exactly. Title/company/location similarity is never identity evidence. Without the strong provider tuple, v1 uses observation-bound identity rather than risking a false merge.
+
+Each immutable MarketObservation receives one content-addressed `MarketOpportunityLink`. Material source changes therefore create another MarketObservation/link under the same strong provider opportunity while prior states remain preserved. Re-observing unchanged content creates only another ObservationOccurrence and refreshes recency without increasing material-state count.
+
+Lifecycle is a temporal derived view, not source truth. Direct provider/public observations are OPEN for the first 72 hours after the latest durable occurrence and become STALE after that freshness window. Manual/non-direct observations remain UNKNOWN rather than pretending to be current. A valid source-explicit `expiresAt` whose expiry has passed yields CLOSED.
+
+M4B-07 intentionally does not convert provider 404/disappearance into CLOSED. M4B-03 currently treats disappearance as acquisition failure and persists no negative source event. Until a later explicit closure/disappearance-event contract exists, an old direct observation becomes STALE rather than falsely CLOSED.
+
+The public lifecycle boundary is:
+
+```text
+POST /api/market-opportunity-lifecycle
+```
+
+and accepts only a durable `marketObservationId`. The server resolves logical identity, current material state, occurrences, age and lifecycle status.
+
+OpportunitySpace now treats lifecycle as a ranking guard only:
+
+```text
+CLOSED                         -> DEPRIORITIZE
+STALE                          -> INSUFFICIENT_SIGNAL
+OPEN + superseded assessment  -> INSUFFICIENT_SIGNAL
+OPEN + current assessment     -> normal M4A priority rules
+UNKNOWN                        -> existing/manual behavior
+```
+
+The superseded-assessment rule prevents an old JobSnapshot assessment from inheriting the OPEN status of a newer material MarketObservation for the same logical vacancy.
+
+### Gate M4B-07 — CONSERVATIVE_LOGICAL_OPPORTUNITY_IDENTITY_AND_LIFECYCLE
+
+M4B-07 is complete: provider-native logical identity is deterministic, fuzzy merge is prohibited, material-state history is preserved, unchanged observations refresh recency through occurrences, lifecycle is explicit, durable link history is reload-verified, and OpportunitySpace cannot silently prioritize closed, stale, or materially superseded market assessments.
+
+## Next architectural step — MARKET-04B-08
+
+The market truth chain can now reach a lifecycle-aware opportunity decision:
 
 ```text
 External Source
-→ MarketObservation
+→ MarketObservation / Occurrence
+→ MarketOpportunity identity + lifecycle
 → DerivedMarketInterpretation
 → MarketJobProjection
 → JobSnapshot
 → Job Match
 → OpportunityAssessment
+→ lifecycle-aware OpportunitySpace
 ```
 
-The next major gap is no longer parser integration. It is:
+The remaining blocker before broad provider discovery/polling is infrastructure safety. Observation, interpretation, projection and logical-opportunity histories still rely on single Redis snapshot keys with read-modify-write behavior.
+
+The next gate is:
 
 ```text
-MARKET-04B-07 — Logical Opportunity Identity + Lifecycle / Freshness
+MARKET-04B-08 — Partitioned Market Persistence + Concurrency Safety
 ```
 
-CV Engine currently preserves immutable source states, but it still needs a controlled model for:
+It must preserve current content-addressed and idempotent semantics while partitioning durable state by stable keys, defining concurrency-safe writes, proving simultaneous provider workers cannot lose history, and providing a migration/compatibility path for the current v1 snapshot stores.
 
-- when multiple observations/snapshots are states of the same logical opportunity;
-- whether a listing is `OPEN`, `STALE`, `CLOSED` or `UNKNOWN`;
-- how recency and source evidence affect lifecycle state;
-- how material changes create new state without rewriting history;
-- when OpportunitySpace must refuse to prioritize a stale/closed opportunity;
-- how cross-source identity can remain conservative instead of fuzzy/guessed.
-
-Provider-scale polling and high-concurrency synchronization remain later work; the current single-snapshot market/interpretation/projection persistence stores are still not approved for parallel provider workers.
+Only after that gate should CV Engine authorize multi-job discovery, scheduled provider refresh, broad lifecycle polling, or high-volume opportunity acquisition.
