@@ -2,7 +2,13 @@
 
 ## Status
 
-`IMPLEMENTED — pending final documentation-head CI and merge`
+`COMPLETE — merged via PR #43`
+
+Merge commit:
+
+```text
+1c4e319702bd1dab451b3f48d828b392b34457c6
+```
 
 ## Purpose
 
@@ -191,9 +197,37 @@ Production build    PASS
 
 The additional optimizer regressions include rejection of unsupported numbers, URLs, email addresses, new technologies/domain vocabulary and stronger responsibility verbs.
 
+### Authoritative merge head
+
+```text
+head
+824bcae50a347b25ce2960dc2ba5e93477d67757
+
+CI run
+32100063541
+
+CI job
+95598725903
+
+Install             PASS
+Dependency audit    PASS — 0 vulnerabilities
+Lint                PASS — zero warnings
+Typecheck           PASS
+Behavior tests      PASS — 250 tests
+Production build    PASS
+
+PR
+#43 — UX trust: Repair inline optimizer and polish responsible-use experience
+
+merge commit
+1c4e319702bd1dab451b3f48d828b392b34457c6
+```
+
+GitHub reports the squash-merge commit signature as valid/verified. The merge parent was the prior `develop` head `edd96c147618454d30c900dd1b1f35b0b39cce76`.
+
 ## Browser-preview evidence boundary
 
-No PR preview URL is available in PR #43 comments, and the Vercel project for this repository is not present in the currently connected Vercel team. Therefore this pass does **not** claim browser-level preview verification.
+No PR preview URL was available in PR #43 comments, and the Vercel project for this repository was not present in the connected Vercel team during implementation. Therefore this pass does **not** claim browser-level preview verification for the exact merged head.
 
 What is verified is:
 
@@ -203,4 +237,4 @@ What is verified is:
 - complete ATS v2 behavior regression suite;
 - optimized Next.js production build.
 
-A live/preview visual inspection should only be claimed once a deployment for this exact head is accessible.
+A live/preview visual inspection should only be claimed once a deployment for the exact merged code is accessible.
