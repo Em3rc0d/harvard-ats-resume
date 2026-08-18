@@ -56,6 +56,9 @@ OpportunityAssessment != CandidateTruth
 MarketObservation != MarketOpportunity
 MarketOpportunityLifecycle != MarketFact
 OPEN != CURRENT_ASSESSMENT
+ConcurrentWriter != SnapshotOverwriteAuthority
+SameSemanticPersistenceKey + DifferentContent != Idempotency
+PartitionedPersistence != CandidateTruth
 UNKNOWN != FALSE
 SOURCE_SILENT != INFERRED_VALUE
 ```
@@ -78,7 +81,8 @@ MARKET-04B-04 Derived Market Interpretation   COMPLETE
 MARKET-04B-05 Job Intelligence Projection     COMPLETE
 MARKET-04B-06 Market Assessment Integration   COMPLETE
 MARKET-04B-07 Opportunity Identity/Lifecycle  COMPLETE
-MARKET-04B-08 Partitioned Market Persistence  NEXT
+MARKET-04B-08 Partitioned Market Persistence  COMPLETE
+MARKET-04B-09 Multi-job Discovery / Refresh   NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -93,6 +97,7 @@ The specific execution documents are the authoritative details for each later st
 - `MARKET-04B-05-JOB-INTELLIGENCE-PROJECTION.md`
 - `MARKET-04B-06-MARKET-ASSESSMENT-INTEGRATION.md`
 - `MARKET-04B-07-OPPORTUNITY-IDENTITY-LIFECYCLE.md`
+- `MARKET-04B-08-PARTITIONED-MARKET-PERSISTENCE.md`
 
 ## MARKET-01 — Application Intelligence
 
@@ -300,7 +305,7 @@ OBSERVATION_EVENT_NOT_SEMANTIC_MARKET_STATE
 
 The durable aggregate stores validated `MarketObservation[]` and `ObservationOccurrence[]`. Every occurrence must reference a stored observation, every observation must have at least one occurrence, duplicate identifiers are rejected, and loaded history is revalidated before any merge.
 
-The first persistence adapter stores one versioned history snapshot in Upstash and reload-verifies the exact revision, observation and occurrence before success is claimed.
+The first persistence adapter stores one versioned history snapshot in Upstash and reload-verifies the exact revision, observation and occurrence before success is claimed. M4B-08 later preserves this aggregate contract while replacing the production whole-snapshot write path with partitioned immutable appends.
 
 The public `/api/market-intake` flow is now:
 
@@ -583,30 +588,62 @@ The superseded-assessment rule prevents an old JobSnapshot assessment from inher
 
 M4B-07 is complete: provider-native logical identity is deterministic, fuzzy merge is prohibited, material-state history is preserved, unchanged observations refresh recency through occurrences, lifecycle is explicit, durable link history is reload-verified, and OpportunitySpace cannot silently prioritize closed, stale, or materially superseded market assessments.
 
-## Next architectural step — MARKET-04B-08
+## MARKET-04B-08 — Partitioned Market Persistence + Concurrency Safety
 
-The market truth chain can now reach a lifecycle-aware opportunity decision:
+M4B-08 removes the global-snapshot lost-update boundary from the production market persistence path.
+
+Before M4B-08, Observation, Interpretation, Projection and MarketOpportunity histories each used one Redis key and a read-modify-write aggregate cycle. Two parallel workers could therefore load the same history and replace each other's independent append.
+
+Production persistence now uses immutable semantic/stable records plus deterministic 16-shard indexes:
 
 ```text
-External Source
-→ MarketObservation / Occurrence
-→ MarketOpportunity identity + lifecycle
-→ DerivedMarketInterpretation
-→ MarketJobProjection
-→ JobSnapshot
-→ Job Match
-→ OpportunityAssessment
-→ lifecycle-aware OpportunitySpace
+immutable logical event
+      ↓
+MULTI / EXEC
+      ├── SETNX immutable record key
+      └── SADD deterministic shard index
+      ↓
+MGET exact read-back verification
+      ↓
+validated aggregate reconstruction
 ```
 
-The remaining blocker before broad provider discovery/polling is infrastructure safety. Observation, interpretation, projection and logical-opportunity histories still rely on single Redis snapshot keys with read-modify-write behavior.
+MarketObservation + ObservationOccurrence is one atomic two-record persistence event, so the M4B-02B invariant cannot be half-visible. Interpretation storage is keyed by `MarketObservationId + policyVersion`; projection storage by `MarketJobProjectionId + analyzerVersion`; logical-opportunity linkage by `MarketObservationId`. These storage authorities make semantic collisions fail closed at the persistence boundary rather than merely during a later aggregate validation.
+
+Application repositories gained append-safe production paths while preserving legacy `load()/save()` compatibility. Reload verification accepts a reconstructed revision greater than the caller's local expected revision because another legitimate concurrent writer may have advanced history; the caller's own exact immutable content remains mandatory.
+
+The v1 → v2 migration is lazy and append-idempotent. Existing v1 keys are deliberately still dual-read after migration so a draining old deployment cannot write history that new code silently ignores. Divergent v1/v2 immutable meanings for the same semantic key fail closed.
+
+M4B-08 proves concurrent append correctness, not final high-volume catalog query efficiency. Current compatibility reads may reconstruct a full aggregate from all shard indexes; provider/opportunity-scoped discovery read models remain later work.
+
+### Gate M4B-08 — PARTITIONED_APPEND_SAFE_MARKET_PERSISTENCE
+
+M4B-08 is complete: parallel market writers cannot overwrite one another through global snapshot replacement, logical observation events are atomically visible, semantic-key collisions fail closed, legacy history survives rolling migration, exact repeat remains idempotent, and all earlier market/candidate truth boundaries remain intact.
+
+## Next architectural step — MARKET-04B-09
+
+The market infrastructure is now safe enough to authorize controlled multi-listing acquisition:
+
+```text
+Provider listing discovery
+      ↓
+bounded multi-job acquisition
+      ↓
+partitioned MarketObservation / Occurrence history
+      ↓
+existing MarketOpportunity identity + lifecycle
+      ↓
+Interpretation → Projection → Assessment
+```
 
 The next gate is:
 
 ```text
-MARKET-04B-08 — Partitioned Market Persistence + Concurrency Safety
+MARKET-04B-09 — Multi-job Discovery + Refresh
 ```
 
-It must preserve current content-addressed and idempotent semantics while partitioning durable state by stable keys, defining concurrency-safe writes, proving simultaneous provider workers cannot lose history, and providing a migration/compatibility path for the current v1 snapshot stores.
+It must add bounded provider listing enumeration/pagination, controlled refresh/re-observation, retry/backoff and provider rate-budget semantics, partial-failure handling, and provenance-preserving handoff into the existing market truth chain.
 
-Only after that gate should CV Engine authorize multi-job discovery, scheduled provider refresh, broad lifecycle polling, or high-volume opportunity acquisition.
+M4B-09 must continue to forbid arbitrary crawling and cross-provider fuzzy identity. Discovery may find more listings; it does not gain authority to manufacture candidate truth or merge source identities by similarity.
+
+Negative provider disappearance/closure events and optimized catalog/query projections should be introduced only through explicit source/evidence contracts rather than hidden inside discovery.
