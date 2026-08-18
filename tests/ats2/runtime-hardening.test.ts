@@ -82,7 +82,7 @@ test('PDF.js uses separate browser and Node runtime contracts', () => {
   assert.match(certificateUpload, /import\(['"]pdfjs-dist['"]\)/);
   assert.match(config, /pdfjs-dist\$/);
   assert.match(config, /pdfjs-dist\/legacy\/build\/pdf\.mjs/);
-  assert.match(config, /serverExternalPackages:\s*\[[^\]]*['"]pdfjs-dist['"]/s);
+  assert.match(config, /serverExternalPackages:\s*\[[\s\S]*?['"]pdfjs-dist['"]/);
   assert.match(nativeResumeImport, /pdfjs-dist\/legacy\/build\/pdf\.mjs/);
 });
 
