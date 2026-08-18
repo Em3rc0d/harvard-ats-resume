@@ -45,3 +45,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify PDF.js server runtime bundle
+        run: node scripts/verify-pdfjs-server-bundle.mjs

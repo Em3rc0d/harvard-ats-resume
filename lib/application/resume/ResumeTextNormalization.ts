@@ -45,13 +45,52 @@ function splitEmbeddedBullets(value: string): string {
     .join('\n');
 }
 
+function normalizeStructuredRecordSeparators(value: string): string {
+  let currentSection = '';
+  const normalizedLines: string[] = [];
+
+  value.split('\n').forEach((line) => {
+    const trimmed = line.trim();
+    if (UPPERCASE_SECTION_HEADING_SET.has(trimmed)) {
+      currentSection = trimmed;
+      normalizedLines.push(line);
+      return;
+    }
+
+    const pipeParts = trimmed
+      .split('|')
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    if (currentSection === 'CERTIFICATIONS' && pipeParts.length >= 3) {
+      normalizedLines.push(pipeParts.join(' — '));
+      return;
+    }
+
+    if (
+      (currentSection === 'EXPERIENCE' || currentSection === 'WORK EXPERIENCE') &&
+      !/^[•●▪◦*\-]\s*/.test(trimmed) &&
+      pipeParts.length === 3
+    ) {
+      const [company, role, date] = pipeParts;
+      normalizedLines.push(`${company} — ${role}`, date);
+      return;
+    }
+
+    normalizedLines.push(line);
+  });
+
+  return normalizedLines.join('\n');
+}
+
 /**
  * Repairs presentation-only serialization defects emitted by the generation
  * provider without changing candidate facts or rewriting already-valid layout.
  *
  * Existing physical lines, section spacing and standalone bullets are preserved.
- * Recovery is applied only when a provider serialized line breaks literally or
- * embedded standard headings/bullets inside another physical line.
+ * Recovery is applied only when a provider serialized line breaks literally,
+ * embedded standard headings/bullets, or used pipe separators for structured
+ * records whose semantic fields are already independently present.
  */
 export function normalizeGeneratedResumeText(value: string): string {
   let normalized = value
@@ -64,6 +103,7 @@ export function normalizeGeneratedResumeText(value: string): string {
 
   normalized = splitEmbeddedBullets(normalized);
   normalized = splitEmbeddedSectionHeadings(normalized);
+  normalized = normalizeStructuredRecordSeparators(normalized);
 
   return normalized
     .split('\n')

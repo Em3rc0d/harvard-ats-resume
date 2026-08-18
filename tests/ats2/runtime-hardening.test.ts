@@ -74,15 +74,19 @@ test('inline optimize stays on the internal endpoint and model output crosses a 
   assert.match(provider, /responseJsonSchema/);
 });
 
-test('PDF.js uses separate browser and Node runtime contracts', () => {
+test('PDF.js uses separate browser and native Node runtime contracts', () => {
   const config = source('next.config.js');
   const certificateUpload = source('components/CertificateUpload.tsx');
   const nativeResumeImport = source('lib/infrastructure/import/NativeResumeImportProvider.ts');
+  const nodeRuntime = source('lib/infrastructure/import/PdfJsNodeRuntime.ts');
 
   assert.match(certificateUpload, /import\(['"]pdfjs-dist['"]\)/);
   assert.match(config, /pdfjs-dist\$/);
-  assert.match(config, /pdfjs-dist\/legacy\/build\/pdf\.mjs/);
-  assert.match(config, /serverExternalPackages:\s*\[[\s\S]*?['"]pdfjs-dist['"]/);
+  assert.match(config, /pdfjs-dist\/legacy\/build\/pdf\.mjs\$/);
+  assert.match(config, /PdfJsNodeRuntime\.ts/);
+  assert.doesNotMatch(config, /serverExternalPackages:\s*\[[\s\S]*?['"]pdfjs-dist['"]/);
+  assert.match(nodeRuntime, /webpackIgnore:\s*true/);
+  assert.match(nodeRuntime, /pdfjs-dist\/legacy\/build\/pdf\.mjs/);
   assert.match(nativeResumeImport, /pdfjs-dist\/legacy\/build\/pdf\.mjs/);
 });
 
