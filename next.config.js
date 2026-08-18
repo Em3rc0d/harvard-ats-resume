@@ -1,6 +1,4 @@
 /** @type {import('next').NextConfig} */
-const path = require('node:path');
-
 const nextConfig = {
   reactStrictMode: true,
 
@@ -54,10 +52,8 @@ const nextConfig = {
       // marked webpackIgnore, so Node executes the ESM package natively during
       // both `next dev --webpack` and `next start` instead of Webpack rewriting
       // PDF.js' module namespace.
-      config.resolve.alias['pdfjs-dist/legacy/build/pdf.mjs$'] = path.resolve(
-        __dirname,
-        'lib/infrastructure/import/PdfJsNodeRuntime.ts',
-      );
+      config.resolve.alias['pdfjs-dist/legacy/build/pdf.mjs$'] =
+        `${__dirname}/lib/infrastructure/import/PdfJsNodeRuntime.ts`;
     } else {
       // Certificate parsing runs in the browser and needs the generic legacy
       // PDF.js entry. Keep this contract independent from native resume import.
