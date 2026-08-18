@@ -20,9 +20,13 @@ const NAMESPACE = 'ats2:derived-market-interpretation-history:v2';
 const MIGRATION_MARKER = `${NAMESPACE}:migration-complete`;
 const INTERPRETATION_KIND = 'interpretation';
 
+function semanticKey(interpretation: DerivedMarketInterpretation): string {
+  return `${interpretation.marketObservationId}:${interpretation.policyVersion}`;
+}
+
 function compareInterpretations(first: DerivedMarketInterpretation, second: DerivedMarketInterpretation): number {
   const byTime = Date.parse(first.generatedAt) - Date.parse(second.generatedAt);
-  return byTime !== 0 ? byTime : first.id.localeCompare(second.id);
+  return byTime !== 0 ? byTime : semanticKey(first).localeCompare(semanticKey(second));
 }
 
 export class PartitionedDerivedMarketInterpretationHistoryRepository
@@ -31,11 +35,12 @@ implements DerivedMarketInterpretationHistoryRepository {
 
   private async commitInterpretation(interpretation: DerivedMarketInterpretation): Promise<void> {
     validateDerivedMarketInterpretationIntegrity(interpretation);
+    const key = semanticKey(interpretation);
     await this.backend.commitImmutableRecords([
       immutablePartitionRecord({
         namespace: NAMESPACE,
         kind: INTERPRETATION_KIND,
-        id: interpretation.id,
+        id: key,
         record: interpretation,
       }),
     ]);
@@ -68,7 +73,7 @@ implements DerivedMarketInterpretationHistoryRepository {
     const interpretations = mergeImmutableRecordsById(
       legacy?.interpretations ?? [],
       partitioned,
-      (item) => item.id,
+      semanticKey,
     ).sort(compareInterpretations);
     if (interpretations.length === 0) return null;
 
