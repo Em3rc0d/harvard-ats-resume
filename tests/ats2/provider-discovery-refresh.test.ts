@@ -27,6 +27,7 @@ import type {
   MarketOpportunityIndexRepository,
   MarketOpportunityIndexSnapshot,
 } from '../../lib/application/market/MarketOpportunityIndexHistory';
+import { domainId } from '../../lib/domain';
 import {
   discoverProviderLocators,
 } from '../../lib/infrastructure/market/ControlledProviderDiscoveryAdapters';
@@ -261,11 +262,19 @@ test('bounded batch acquisition preserves successes when one discovered listing 
 });
 
 test('refresh policy separates lifecycle from refresh eligibility', () => {
+  const marketOpportunityId = domainId(
+    'MarketOpportunity',
+    'market-opportunity:11111111111111111111111111111111',
+  );
+  const marketObservationId = domainId(
+    'MarketObservation',
+    'market-observation:22222222222222222222222222222222',
+  );
   const base = {
     policyVersion: 'market-opportunity-lifecycle-v1' as const,
-    marketOpportunityId: 'market-opportunity:11111111111111111111111111111111' as const,
-    currentMarketObservationId: 'market-observation:22222222222222222222222222222222' as const,
-    observationIds: ['market-observation:22222222222222222222222222222222' as const],
+    marketOpportunityId,
+    currentMarketObservationId: marketObservationId,
+    observationIds: [marketObservationId],
     materialStateCount: 1,
     firstObservedAt: '2026-08-15T00:00:00.000Z',
     lastObservedAt: '2026-08-15T00:00:00.000Z',
