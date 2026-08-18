@@ -55,12 +55,12 @@ implements PartitionedMarketPersistenceBackend {
   }
 
   async members(key: string): Promise<readonly string[]> {
-    return await this.redis.smembers<string>(key);
+    return await this.redis.smembers<string[]>(key);
   }
 
   async many<T>(keys: readonly string[]): Promise<readonly (T | null)[]> {
     if (keys.length === 0) return [];
-    return await this.redis.mget<T>(...keys);
+    return await this.redis.mget<(T | null)[]>(...keys);
   }
 
   async commitImmutableRecords(records: readonly ImmutablePartitionRecordWrite[]): Promise<void> {
@@ -72,7 +72,7 @@ implements PartitionedMarketPersistenceBackend {
     }
     await transaction.exec();
 
-    const persisted = await this.redis.mget<unknown>(...records.map((record) => record.recordKey));
+    const persisted = await this.redis.mget<unknown[]>(...records.map((record) => record.recordKey));
     records.forEach((record, index) => {
       if (persisted[index] === null || stableJson(persisted[index]) !== stableJson(record.record)) {
         throw new Error(`Immutable partition key ${record.recordKey} already contains different content.`);
