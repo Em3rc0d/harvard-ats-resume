@@ -14,6 +14,7 @@ export type MarketJobProjectionId = DomainId<'MarketJobProjection'>;
 export type MarketOpportunityId = DomainId<'MarketOpportunity'>;
 export type MarketOpportunityLinkId = DomainId<'MarketOpportunityLink'>;
 export type MarketCandidateSetId = DomainId<'MarketCandidateSet'>;
+export type MarketCandidateAnalysisRunId = DomainId<'MarketCandidateAnalysisRun'>;
 export type JobDescriptionId = DomainId<'JobDescription'>;
 export type JobRequirementId = DomainId<'JobRequirement'>;
 export type JobSnapshotId = DomainId<'JobSnapshot'>;
