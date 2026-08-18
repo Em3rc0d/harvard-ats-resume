@@ -71,10 +71,12 @@ test('OpportunitySpace is rate limited before loading or writing durable candida
   assert.ok(rateLimitAt < spaceWriteAt);
 });
 
-test('presentation cleanup is rate limited before CPU normalization', () => {
+test('inline optimization is rate limited before any model-backed rewrite work', () => {
   const route = source('app/api/optimize-content/route.ts');
   const rateLimitAt = route.indexOf("await rateLimitPublicApiRequest(request.headers, 'optimize-content')");
-  const normalizeAt = route.indexOf('normalizeCandidatePresentationText(parsed.data.summary)');
+  const optimizeAt = route.indexOf('await optimizeCandidateText(');
+  const providerAt = route.indexOf('new GeminiCandidateTextOptimizer()');
 
-  assert.ok(rateLimitAt >= 0 && normalizeAt >= 0 && rateLimitAt < normalizeAt);
+  assert.ok(rateLimitAt >= 0 && optimizeAt >= 0 && rateLimitAt < optimizeAt);
+  assert.ok(rateLimitAt < providerAt);
 });
