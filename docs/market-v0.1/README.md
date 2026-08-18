@@ -59,6 +59,11 @@ OPEN != CURRENT_ASSESSMENT
 ConcurrentWriter != SnapshotOverwriteAuthority
 SameSemanticPersistenceKey + DifferentContent != Idempotency
 PartitionedPersistence != CandidateTruth
+DiscoveryLocator != MarketObservation
+DiscoveryResult != JobRequirement
+AcquisitionFailure != MarketClosure
+RefreshDecision != MarketOpportunityLifecycle
+RefreshFailure != CLOSED
 UNKNOWN != FALSE
 SOURCE_SILENT != INFERRED_VALUE
 ```
@@ -82,7 +87,8 @@ MARKET-04B-05 Job Intelligence Projection     COMPLETE
 MARKET-04B-06 Market Assessment Integration   COMPLETE
 MARKET-04B-07 Opportunity Identity/Lifecycle  COMPLETE
 MARKET-04B-08 Partitioned Market Persistence  COMPLETE
-MARKET-04B-09 Multi-job Discovery / Refresh   NEXT
+MARKET-04B-09 Multi-job Discovery / Refresh   COMPLETE
+MARKET-04B-10 Market Candidate Retrieval      NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -98,6 +104,7 @@ The specific execution documents are the authoritative details for each later st
 - `MARKET-04B-06-MARKET-ASSESSMENT-INTEGRATION.md`
 - `MARKET-04B-07-OPPORTUNITY-IDENTITY-LIFECYCLE.md`
 - `MARKET-04B-08-PARTITIONED-MARKET-PERSISTENCE.md`
+- `MARKET-04B-09-PROVIDER-DISCOVERY-REFRESH.md`
 
 ## MARKET-01 — Application Intelligence
 
@@ -620,30 +627,94 @@ M4B-08 proves concurrent append correctness, not final high-volume catalog query
 
 M4B-08 is complete: parallel market writers cannot overwrite one another through global snapshot replacement, logical observation events are atomically visible, semantic-key collisions fail closed, legacy history survives rolling migration, exact repeat remains idempotent, and all earlier market/candidate truth boundaries remain intact.
 
-## Next architectural step — MARKET-04B-09
+## MARKET-04B-09 — Bounded Provider Discovery + Refresh
 
-The market infrastructure is now safe enough to authorize controlled multi-listing acquisition:
+M4B-09 turns the trusted one-listing acquisition boundary into a bounded provider-market intake path without creating a crawler or a second market-truth parser.
 
 ```text
-Provider listing discovery
+Provider board/site
       ↓
-bounded multi-job acquisition
+controlled discovery
       ↓
-partitioned MarketObservation / Occurrence history
+provider-native M4B-03 locators
       ↓
-existing MarketOpportunity identity + lifecycle
+bounded acquisition workers
       ↓
-Interpretation → Projection → Assessment
+MarketObservation + ObservationOccurrence
+```
+
+Discovery itself is not market truth. Greenhouse board discovery emits job ids, Lever discovery emits paginated posting ids, and Ashby discovery emits public hosted `jobUrl` selectors while excluding `isListed=false` direct-link-only entries. Every discovered locator still passes through the existing M4B-03 single-listing acquisition, canonical intake and durable observation history.
+
+The default v1 discovery budget is server-owned:
+
+```text
+maxListings               = 50
+maxPages                  = 5
+maxConcurrentAcquisitions = 4
+```
+
+The public caller cannot override these values or submit arbitrary source URLs. Provider discovery retains fixed HTTPS hosts, GET-only JSON requests, redirect rejection, no-store semantics, the existing 8-second timeout and 2 MiB response ceiling.
+
+Independent listing failures are item-scoped. Successful observations remain durable even if another listing times out, disappears or returns an invalid provider response. The explicit boundary is:
+
+```text
+AcquisitionFailure != MarketClosure
+```
+
+Refresh is a separate decision over M4B-07 lifecycle:
+
+```text
+OPEN    -> NOT_DUE
+STALE   -> DUE
+CLOSED  -> INELIGIBLE
+UNKNOWN -> INELIGIBLE
+```
+
+A DUE refresh reconstructs the exact Greenhouse/Lever/Ashby provider locator from durable provenance server-side and reuses M4B-03 acquisition. Unchanged content creates another ObservationOccurrence; material change creates a new MarketObservation under the same strong logical opportunity. A refresh 404/timeout/error returns `REFRESH_FAILED` and preserves the prior lifecycle rather than manufacturing `CLOSED`.
+
+Public boundaries are:
+
+```text
+POST /api/market-discovery
+POST /api/market-refresh
+```
+
+Discovery accepts only a controlled provider board/site selector. Refresh accepts only a canonical durable `marketObservationId`. Neither route accepts candidate evidence, requirements, MatchReport, lifecycle state, provider refresh URL or application recommendation inputs.
+
+M4B-09 does not automatically interpret, project, match or assess every discovered listing. It creates and refreshes a broad source-truth pool; later candidate-specific retrieval decides which opportunities merit deeper intelligence work.
+
+### Gate M4B-09 — BOUNDED_PROVIDER_DISCOVERY_AND_REFRESH
+
+M4B-09 is complete: controlled Greenhouse/Lever/Ashby listing enumeration is bounded and provider-native, discovered locators reuse M4B-03 acquisition, parallel item acquisition preserves partial success, refresh eligibility is explicit, provider locators are reconstructed from durable provenance, unchanged/changed re-observation semantics preserve history, and provider failure remains operational evidence rather than false closure.
+
+## Next architectural step — MARKET-04B-10
+
+CV Engine can now maintain a bounded pool of durable external opportunities without immediately running expensive candidate analysis over every listing.
+
+The next question is:
+
+```text
+many observed/current opportunities
+        ↓
+which ones are relevant enough to this candidate + target
+that deeper Job Intelligence / assessment is warranted?
 ```
 
 The next gate is:
 
 ```text
-MARKET-04B-09 — Multi-job Discovery + Refresh
+MARKET-04B-10 — Market Candidate Retrieval / Opportunity Filtering
 ```
 
-It must add bounded provider listing enumeration/pagination, controlled refresh/re-observation, retry/backoff and provider rate-budget semantics, partial-failure handling, and provenance-preserving handoff into the existing market truth chain.
+It should introduce a conservative market read/retrieval layer that narrows observed current opportunities before full assessment while keeping retrieval signals separate from candidate truth and evidence-backed Job Match.
 
-M4B-09 must continue to forbid arbitrary crawling and cross-provider fuzzy identity. Discovery may find more listings; it does not gain authority to manufacture candidate truth or merge source identities by similarity.
+Hard boundaries for the next gate:
 
-Negative provider disappearance/closure events and optimized catalog/query projections should be introduced only through explicit source/evidence contracts rather than hidden inside discovery.
+```text
+RetrievalSignal != CandidateFact
+RetrievalRelevance != JobMatch
+MarketPrefilter != HiringProbability
+Filtering != FuzzyLogicalIdentity
+```
+
+Negative provider disappearance/closure events, scheduled background polling and final high-volume catalog query projections remain explicit later boundaries rather than hidden inside retrieval.
