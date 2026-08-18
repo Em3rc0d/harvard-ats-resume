@@ -13,7 +13,10 @@ export interface MarketOpportunityIndexSnapshot {
 
 export interface MarketOpportunityIndexRepository {
   load(): Promise<MarketOpportunityIndexSnapshot | null>;
+  /** Legacy/full-snapshot fallback retained for tests and migration compatibility. */
   save(snapshot: MarketOpportunityIndexSnapshot): Promise<void>;
+  /** M4B-08 production path: append one immutable observation→opportunity link. */
+  append?(link: MarketOpportunityLink): Promise<void>;
 }
 
 export class MarketOpportunityIndexIntegrityError extends Error {
@@ -95,15 +98,27 @@ export async function persistMarketOpportunityLink(input: {
       : input.link.linkedAt,
   };
   validateMarketOpportunityIndexSnapshot(next);
-  await input.repository.save(next);
+
+  if (input.repository.append) {
+    await input.repository.append(input.link);
+  } else {
+    await input.repository.save(next);
+  }
 
   const reloaded = await input.repository.load();
   requireIndex(Boolean(reloaded), 'Market opportunity index save could not be reloaded for verification.');
   validateMarketOpportunityIndexSnapshot(reloaded!);
-  requireIndex(reloaded!.revision === next.revision, `Expected market opportunity index revision ${next.revision} but reloaded ${reloaded!.revision}.`);
   requireIndex(
-    reloaded!.links.some((item) => item.id === input.link.id),
-    'Reloaded market opportunity index does not contain the persisted link.',
+    reloaded!.revision >= next.revision,
+    `Expected market opportunity index revision at least ${next.revision} but reloaded ${reloaded!.revision}.`,
+  );
+  const persisted = reloaded!.links.find((item) => item.id === input.link.id);
+  requireIndex(Boolean(persisted), 'Reloaded market opportunity index does not contain the persisted link.');
+  requireIndex(
+    persisted!.marketObservationId === input.link.marketObservationId
+      && persisted!.marketOpportunityId === input.link.marketOpportunityId
+      && persisted!.contentSha256 === input.link.contentSha256,
+    'Reloaded market opportunity link changed historical meaning.',
   );
   return { snapshot: reloaded!, linkAdded: true };
 }

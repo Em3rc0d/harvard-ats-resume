@@ -18,9 +18,17 @@ export interface MarketObservationHistorySnapshot {
   readonly updatedAt: string;
 }
 
+export interface AppendMarketObservationHistoryEvent {
+  readonly observation: MarketObservation;
+  readonly occurrence: ObservationOccurrence;
+}
+
 export interface MarketObservationHistoryRepository {
   load(): Promise<MarketObservationHistorySnapshot | null>;
+  /** Legacy/full-snapshot fallback retained for deterministic tests and migration compatibility. */
   save(snapshot: MarketObservationHistorySnapshot): Promise<void>;
+  /** M4B-08 production path: one observation event is committed atomically. */
+  append?(event: AppendMarketObservationHistoryEvent): Promise<void>;
 }
 
 export interface PersistMarketObservationHistoryInput {
@@ -170,12 +178,12 @@ function laterTimestamp(first: string, second: string): string {
 }
 
 /**
- * M4B-02B durability boundary.
+ * M4B-02B durability semantics with the M4B-08 append-safe repository path.
  *
- * Semantic market state and temporal observation events are persisted
- * separately. Seeing unchanged source content again keeps one MarketObservation
- * and appends a new ObservationOccurrence. Changed semantic content creates a
- * new MarketObservation while every prior state and occurrence remain intact.
+ * Semantic market state and temporal observation events remain separate. A
+ * partitioned repository commits the observation + occurrence visibility as one
+ * atomic event, while legacy/full-snapshot repositories remain supported for
+ * tests and migration compatibility.
  */
 export async function persistMarketObservationHistory(
   input: PersistMarketObservationHistoryInput,
@@ -226,19 +234,31 @@ export async function persistMarketObservationHistory(
       : input.observation.observedAt,
   };
   validateMarketObservationHistorySnapshot(next);
-  await input.repository.save(next);
+
+  if (input.repository.append) {
+    await input.repository.append({ observation: input.observation, occurrence });
+  } else {
+    await input.repository.save(next);
+  }
 
   const reloaded = await input.repository.load();
   requireHistory(Boolean(reloaded), 'Market observation history save could not be reloaded for verification.');
   validateMarketObservationHistorySnapshot(reloaded!);
-  requireHistory(reloaded!.revision === next.revision, `Market observation history expected revision ${next.revision} but reloaded ${reloaded!.revision}.`);
   requireHistory(
-    reloaded!.observations.some((item) => item.id === input.observation.id),
-    'Market observation history reload could not find the persisted semantic observation.',
+    reloaded!.revision >= next.revision,
+    `Market observation history expected revision at least ${next.revision} but reloaded ${reloaded!.revision}.`,
   );
+  const persistedObservation = reloaded!.observations.find((item) => item.id === input.observation.id);
+  requireHistory(Boolean(persistedObservation), 'Market observation history reload could not find the persisted semantic observation.');
   requireHistory(
-    reloaded!.occurrences.some((item) => item.id === occurrence.id),
-    'Market observation history reload could not find the persisted observation occurrence.',
+    persistedObservation!.contentSha256 === input.observation.contentSha256,
+    'Reloaded MarketObservation content hash changed.',
+  );
+  const persistedOccurrence = reloaded!.occurrences.find((item) => item.id === occurrence.id);
+  requireHistory(Boolean(persistedOccurrence), 'Market observation history reload could not find the persisted observation occurrence.');
+  requireHistory(
+    persistedOccurrence!.contentSha256 === occurrence.contentSha256,
+    'Reloaded ObservationOccurrence content hash changed.',
   );
 
   return { snapshot: reloaded!, occurrence, observationAdded, occurrenceAdded };

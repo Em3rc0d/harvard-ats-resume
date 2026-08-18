@@ -22,7 +22,10 @@ export interface MarketJobProjectionHistorySnapshot {
 
 export interface MarketJobProjectionHistoryRepository {
   load(): Promise<MarketJobProjectionHistorySnapshot | null>;
+  /** Legacy/full-snapshot fallback retained for tests and migration compatibility. */
   save(snapshot: MarketJobProjectionHistorySnapshot): Promise<void>;
+  /** M4B-08 production path: append one immutable projection + JobSnapshot record. */
+  append?(record: MarketJobProjectionHistoryRecord): Promise<void>;
 }
 
 export class MarketJobProjectionHistoryIntegrityError extends Error {
@@ -166,19 +169,29 @@ export async function persistMarketJobProjection(
       : input.projection.projectedAt,
   };
   validateMarketJobProjectionHistorySnapshot(next);
-  await input.repository.save(next);
+
+  if (input.repository.append) {
+    await input.repository.append(incoming);
+  } else {
+    await input.repository.save(next);
+  }
 
   const reloaded = await input.repository.load();
   requireHistory(Boolean(reloaded), 'Market job projection history save could not be reloaded for verification.');
   validateMarketJobProjectionHistorySnapshot(reloaded!);
   requireHistory(
-    reloaded!.revision === next.revision,
-    `Expected market job projection history revision ${next.revision} but reloaded ${reloaded!.revision}.`,
+    reloaded!.revision >= next.revision,
+    `Expected market job projection history revision at least ${next.revision} but reloaded ${reloaded!.revision}.`,
   );
   const persisted = reloaded!.records.find((item) => semanticKey(item) === key);
   requireHistory(Boolean(persisted), 'Reload could not find the persisted market job projection record.');
   requireHistory(
-    persisted!.jobSnapshot.id === input.jobSnapshot.id,
+    persisted!.projection.contentSha256 === input.projection.contentSha256,
+    'Reloaded MarketJobProjection content hash changed.',
+  );
+  requireHistory(
+    persisted!.jobSnapshot.id === input.jobSnapshot.id
+      && persisted!.jobSnapshot.contentSha256 === input.jobSnapshot.contentSha256,
     'Reloaded market job projection points to another JobSnapshot.',
   );
 

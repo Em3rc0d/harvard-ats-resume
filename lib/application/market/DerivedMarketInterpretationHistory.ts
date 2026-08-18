@@ -16,7 +16,10 @@ export interface DerivedMarketInterpretationHistorySnapshot {
 
 export interface DerivedMarketInterpretationHistoryRepository {
   load(): Promise<DerivedMarketInterpretationHistorySnapshot | null>;
+  /** Legacy/full-snapshot fallback retained for tests and migration compatibility. */
   save(snapshot: DerivedMarketInterpretationHistorySnapshot): Promise<void>;
+  /** M4B-08 production path: append one immutable interpretation. */
+  append?(interpretation: DerivedMarketInterpretation): Promise<void>;
 }
 
 export class DerivedMarketInterpretationHistoryIntegrityError extends Error {
@@ -90,9 +93,10 @@ export interface PersistDerivedMarketInterpretationResult {
 }
 
 /**
- * Durable M4B-04 history boundary. Interpretation identity is semantic, so
- * regenerating the same observation under the same policy is idempotent.
- * Changing the source observation or policy preserves the prior interpretation.
+ * Durable M4B-04 semantics with the M4B-08 append-safe repository path.
+ * Interpretation identity remains semantic and idempotent; concurrent writers
+ * may advance history beyond this caller's locally observed revision, so reload
+ * verification requires at least the expected revision plus the exact record.
  */
 export async function persistDerivedMarketInterpretation(
   input: PersistDerivedMarketInterpretationInput,
@@ -135,14 +139,19 @@ export async function persistDerivedMarketInterpretation(
       : input.interpretation.generatedAt,
   };
   validateDerivedMarketInterpretationHistorySnapshot(next);
-  await input.repository.save(next);
+
+  if (input.repository.append) {
+    await input.repository.append(input.interpretation);
+  } else {
+    await input.repository.save(next);
+  }
 
   const reloaded = await input.repository.load();
   requireHistory(Boolean(reloaded), 'Derived market interpretation history save could not be reloaded for verification.');
   validateDerivedMarketInterpretationHistorySnapshot(reloaded!);
   requireHistory(
-    reloaded!.revision === next.revision,
-    `Expected interpretation history revision ${next.revision} but reloaded ${reloaded!.revision}.`,
+    reloaded!.revision >= next.revision,
+    `Expected interpretation history revision at least ${next.revision} but reloaded ${reloaded!.revision}.`,
   );
   const persisted = reloaded!.interpretations.find((item) => item.id === input.interpretation.id);
   requireHistory(Boolean(persisted), 'Reload could not find the persisted derived market interpretation.');
