@@ -79,7 +79,7 @@ export class PartitionedMarketObservationHistoryRepository implements MarketObse
   }
 
   async load(): Promise<MarketObservationHistorySnapshot | null> {
-    const [partitionedObservations, partitionedOccurrences, migrated] = await Promise.all([
+    const [partitionedObservations, partitionedOccurrences, legacy] = await Promise.all([
       readPartitionedMarketCollection<MarketObservation>({
         backend: this.backend,
         namespace: NAMESPACE,
@@ -90,12 +90,8 @@ export class PartitionedMarketObservationHistoryRepository implements MarketObse
         namespace: NAMESPACE,
         kind: OCCURRENCE_KIND,
       }),
-      this.backend.get<string>(MIGRATION_MARKER),
+      this.backend.get<MarketObservationHistorySnapshot>(LEGACY_KEY),
     ]);
-
-    const legacy = migrated
-      ? null
-      : await this.backend.get<MarketObservationHistorySnapshot>(LEGACY_KEY);
     if (legacy) validateMarketObservationHistorySnapshot(legacy);
 
     const observations = mergeImmutableRecordsById(
