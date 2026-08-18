@@ -66,17 +66,14 @@ implements MarketJobProjectionHistoryRepository {
   }
 
   async load(): Promise<MarketJobProjectionHistorySnapshot | null> {
-    const [partitioned, migrated] = await Promise.all([
+    const [partitioned, legacy] = await Promise.all([
       readPartitionedMarketCollection<MarketJobProjectionHistoryRecord>({
         backend: this.backend,
         namespace: NAMESPACE,
         kind: RECORD_KIND,
       }),
-      this.backend.get<string>(MIGRATION_MARKER),
+      this.backend.get<MarketJobProjectionHistorySnapshot>(LEGACY_KEY),
     ]);
-    const legacy = migrated
-      ? null
-      : await this.backend.get<MarketJobProjectionHistorySnapshot>(LEGACY_KEY);
     if (legacy) validateMarketJobProjectionHistorySnapshot(legacy);
 
     const records = mergeImmutableRecordsById(
