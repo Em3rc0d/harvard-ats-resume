@@ -4,6 +4,7 @@ import { MarketObservationHistoryUnavailableError } from '@/lib/application/mark
 import { MarketOpportunityIndexUnavailableError } from '@/lib/application/market/MarketOpportunityIndexHistory';
 import { MarketOpportunitySourceNotFoundError } from '@/lib/application/market/MarketOpportunityLifecycleRuntime';
 import { refreshDurableMarketOpportunity } from '@/lib/application/market/ControlledProviderRefresh';
+import type { MarketObservationId } from '@/lib/domain';
 import { acquireProviderMarketIntake } from '@/lib/infrastructure/market/ControlledProviderSourceAdapters';
 import { resolveControlledProviderRefreshLocator } from '@/lib/infrastructure/market/ControlledProviderRefreshLocator';
 import { createMarketObservationHistoryRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashMarketObservationHistoryRepository';
@@ -84,7 +85,8 @@ export async function POST(request: NextRequest) {
   try {
     const observationRepository = createMarketObservationHistoryRepositoryFromEnv();
     const opportunityIndexRepository = createMarketOpportunityIndexRepositoryFromEnv();
-    const result = await refreshDurableMarketOpportunity(validation.data.marketObservationId as `market-observation:${string}`, {
+    const marketObservationId = validation.data.marketObservationId as MarketObservationId;
+    const result = await refreshDurableMarketOpportunity(marketObservationId, {
       observationRepository,
       opportunityIndexRepository,
       acquirer: (sourceRequest) => acquireProviderMarketIntake(sourceRequest, fetch),
