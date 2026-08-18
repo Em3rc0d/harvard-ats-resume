@@ -151,7 +151,14 @@ function looksLikeIdentityHeader(line: string): boolean {
     .split(/\s+/)
     .filter(Boolean);
 
-  return words.length > 0 && words.length <= 5;
+  if (words.length === 0 || words.length > 5) return false;
+
+  const firstToken = normalize(words[0] ?? '');
+  if (canonicalToken(firstToken) !== firstToken) return false;
+
+  return words.every((word) =>
+    /^[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9.+#'’\-]*$/.test(word),
+  );
 }
 
 function isPresentationLine(line: string, nonEmptyIndex: number): boolean {
