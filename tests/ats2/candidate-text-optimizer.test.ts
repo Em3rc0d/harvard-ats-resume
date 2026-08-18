@@ -15,9 +15,9 @@ class StaticProvider implements CandidateTextOptimizationProvider {
   }
 }
 
-test('inline optimizer accepts a conservative rewrite that preserves factual vocabulary', async () => {
-  const source = 'Trabajo con Spring Boot y MongoDB en APIs REST.';
-  const provider = new StaticProvider('Trabajo con Spring Boot y MongoDB en APIs REST, de forma clara y estructurada.');
+test('inline optimizer accepts a conservative rewrite that only reorders facts and adds grammar', async () => {
+  const source = 'Trabajo Spring Boot MongoDB APIs REST.';
+  const provider = new StaticProvider('Trabajo con APIs REST, Spring Boot y MongoDB.');
 
   const result = await optimizeCandidateText(source, provider);
 
@@ -46,6 +46,18 @@ test('inline optimizer rejects novel domain vocabulary that could become fabrica
 
   assert.equal(result.mode, 'PRESENTATION_ONLY_FALLBACK');
   assert.doesNotMatch(result.output, /Kubernetes/);
+  assert.match(result.fallbackReason ?? '', /unsupported factual vocabulary/i);
+});
+
+test('inline optimizer rejects a stronger responsibility verb absent from candidate-authored source', async () => {
+  const source = 'Apoyé el desarrollo de APIs REST con Spring Boot.';
+  const provider = new StaticProvider('Lideré el desarrollo de APIs REST con Spring Boot.');
+
+  const result = await optimizeCandidateText(source, provider);
+
+  assert.equal(result.mode, 'PRESENTATION_ONLY_FALLBACK');
+  assert.equal(result.output, source);
+  assert.doesNotMatch(result.output, /Lideré/);
   assert.match(result.fallbackReason ?? '', /unsupported factual vocabulary/i);
 });
 
