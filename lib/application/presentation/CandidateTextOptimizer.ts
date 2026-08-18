@@ -31,42 +31,24 @@ function normalize(value: string): string {
     .trim();
 }
 
-// The inline optimizer is allowed to introduce only connective/style vocabulary.
-// Domain nouns, technologies, metrics, responsibilities and scope must already
-// exist in the candidate-authored source text. This deliberately prefers a
-// conservative fallback over silently promoting model prose into candidate truth.
-const SAFE_STYLE_TOKENS = new Set([
+// Only grammatical/connective vocabulary may be newly introduced. Action verbs,
+// scope qualifiers, technologies, outcomes, responsibility words and domain nouns
+// must already occur in the candidate-authored source. This intentionally makes
+// the optimizer conservative: if a model needs a stronger verb to make the text
+// sound better, the rewrite is rejected instead of promoting prose into truth.
+const SAFE_GRAMMAR_TOKENS = new Set([
   // English
   'a', 'an', 'and', 'as', 'at', 'by', 'for', 'from', 'in', 'into', 'of', 'on',
   'or', 'the', 'to', 'with', 'while', 'through', 'across', 'within', 'using',
-  'used', 'focused', 'clear', 'clearly', 'concise', 'professional', 'relevant',
-  'effective', 'effectively', 'consistent', 'structured', 'responsible',
-  'supported', 'supporting', 'including', 'related', 'work', 'worked', 'working',
-  'contributed', 'contributing', 'collaborated', 'collaborating', 'helped',
-  'maintained', 'maintaining', 'organized', 'organizing', 'delivered', 'providing',
-  'way', 'manner', 'more', 'direct', 'directly',
   // Spanish
   'a', 'al', 'con', 'de', 'del', 'desde', 'durante', 'el', 'en', 'entre', 'la',
   'las', 'los', 'para', 'por', 'que', 'y', 'o', 'mediante', 'utilizando', 'usando',
-  'enfocado', 'enfocada', 'claro', 'clara', 'claramente', 'conciso', 'concisa',
-  'profesional', 'relevante', 'efectivo', 'efectiva', 'consistente', 'estructurado',
-  'estructurada', 'responsable', 'incluyendo', 'relacionado', 'relacionada',
-  'trabajo', 'trabajando', 'colaborando', 'colabore', 'colaboré', 'apoye', 'apoyé',
-  'apoyando', 'contribui', 'contribuí', 'contribuyendo', 'mantuve', 'manteniendo',
-  'organicé', 'organice', 'organizando', 'forma', 'manera', 'mas', 'más', 'directo',
-  'directa', 'directamente',
   // French
   'avec', 'dans', 'de', 'des', 'du', 'et', 'en', 'pour', 'par', 'sur', 'via',
-  'utilisant', 'professionnel', 'professionnelle', 'clair', 'claire', 'concis',
-  'concise', 'coherent', 'cohérente', 'structure', 'structuré', 'structurée',
-  'collabore', 'collaboré', 'collaborant', 'contribue', 'contribué', 'soutenu',
-  'manière', 'maniere', 'plus', 'direct', 'directe', 'directement',
+  'utilisant',
   // Portuguese
   'a', 'ao', 'com', 'da', 'das', 'de', 'do', 'dos', 'em', 'entre', 'e', 'ou',
-  'para', 'por', 'usando', 'utilizando', 'profissional', 'claro', 'clara', 'conciso',
-  'concisa', 'consistente', 'estruturado', 'estruturada', 'colaborei', 'colaborando',
-  'contribui', 'contribuindo', 'apoiei', 'apoiando', 'mantive', 'mantendo',
-  'forma', 'maneira', 'mais', 'direto', 'direta', 'diretamente',
+  'para', 'por', 'usando', 'utilizando',
 ].map(normalize));
 
 function tokens(value: string): string[] {
@@ -116,7 +98,7 @@ function assertNoNovelDomainVocabulary(sourceText: string, candidateText: string
     (token) =>
       token.length >= 3 &&
       !sourceTokens.has(token) &&
-      !SAFE_STYLE_TOKENS.has(token),
+      !SAFE_GRAMMAR_TOKENS.has(token),
   );
 
   if (novel.length > 0) {
