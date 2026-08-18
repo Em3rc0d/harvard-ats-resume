@@ -3,26 +3,31 @@ import { Redis } from '@upstash/redis';
 
 export const MARKET_PERSISTENCE_SHARD_COUNT = 16 as const;
 
+export interface ImmutablePartitionRecordWrite {
+  readonly recordKey: string;
+  readonly record: unknown;
+  readonly indexKey: string;
+  readonly id: string;
+}
+
 export interface PartitionedMarketPersistenceBackend {
   get<T>(key: string): Promise<T | null>;
   members(key: string): Promise<readonly string[]>;
   many<T>(keys: readonly string[]): Promise<readonly (T | null)[]>;
-  commitImmutableRecord(input: {
-    readonly recordKey: string;
-    readonly record: unknown;
-    readonly indexKey: string;
-    readonly id: string;
-  }): Promise<void>;
+  commitImmutableRecords(records: readonly ImmutablePartitionRecordWrite[]): Promise<void>;
   set(key: string, value: unknown): Promise<void>;
 }
 
 /**
  * Redis implementation for M4B-08 partitioned persistence.
  *
- * Each immutable record is written in one MULTI/EXEC transaction together with
- * membership in exactly one deterministic shard index. Writers targeting
- * disjoint record/index keys can proceed independently; writers that collide on
- * one shard serialize without replacing another writer's record or membership.
+ * One logical persistence event can contain one or more immutable records. The
+ * records and their shard-index memberships are committed in one MULTI/EXEC
+ * transaction so no reader can observe a half-committed event such as a
+ * MarketObservation without its ObservationOccurrence.
+ *
+ * Separate logical events use deterministic shard indexes; disjoint key sets do
+ * not share one global history blob and cannot overwrite one another.
  */
 export class UpstashPartitionedMarketPersistenceBackend
 implements PartitionedMarketPersistenceBackend {
@@ -41,15 +46,13 @@ implements PartitionedMarketPersistenceBackend {
     return await this.redis.mget<T>(...keys);
   }
 
-  async commitImmutableRecord(input: {
-    readonly recordKey: string;
-    readonly record: unknown;
-    readonly indexKey: string;
-    readonly id: string;
-  }): Promise<void> {
+  async commitImmutableRecords(records: readonly ImmutablePartitionRecordWrite[]): Promise<void> {
+    if (records.length === 0) return;
     const transaction = this.redis.multi();
-    transaction.setnx(input.recordKey, input.record);
-    transaction.sadd(input.indexKey, input.id);
+    for (const record of records) {
+      transaction.setnx(record.recordKey, record.record);
+      transaction.sadd(record.indexKey, record.id);
+    }
     await transaction.exec();
   }
 
@@ -76,6 +79,20 @@ export function partitionedMarketIndexKeys(namespace: string, kind: string): rea
   return Array.from({ length: MARKET_PERSISTENCE_SHARD_COUNT }, (_, shard) => (
     `${namespace}:${kind}:index:${shard.toString(16).padStart(2, '0')}`
   ));
+}
+
+export function immutablePartitionRecord<T>(input: {
+  readonly namespace: string;
+  readonly kind: string;
+  readonly id: string;
+  readonly record: T;
+}): ImmutablePartitionRecordWrite {
+  return {
+    recordKey: partitionedMarketRecordKey(input.namespace, input.kind, input.id),
+    record: input.record,
+    indexKey: partitionedMarketIndexKey(input.namespace, input.kind, input.id),
+    id: input.id,
+  };
 }
 
 export async function readPartitionedMarketCollection<T>(input: {
@@ -107,12 +124,14 @@ export async function writePartitionedMarketCollection<T>(input: {
 }): Promise<void> {
   await Promise.all(input.records.map(async (record) => {
     const id = input.idOf(record);
-    await input.backend.commitImmutableRecord({
-      recordKey: partitionedMarketRecordKey(input.namespace, input.kind, id),
-      record,
-      indexKey: partitionedMarketIndexKey(input.namespace, input.kind, id),
-      id,
-    });
+    await input.backend.commitImmutableRecords([
+      immutablePartitionRecord({
+        namespace: input.namespace,
+        kind: input.kind,
+        id,
+        record,
+      }),
+    ]);
   }));
 }
 
