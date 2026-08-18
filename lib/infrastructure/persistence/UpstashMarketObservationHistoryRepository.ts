@@ -94,16 +94,16 @@ export class PartitionedMarketObservationHistoryRepository implements MarketObse
     ]);
     if (legacy) validateMarketObservationHistorySnapshot(legacy);
 
-    const observations = mergeImmutableRecordsById(
+    const observations = [...mergeImmutableRecordsById(
       legacy?.observations ?? [],
       partitionedObservations,
       (item) => item.id,
-    ).sort((first, second) => compareTimestampThenId(first, second, (item) => item.observedAt, (item) => item.id));
-    const occurrences = mergeImmutableRecordsById(
+    )].sort((first, second) => compareTimestampThenId(first, second, (item) => item.observedAt, (item) => item.id));
+    const occurrences = [...mergeImmutableRecordsById(
       legacy?.occurrences ?? [],
       partitionedOccurrences,
       (item) => item.id,
-    ).sort((first, second) => compareTimestampThenId(first, second, (item) => item.observedAt, (item) => item.id));
+    )].sort((first, second) => compareTimestampThenId(first, second, (item) => item.observedAt, (item) => item.id));
 
     if (observations.length === 0 && occurrences.length === 0) return null;
     if (occurrences.length === 0) {
