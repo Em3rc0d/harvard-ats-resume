@@ -76,11 +76,11 @@ implements MarketJobProjectionHistoryRepository {
     ]);
     if (legacy) validateMarketJobProjectionHistorySnapshot(legacy);
 
-    const records = mergeImmutableRecordsById(
+    const records = [...mergeImmutableRecordsById(
       legacy?.records ?? [],
       partitioned,
       recordId,
-    ).sort(compareRecords);
+    )].sort(compareRecords);
     if (records.length === 0) return null;
 
     const snapshot: MarketJobProjectionHistorySnapshot = {
