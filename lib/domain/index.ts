@@ -8,6 +8,7 @@ export * from './job/JobDescription';
 export * from './job/JobRequirement';
 export * from './job/JobSnapshot';
 export * from './market/DerivedMarketInterpretation';
+export * from './market/MarketCandidateRetrieval';
 export * from './market/MarketJobProjection';
 export * from './market/MarketObservation';
 export * from './market/MarketOpportunity';
