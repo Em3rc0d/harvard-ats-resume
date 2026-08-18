@@ -56,17 +56,14 @@ export class PartitionedMarketOpportunityIndexRepository implements MarketOpport
   }
 
   async load(): Promise<MarketOpportunityIndexSnapshot | null> {
-    const [partitioned, migrated] = await Promise.all([
+    const [partitioned, legacy] = await Promise.all([
       readPartitionedMarketCollection<MarketOpportunityLink>({
         backend: this.backend,
         namespace: NAMESPACE,
         kind: LINK_KIND,
       }),
-      this.backend.get<string>(MIGRATION_MARKER),
+      this.backend.get<MarketOpportunityIndexSnapshot>(LEGACY_KEY),
     ]);
-    const legacy = migrated
-      ? null
-      : await this.backend.get<MarketOpportunityIndexSnapshot>(LEGACY_KEY);
     if (legacy) validateMarketOpportunityIndexSnapshot(legacy);
 
     const links = mergeImmutableRecordsById(
