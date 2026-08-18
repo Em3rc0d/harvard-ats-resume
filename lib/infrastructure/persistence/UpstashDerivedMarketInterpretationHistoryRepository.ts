@@ -67,11 +67,11 @@ implements DerivedMarketInterpretationHistoryRepository {
     ]);
     if (legacy) validateDerivedMarketInterpretationHistorySnapshot(legacy);
 
-    const interpretations = mergeImmutableRecordsById(
+    const interpretations = [...mergeImmutableRecordsById(
       legacy?.interpretations ?? [],
       partitioned,
       semanticKey,
-    ).sort(compareInterpretations);
+    )].sort(compareInterpretations);
     if (interpretations.length === 0) return null;
 
     const snapshot: DerivedMarketInterpretationHistorySnapshot = {
