@@ -21,7 +21,7 @@ function source(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
 }
 
-const candidateProfileId = domainId('CandidateProfile', 'candidate-profile:retrieval-test');
+const candidateProfileId: CandidateProfileId = domainId('CandidateProfile', 'candidate-profile:retrieval-test');
 
 const target = createCareerTarget(candidateProfileId, {
   roleTitle: 'Backend Engineer',
@@ -118,7 +118,7 @@ test('OPEN source-explicit target role with compatible constraints becomes a ret
   });
 
   assert.equal(result.candidates.length, 1);
-  assert.equal(result.candidates[0].disposition, 'CANDIDATE');
+  assert.equal(candidateByRole(result, 'Senior Backend Engineer')?.disposition, 'CANDIDATE');
   assert.equal(result.candidates[0].lifecycle.status, 'OPEN');
   assert.equal(result.candidates[0].signals.find((item) => item.dimension === 'ROLE')?.status, 'ALIGNED');
   assert.equal(result.scopeBoundary, 'TARGET_BOUND_MARKET_PREFILTER_NOT_JOB_MATCH_HIRING_PROBABILITY_OR_CANDIDATE_TRUTH');
