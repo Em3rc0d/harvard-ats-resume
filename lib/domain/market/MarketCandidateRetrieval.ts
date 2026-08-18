@@ -85,7 +85,12 @@ export interface MarketCandidateSet {
   readonly careerTargetId: CareerTargetId;
   readonly careerTargetContentSha256: string;
   readonly marketObservationHistoryRevision: number;
+  /** Digest of every logical current market candidate considered by this view. */
+  readonly marketUniverseSha256: string;
+  /** Bounded OPEN opportunities worth deeper interpretation/assessment work. */
   readonly candidates: readonly MarketRetrievalCandidate[];
+  /** Bounded stale opportunities whose target signal warrants source refresh first. */
+  readonly refreshFirst: readonly MarketRetrievalCandidate[];
   readonly summary: MarketCandidateRetrievalSummary;
   readonly contentSha256: string;
   readonly generatedAt: string;
