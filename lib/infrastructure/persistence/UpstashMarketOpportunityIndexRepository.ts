@@ -1,25 +1,103 @@
 import { Redis } from '@upstash/redis';
 import {
   MarketOpportunityIndexUnavailableError,
+  validateMarketOpportunityIndexSnapshot,
   type MarketOpportunityIndexRepository,
   type MarketOpportunityIndexSnapshot,
 } from '../../application/market/MarketOpportunityIndexHistory';
+import { validateMarketOpportunityLinkIntegrity } from '../../application/market/MarketOpportunityIdentityLifecycleService';
+import type { MarketOpportunityLink } from '../../domain';
+import {
+  UpstashPartitionedMarketPersistenceBackend,
+  immutablePartitionRecord,
+  mergeImmutableRecordsById,
+  readPartitionedMarketCollection,
+  type PartitionedMarketPersistenceBackend,
+} from './PartitionedMarketPersistence';
 
-const KEY = 'ats2:market-opportunity-index:v1';
+const LEGACY_KEY = 'ats2:market-opportunity-index:v1';
+const NAMESPACE = 'ats2:market-opportunity-index:v2';
+const MIGRATION_MARKER = `${NAMESPACE}:migration-complete`;
+const LINK_KIND = 'link';
 
-/**
- * First durable logical-opportunity index. This retains the current single-key
- * snapshot limitation and is not approved for provider-scale parallel writers.
- */
-export class UpstashMarketOpportunityIndexRepository implements MarketOpportunityIndexRepository {
-  constructor(private readonly redis: Redis) {}
+function compareLinks(first: MarketOpportunityLink, second: MarketOpportunityLink): number {
+  const byTime = Date.parse(first.linkedAt) - Date.parse(second.linkedAt);
+  return byTime !== 0 ? byTime : first.id.localeCompare(second.id);
+}
+
+export class PartitionedMarketOpportunityIndexRepository implements MarketOpportunityIndexRepository {
+  constructor(private readonly backend: PartitionedMarketPersistenceBackend) {}
+
+  private async commitLink(link: MarketOpportunityLink): Promise<void> {
+    validateMarketOpportunityLinkIntegrity(link);
+    await this.backend.commitImmutableRecords([
+      immutablePartitionRecord({
+        namespace: NAMESPACE,
+        kind: LINK_KIND,
+        id: link.id,
+        record: link,
+      }),
+    ]);
+  }
+
+  private async ensureLegacyMigrated(): Promise<void> {
+    if (await this.backend.get<string>(MIGRATION_MARKER)) return;
+    const legacy = await this.backend.get<MarketOpportunityIndexSnapshot>(LEGACY_KEY);
+    if (legacy) {
+      validateMarketOpportunityIndexSnapshot(legacy);
+      await Promise.all(legacy.links.map((link) => this.commitLink(link)));
+    }
+    await this.backend.set(MIGRATION_MARKER, 'complete');
+  }
 
   async load(): Promise<MarketOpportunityIndexSnapshot | null> {
-    return await this.redis.get<MarketOpportunityIndexSnapshot>(KEY);
+    const [partitioned, migrated] = await Promise.all([
+      readPartitionedMarketCollection<MarketOpportunityLink>({
+        backend: this.backend,
+        namespace: NAMESPACE,
+        kind: LINK_KIND,
+      }),
+      this.backend.get<string>(MIGRATION_MARKER),
+    ]);
+    const legacy = migrated
+      ? null
+      : await this.backend.get<MarketOpportunityIndexSnapshot>(LEGACY_KEY);
+    if (legacy) validateMarketOpportunityIndexSnapshot(legacy);
+
+    const links = mergeImmutableRecordsById(
+      legacy?.links ?? [],
+      partitioned,
+      (link) => link.id,
+    ).sort(compareLinks);
+    if (links.length === 0) return null;
+
+    const snapshot: MarketOpportunityIndexSnapshot = {
+      schemaVersion: 'market-opportunity-index-v1',
+      links,
+      revision: links.length,
+      createdAt: links[0].linkedAt,
+      updatedAt: links[links.length - 1].linkedAt,
+    };
+    validateMarketOpportunityIndexSnapshot(snapshot);
+    return snapshot;
+  }
+
+  async append(link: MarketOpportunityLink): Promise<void> {
+    await this.ensureLegacyMigrated();
+    await this.commitLink(link);
   }
 
   async save(snapshot: MarketOpportunityIndexSnapshot): Promise<void> {
-    await this.redis.set(KEY, snapshot);
+    validateMarketOpportunityIndexSnapshot(snapshot);
+    await this.ensureLegacyMigrated();
+    await Promise.all(snapshot.links.map((link) => this.commitLink(link)));
+  }
+}
+
+export class UpstashMarketOpportunityIndexRepository
+extends PartitionedMarketOpportunityIndexRepository {
+  constructor(redis: Redis) {
+    super(new UpstashPartitionedMarketPersistenceBackend(redis));
   }
 }
 
