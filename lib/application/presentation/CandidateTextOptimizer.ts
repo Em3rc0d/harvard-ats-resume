@@ -71,7 +71,12 @@ const SAFE_STYLE_TOKENS = new Set([
 
 function tokens(value: string): string[] {
   return normalize(value)
-    .replace(/[^a-z0-9+#.\-/\s]/g, ' ')
+    // Sentence punctuation must never change factual-token identity. Removing
+    // dots here also makes `REST.` and `REST` equivalent; dotted technology
+    // names such as Next.js remain represented by the same `next` + `js`
+    // tokens on both the source and candidate sides.
+    .replace(/[.,;:!?()[\]{}]/g, ' ')
+    .replace(/[^a-z0-9+#/\-\s]/g, ' ')
     .split(/\s+/)
     .map((token) => token.trim())
     .filter(Boolean);
