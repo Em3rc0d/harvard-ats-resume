@@ -250,7 +250,7 @@ test('Upstash partition backend uses MULTI/EXEC with SETNX, SADD, and read verif
   assert.match(source, /this\.redis\.multi\(\)/);
   assert.match(source, /transaction\.setnx\(/);
   assert.match(source, /transaction\.sadd\(/);
-  assert.match(source, /this\.redis\.mget<unknown>/);
+  assert.match(source, /this\.redis\.mget<unknown\[\]>/);
 
   for (const file of [
     'UpstashMarketObservationHistoryRepository.ts',
