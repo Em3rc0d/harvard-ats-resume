@@ -1,12 +1,8 @@
 /** @type {import('next').NextConfig} */
+const path = require('node:path');
+
 const nextConfig = {
   reactStrictMode: true,
-
-  // Route Handlers bundle server dependencies by default. pdfjs-dist v5 ships
-  // its Node-compatible legacy entry as ESM; letting the Next/Webpack server
-  // bundle transform that module can corrupt its namespace initialization at
-  // runtime. Keep PDF.js external so Node loads the package natively.
-  serverExternalPackages: ['pdfjs-dist'],
 
   // Temporary compatibility bridge for the legacy inline Optimize buttons.
   // The browser no longer calls an external n8n workflow; requests stay inside
@@ -52,10 +48,19 @@ const nextConfig = {
   webpack: (config, { isServer }) => {
     config.resolve.alias.canvas = false;
 
-    // Certificate parsing runs in the browser and still needs the generic
-    // legacy entry. Native resume ingestion runs on the Node server and is
-    // isolated above through serverExternalPackages.
-    if (!isServer) {
+    if (isServer) {
+      // The resume Route Handler imports PDF.js through this exact package
+      // subpath. Route it through a tiny adapter whose own dynamic import is
+      // marked webpackIgnore, so Node executes the ESM package natively during
+      // both `next dev --webpack` and `next start` instead of Webpack rewriting
+      // PDF.js' module namespace.
+      config.resolve.alias['pdfjs-dist/legacy/build/pdf.mjs$'] = path.resolve(
+        __dirname,
+        'lib/infrastructure/import/PdfJsNodeRuntime.ts',
+      );
+    } else {
+      // Certificate parsing runs in the browser and needs the generic legacy
+      // PDF.js entry. Keep this contract independent from native resume import.
       config.resolve.alias['pdfjs-dist$'] = 'pdfjs-dist/legacy/build/pdf.mjs';
     }
 
