@@ -135,6 +135,22 @@ export async function writePartitionedMarketCollection<T>(input: {
   }));
 }
 
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.keys(value as Record<string, unknown>)
+    .sort()
+    .reduce<Record<string, unknown>>((result, key) => {
+      const item = (value as Record<string, unknown>)[key];
+      if (item !== undefined) result[key] = stableValue(item);
+      return result;
+    }, {});
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(stableValue(value));
+}
+
 export function mergeImmutableRecordsById<T>(
   legacy: readonly T[],
   partitioned: readonly T[],
@@ -144,7 +160,11 @@ export function mergeImmutableRecordsById<T>(
   for (const record of legacy) byId.set(idOf(record), record);
   for (const record of partitioned) {
     const id = idOf(record);
-    if (!byId.has(id)) byId.set(id, record);
+    const prior = byId.get(id);
+    if (prior && stableJson(prior) !== stableJson(record)) {
+      throw new Error(`Immutable partition identity ${id} has divergent legacy and partitioned content.`);
+    }
+    if (!prior) byId.set(id, record);
   }
   return [...byId.values()];
 }
