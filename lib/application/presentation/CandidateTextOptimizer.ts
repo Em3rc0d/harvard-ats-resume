@@ -22,6 +22,15 @@ const NUMBER_PATTERN = /(?:[$€£]\s*)?\b\d+(?:[.,]\d+)?%?\b/g;
 const URL_PATTERN = /https?:\/\/[^\s]+/gi;
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 
+function normalize(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[“”"'`]/g, '')
+    .trim();
+}
+
 // The inline optimizer is allowed to introduce only connective/style vocabulary.
 // Domain nouns, technologies, metrics, responsibilities and scope must already
 // exist in the candidate-authored source text. This deliberately prefers a
@@ -35,6 +44,7 @@ const SAFE_STYLE_TOKENS = new Set([
   'supported', 'supporting', 'including', 'related', 'work', 'worked', 'working',
   'contributed', 'contributing', 'collaborated', 'collaborating', 'helped',
   'maintained', 'maintaining', 'organized', 'organizing', 'delivered', 'providing',
+  'way', 'manner', 'more', 'direct', 'directly',
   // Spanish
   'a', 'al', 'con', 'de', 'del', 'desde', 'durante', 'el', 'en', 'entre', 'la',
   'las', 'los', 'para', 'por', 'que', 'y', 'o', 'mediante', 'utilizando', 'usando',
@@ -43,27 +53,21 @@ const SAFE_STYLE_TOKENS = new Set([
   'estructurada', 'responsable', 'incluyendo', 'relacionado', 'relacionada',
   'trabajo', 'trabajando', 'colaborando', 'colabore', 'colaboré', 'apoye', 'apoyé',
   'apoyando', 'contribui', 'contribuí', 'contribuyendo', 'mantuve', 'manteniendo',
-  'organicé', 'organice', 'organizando',
+  'organicé', 'organice', 'organizando', 'forma', 'manera', 'mas', 'más', 'directo',
+  'directa', 'directamente',
   // French
   'avec', 'dans', 'de', 'des', 'du', 'et', 'en', 'pour', 'par', 'sur', 'via',
   'utilisant', 'professionnel', 'professionnelle', 'clair', 'claire', 'concis',
   'concise', 'coherent', 'cohérente', 'structure', 'structuré', 'structurée',
   'collabore', 'collaboré', 'collaborant', 'contribue', 'contribué', 'soutenu',
+  'manière', 'maniere', 'plus', 'direct', 'directe', 'directement',
   // Portuguese
   'a', 'ao', 'com', 'da', 'das', 'de', 'do', 'dos', 'em', 'entre', 'e', 'ou',
   'para', 'por', 'usando', 'utilizando', 'profissional', 'claro', 'clara', 'conciso',
   'concisa', 'consistente', 'estruturado', 'estruturada', 'colaborei', 'colaborando',
   'contribui', 'contribuindo', 'apoiei', 'apoiando', 'mantive', 'mantendo',
-]);
-
-function normalize(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[“”"'`]/g, '')
-    .trim();
-}
+  'forma', 'maneira', 'mais', 'direto', 'direta', 'diretamente',
+].map(normalize));
 
 function tokens(value: string): string[] {
   return normalize(value)
