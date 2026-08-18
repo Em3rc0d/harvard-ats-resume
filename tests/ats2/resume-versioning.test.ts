@@ -180,3 +180,38 @@ test('runtime versioning refuses material wording that cannot be traced to candi
     /cannot trace approved wording to candidate assertions/i,
   );
 });
+
+test('composition repairs provider output that serialized line breaks as literal backslash-n text', () => {
+  const serialized = FORMATTED_RESUME.replace(/\n/g, '\\n');
+  const result = compositionFor(serialized);
+
+  assert.ok(result.claims.length >= 7);
+  assert.match(result.renderedResume, /PROFESSIONAL SUMMARY\nBackend engineer/);
+  assert.match(result.renderedResume, /EXPERIENCE\nACME/);
+  assert.doesNotMatch(result.renderedResume, /\\n/);
+});
+
+test('composition recovers a compressed one-line resume with explicit standard headings and bullets', () => {
+  const compressed = 'JANE CANDIDATE PROFESSIONAL SUMMARY Backend engineer focused on reliable APIs and TypeScript services. EXPERIENCE ACME — BACKEND ENGINEER • Built APIs with TypeScript for internal business workflows. SKILLS Technical Skills: TypeScript, Docker';
+  const result = compositionFor(compressed);
+
+  assert.ok(result.claims.some((claim) =>
+    claim.wording === 'Backend engineer focused on reliable APIs and TypeScript services.',
+  ));
+  assert.ok(result.claims.some((claim) =>
+    claim.wording === 'Built APIs with TypeScript for internal business workflows.',
+  ));
+});
+
+test('composition keeps safe multi-anchor paraphrases traceable without accepting one-word support', () => {
+  const paraphrased = `JANE CANDIDATE
+EXPERIENCE
+• Engineered TypeScript services for workflow automation.`;
+  const result = compositionFor(paraphrased);
+
+  const claim = result.claims.find(
+    (item) => item.wording === 'Engineered TypeScript services for workflow automation.',
+  );
+  assert.ok(claim);
+  assert.ok(claim.assertionIds.length > 0);
+});

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { normalizeCandidatePresentationText } from '../../lib/application/presentation/InlineCandidateTextCleanup';
+import { normalizeGeneratedResumeText } from '../../lib/application/resume/ResumeTextNormalization';
 import { resolveResumeGenerationTimeoutMs } from '../../lib/infrastructure/ai/GeminiResumeProvider';
 
 function source(path: string): string {
@@ -30,6 +31,24 @@ test('legacy presentation cleanup remains deterministic and never invents candid
   assert.match(output, /Next\.js/);
 });
 
+test('generated resume normalization repairs literal newline serialization without changing wording', () => {
+  const serialized = 'JANE CANDIDATE\\nPROFESSIONAL SUMMARY\\nBackend engineer focused on TypeScript APIs.\\nEXPERIENCE\\n• Built TypeScript APIs.';
+  const output = normalizeGeneratedResumeText(serialized);
+
+  assert.equal(
+    output,
+    'JANE CANDIDATE\nPROFESSIONAL SUMMARY\nBackend engineer focused on TypeScript APIs.\nEXPERIENCE\n• Built TypeScript APIs.',
+  );
+});
+
+test('generated resume normalization recovers compressed uppercase sections and bullets', () => {
+  const compressed = 'JANE CANDIDATE PROFESSIONAL SUMMARY Backend engineer focused on TypeScript APIs. EXPERIENCE ACME — BACKEND ENGINEER • Built TypeScript APIs.';
+  const output = normalizeGeneratedResumeText(compressed);
+
+  assert.match(output, /JANE CANDIDATE\nPROFESSIONAL SUMMARY\nBackend engineer focused on TypeScript APIs\./);
+  assert.match(output, /\nEXPERIENCE\nACME — BACKEND ENGINEER\n• Built TypeScript APIs\./);
+});
+
 test('inline optimize stays on the internal endpoint and model output crosses a deterministic truth guard', () => {
   const config = source('next.config.js');
   const form = source('components/ResumeForm.tsx');
@@ -55,11 +74,23 @@ test('inline optimize stays on the internal endpoint and model output crosses a 
   assert.match(provider, /responseJsonSchema/);
 });
 
-test('certificate browser PDF.js entry is redirected away from the crashing modern root build', () => {
+test('PDF.js uses separate browser and Node runtime contracts', () => {
   const config = source('next.config.js');
   const certificateUpload = source('components/CertificateUpload.tsx');
+  const nativeResumeImport = source('lib/infrastructure/import/NativeResumeImportProvider.ts');
 
   assert.match(certificateUpload, /import\(['"]pdfjs-dist['"]\)/);
   assert.match(config, /pdfjs-dist\$/);
   assert.match(config, /pdfjs-dist\/legacy\/build\/pdf\.mjs/);
+  assert.match(config, /serverExternalPackages:\s*\[[\s\S]*?['"]pdfjs-dist['"]/);
+  assert.match(nativeResumeImport, /pdfjs-dist\/legacy\/build\/pdf\.mjs/);
+});
+
+test('composition failures are not presented as Career Vault persistence failures', () => {
+  const guardrailPanel = source('components/GenerationGuardrailPanel.tsx');
+
+  assert.match(guardrailPanel, /const isComposition = Boolean\(failure\.composition\)/);
+  assert.match(guardrailPanel, /const isPersistence = Boolean\(failure\.persistence\)/);
+  assert.doesNotMatch(guardrailPanel, /failure\.persistence\s*\|\|\s*failure\.composition/);
+  assert.match(guardrailPanel, /No se emitió ninguna ResumeVersion/);
 });

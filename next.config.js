@@ -2,6 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
 
+  // Route Handlers bundle server dependencies by default. pdfjs-dist v5 ships
+  // its Node-compatible legacy entry as ESM; letting the Next/Webpack server
+  // bundle transform that module can corrupt its namespace initialization at
+  // runtime. Keep PDF.js external so Node loads the package natively.
+  serverExternalPackages: ['pdfjs-dist'],
+
   // Temporary compatibility bridge for the legacy inline Optimize buttons.
   // The browser no longer calls an external n8n workflow; requests stay inside
   // this application and are handled by /api/optimize-content.
@@ -46,10 +52,9 @@ const nextConfig = {
   webpack: (config, { isServer }) => {
     config.resolve.alias.canvas = false;
 
-    // pdfjs-dist v5's modern browser entry caused a runtime crash in the
-    // Next.js 14 client bundle. PDF.js publishes a generic legacy build for
-    // environments that need the compatibility path. Keep the server import
-    // used by native resume ingestion untouched.
+    // Certificate parsing runs in the browser and still needs the generic
+    // legacy entry. Native resume ingestion runs on the Node server and is
+    // isolated above through serverExternalPackages.
     if (!isServer) {
       config.resolve.alias['pdfjs-dist$'] = 'pdfjs-dist/legacy/build/pdf.mjs';
     }
