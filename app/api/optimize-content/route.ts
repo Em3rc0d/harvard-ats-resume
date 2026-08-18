@@ -1,30 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { normalizeCandidatePresentationText } from '@/lib/application/presentation/InlineCandidateTextCleanup';
+import { optimizeCandidateText } from '@/lib/application/presentation/CandidateTextOptimizer';
+import { GeminiCandidateTextOptimizer } from '@/lib/infrastructure/ai/GeminiCandidateTextOptimizer';
 import { getRateLimitHeaders, rateLimitPublicApiRequest } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const requestSchema = z.object({
-  summary: z.string().min(10).max(50_000),
+  summary: z.string().min(10).max(12_000),
 });
 
 /**
- * Presentation-only cleanup for the legacy inline Optimize buttons.
+ * Fact-preserving inline rewrite for the legacy Optimize buttons.
  *
- * This endpoint intentionally does NOT use generative AI. Inline edited text is
- * later treated as candidate-supplied data, so allowing an unconstrained model
- * to invent wording here would bypass the ATS v2 grounding boundary. The real
- * fact-preserving AI rewrite remains /api/generate-resume, where deterministic
- * and semantic grounding run before a resume version can be emitted.
+ * The model may improve presentation, but the application layer validates that
+ * the rewrite did not introduce unsupported structured facts or novel domain
+ * vocabulary. Unsafe/unavailable model output falls back to deterministic
+ * presentation cleanup rather than silently becoming candidate truth.
  */
 export async function POST(request: NextRequest) {
   try {
     const parsed = requestSchema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Content must contain at least 10 characters.' },
+        { error: 'Content must contain between 10 and 12,000 characters.' },
         { status: 400, headers: { 'Cache-Control': 'no-store, max-age=0' } },
       );
     }
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     if (!rateLimitResult.success) {
       return NextResponse.json(
         {
-          error: 'Rate limit exceeded. Please try content cleanup again later.',
+          error: 'Rate limit exceeded. Please try content optimization again later.',
           retryAfter: new Date(rateLimitResult.reset).toISOString(),
         },
         {
@@ -47,10 +47,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const result = await optimizeCandidateText(
+      parsed.data.summary,
+      new GeminiCandidateTextOptimizer(),
+    );
+
     return NextResponse.json(
       {
-        output: normalizeCandidatePresentationText(parsed.data.summary),
-        mode: 'PRESENTATION_ONLY',
+        output: result.output,
+        mode: result.mode,
+        changed: result.changed,
+        policyVersion: result.policyVersion,
       },
       {
         headers: {
@@ -60,9 +67,9 @@ export async function POST(request: NextRequest) {
       },
     );
   } catch (error) {
-    console.error('Presentation cleanup error:', error);
+    console.error('Inline optimization error:', error);
     return NextResponse.json(
-      { error: 'Unable to clean up content.' },
+      { error: 'Unable to optimize content safely.' },
       { status: 500, headers: { 'Cache-Control': 'no-store, max-age=0' } },
     );
   }

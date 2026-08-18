@@ -10,12 +10,24 @@ import OpportunitySpaceStep from '@/components/OpportunitySpaceStep';
 import GenerationGuardrailPanel, {
   type GenerationFailurePayload,
 } from '@/components/GenerationGuardrailPanel';
+import TrustDisclaimer from '@/components/TrustDisclaimer';
+import CareerSignalScene from '@/components/CareerSignalScene';
 import type { ResumeRequest } from '@/lib/schemas';
 import type { ResumeImportContext } from '@/lib/application/import/ResumeImportProvider';
 import type { GeneratedResumeResult } from '@/lib/application/product/ProductResultContract';
 import { useLanguage } from '@/components/LanguageProvider';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { AlertCircle, BriefcaseBusiness, FileSignature, ShieldCheck, Upload } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowRight,
+  BriefcaseBusiness,
+  Database,
+  FileSignature,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  Upload,
+} from 'lucide-react';
 
 const CAREER_VAULT_STORAGE_KEY = 'ats2:career-vault-id';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -28,6 +40,85 @@ type GenerationApiResponse = {
   readonly data?: GeneratedResumeResult;
   readonly error?: string;
 } & Partial<GenerationFailurePayload>;
+
+const LANDING_COPY = {
+  en: {
+    nav: ['Evidence-bound', 'AI with guardrails', 'Open source'],
+    eyebrow: 'Career Opportunity Intelligence',
+    title: 'Build from career truth, not keyword theater.',
+    body: 'Turn verified career evidence into clearer resumes and better opportunity decisions. CV Engine helps with structure, traceability and analysis; it does not guarantee ATS ranking, interviews or hiring.',
+    trust: 'No invented facts. Missing evidence stays missing until you confirm it.',
+    uploadTitle: 'Start from my CV',
+    uploadBody: 'Import PDF or DOCX, review what was extracted, then decide what is truly yours.',
+    manualTitle: 'Build my evidence',
+    manualBody: 'Enter career facts manually with a guided, traceable workflow.',
+    evidenceTitle: 'Career truth first',
+    evidenceBody: 'Candidate evidence remains separate from job requirements and recommendations.',
+    marketTitle: 'Opportunity context',
+    marketBody: 'Compare where you want to go with what the market is actually asking for.',
+    decisionTitle: 'Explainable decisions',
+    decisionBody: 'See fit, gaps and next actions without pretending we know hiring probability.',
+    loadingTitle: 'Building a trusted resume',
+    loadingBody: 'Drafting → grounding candidate facts → checking overstatement → tracing claims → saving the version.',
+  },
+  es: {
+    nav: ['Basado en evidencia', 'IA con guardrails', 'Código abierto'],
+    eyebrow: 'Career Opportunity Intelligence',
+    title: 'Construye desde la verdad de tu carrera, no desde palabras clave vacías.',
+    body: 'Convierte evidencia profesional verificada en CVs más claros y mejores decisiones de oportunidad. CV Engine ayuda con estructura, trazabilidad y análisis; no garantiza ranking ATS, entrevistas ni contratación.',
+    trust: 'No inventamos hechos. La evidencia faltante sigue faltando hasta que tú la confirmes.',
+    uploadTitle: 'Empezar desde mi CV',
+    uploadBody: 'Importa PDF o DOCX, revisa lo extraído y decide qué información realmente te pertenece.',
+    manualTitle: 'Construir mi evidencia',
+    manualBody: 'Ingresa tus hechos profesionales manualmente con un flujo guiado y trazable.',
+    evidenceTitle: 'Primero la verdad profesional',
+    evidenceBody: 'Tu evidencia permanece separada de requisitos de vacantes y recomendaciones.',
+    marketTitle: 'Contexto de oportunidad',
+    marketBody: 'Compara hacia dónde quieres ir con lo que el mercado realmente está pidiendo.',
+    decisionTitle: 'Decisiones explicables',
+    decisionBody: 'Entiende encaje, brechas y próximos pasos sin fingir probabilidades de contratación.',
+    loadingTitle: 'Construyendo un CV confiable',
+    loadingBody: 'Redacción → verificación de hechos → control de exageración → trazabilidad → guardado de versión.',
+  },
+  fr: {
+    nav: ['Fondé sur les preuves', 'IA avec garde-fous', 'Open source'],
+    eyebrow: 'Career Opportunity Intelligence',
+    title: 'Construisez à partir de la vérité de votre carrière, pas de mots-clés artificiels.',
+    body: "Transformez des preuves professionnelles vérifiées en CV plus clairs et en meilleures décisions d'opportunité. CV Engine aide à structurer, tracer et analyser ; il ne garantit ni classement ATS, ni entretien, ni embauche.",
+    trust: "Aucun fait inventé. Une preuve manquante reste manquante jusqu'à votre confirmation.",
+    uploadTitle: 'Commencer avec mon CV',
+    uploadBody: "Importez un PDF ou DOCX, vérifiez l'extraction puis confirmez ce qui vous appartient réellement.",
+    manualTitle: 'Construire mes preuves',
+    manualBody: 'Saisissez vos faits professionnels manuellement dans un flux guidé et traçable.',
+    evidenceTitle: 'La vérité professionnelle d’abord',
+    evidenceBody: 'Les preuves du candidat restent séparées des exigences de poste et des recommandations.',
+    marketTitle: "Contexte d'opportunité",
+    marketBody: 'Comparez votre direction avec ce que le marché demande réellement.',
+    decisionTitle: 'Décisions explicables',
+    decisionBody: "Comprenez l'adéquation, les écarts et les prochaines actions sans prétendre connaître la probabilité d'embauche.",
+    loadingTitle: 'Construction d’un CV fiable',
+    loadingBody: 'Rédaction → vérification des faits → contrôle de surenchère → traçabilité → sauvegarde.',
+  },
+  pt: {
+    nav: ['Baseado em evidências', 'IA com guardrails', 'Código aberto'],
+    eyebrow: 'Career Opportunity Intelligence',
+    title: 'Construa a partir da verdade da sua carreira, não de palavras-chave vazias.',
+    body: 'Transforme evidências profissionais verificadas em currículos mais claros e melhores decisões de oportunidade. O CV Engine ajuda com estrutura, rastreabilidade e análise; não garante ranking ATS, entrevistas ou contratação.',
+    trust: 'Sem fatos inventados. Evidência ausente continua ausente até você confirmar.',
+    uploadTitle: 'Começar pelo meu CV',
+    uploadBody: 'Importe PDF ou DOCX, revise o que foi extraído e confirme o que realmente pertence à sua história.',
+    manualTitle: 'Construir minhas evidências',
+    manualBody: 'Insira seus fatos profissionais manualmente em um fluxo guiado e rastreável.',
+    evidenceTitle: 'Verdade profissional primeiro',
+    evidenceBody: 'Evidência do candidato permanece separada de requisitos de vagas e recomendações.',
+    marketTitle: 'Contexto de oportunidade',
+    marketBody: 'Compare para onde você quer ir com o que o mercado realmente está pedindo.',
+    decisionTitle: 'Decisões explicáveis',
+    decisionBody: 'Entenda aderência, lacunas e próximos passos sem fingir probabilidade de contratação.',
+    loadingTitle: 'Construindo um currículo confiável',
+    loadingBody: 'Redação → verificação de fatos → controle de exagero → rastreabilidade → salvamento.',
+  },
+} as const;
 
 function getOrCreateCareerVaultId(): string {
   try {
@@ -44,7 +135,8 @@ function getOrCreateCareerVaultId(): string {
 }
 
 export default function Home() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const copy = LANDING_COPY[language];
   const [stage, setStage] = useState<FlowStage>('START');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,193 +223,262 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white py-6">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-gray-900 font-serif font-bold text-white">C</div>
-            <h1 className="text-xl font-semibold tracking-tight text-gray-900">
-              {t.hero.title}
-            </h1>
-          </div>
-          <div className="flex items-center gap-6">
-            <nav className="hidden gap-6 text-sm font-medium text-gray-600 md:flex">
-              <span>{t.nav.ats}</span>
-              <span>{t.nav.ai}</span>
-              <span>{t.nav.opensource}</span>
+    <div className="app-shell min-h-screen overflow-x-hidden">
+      <TrustDisclaimer />
+      <div className="ambient-grid" aria-hidden="true" />
+
+      <header className="sticky top-0 z-50 border-b border-white/50 bg-white/78 py-4 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 sm:px-6">
+          <button
+            type="button"
+            onClick={handleStartOver}
+            className="group flex items-center gap-3 text-left"
+            aria-label="CV Engine home"
+          >
+            <div className="brand-cube flex h-9 w-9 items-center justify-center rounded-xl font-serif font-bold text-white">C</div>
+            <div>
+              <h1 className="text-[17px] font-semibold tracking-tight text-slate-950">{t.hero.title}</h1>
+              <p className="hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 sm:block">Career intelligence</p>
+            </div>
+          </button>
+
+          <div className="flex items-center gap-4">
+            <nav className="hidden items-center gap-2 lg:flex">
+              {copy.nav.map((item) => (
+                <span key={item} className="rounded-full border border-slate-200/80 bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-slate-600 shadow-sm">
+                  {item}
+                </span>
+              ))}
             </nav>
             <LanguageSwitcher />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-12">
-        {error && (
-          <div className="mb-8 flex items-center gap-2 rounded-sm border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <AlertCircle className="h-4 w-4" />
+      <main className="relative mx-auto max-w-6xl px-5 py-9 sm:px-6 sm:py-12">
+        {error ? (
+          <div className="motion-rise mb-8 flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-800 shadow-sm">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             {error}
           </div>
-        )}
+        ) : null}
 
-        {generationFailure && stage !== 'RESULTS' && (
-          <GenerationGuardrailPanel
-            failure={generationFailure}
-            onEditDetails={editImportedDetails}
-          />
-        )}
-
-        {isLoading && stage !== 'RESULTS' && (
-          <div className="mb-8 rounded-xl border border-blue-200 bg-blue-50 p-5" aria-live="polite">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 h-5 w-5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-700" />
-              <div>
-                <p className="text-sm font-bold text-blue-950">Building a trusted resume</p>
-                <p className="mt-1 text-xs leading-relaxed text-blue-800">
-                  Drafting → checking candidate facts → checking overstatement → building traceability → saving the version.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {stage === 'START' && (
-          <div className="mx-auto max-w-2xl space-y-8 text-center">
-            <div className="mb-10">
-              <h2 className="mb-3 text-3xl font-serif font-bold tracking-tight text-gray-900">
-                {t.hero.subtitle}
-              </h2>
-              <p className="mx-auto max-w-lg text-sm leading-relaxed text-gray-500">
-                {t.hero.description}
-              </p>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <button
-                onClick={() => setStage('UPLOAD')}
-                className="group relative rounded-xl border-2 border-dashed border-gray-200 bg-white p-8 text-left transition-all duration-300 hover:border-blue-500 hover:bg-blue-50"
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 text-blue-600 transition-transform group-hover:scale-110">
-                  <Upload className="h-6 w-6" />
-                </div>
-                <h3 className="mb-2 text-lg font-bold text-gray-900">{t.hero.uploadCV}</h3>
-                <p className="text-sm text-gray-500">{t.hero.uploadDesc}</p>
-              </button>
-
-              <button
-                onClick={handleManualStart}
-                className="group relative rounded-xl border-2 border-gray-100 bg-white p-8 text-left shadow-sm transition-all duration-300 hover:border-gray-900 hover:bg-gray-50 hover:shadow-md"
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-gray-900 transition-transform group-hover:scale-110">
-                  <FileSignature className="h-6 w-6" />
-                </div>
-                <h3 className="mb-2 text-lg font-bold text-gray-900">{t.hero.startManual}</h3>
-                <p className="text-sm text-gray-500">{t.hero.manualDesc}</p>
-              </button>
-            </div>
-
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-left">
-              <div className="flex gap-3">
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-gray-700" />
-                <p className="text-xs leading-relaxed text-gray-600">
-                  ATS v2 can reorganize, clarify and prioritize your career evidence. It does not silently create facts you did not provide.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {stage === 'UPLOAD' && (
-          <CVUpload
-            onDataExtracted={handleCVData}
-            onCancel={() => setStage('START')}
-          />
-        )}
-
-        {stage === 'IMPORTED_REVIEW' && initialResumeData && importContext && (
-          <ImportedResumeReview
-            data={initialResumeData}
-            context={importContext}
-            onEdit={editImportedDetails}
-            onContinue={() => {
-              setGenerationFailure(null);
-              setStage('TARGET');
-            }}
-            onStartOver={handleStartOver}
-          />
-        )}
-
-        {stage === 'TARGET' && initialResumeData && (
-          <div className="space-y-5">
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setStage('SPACE')}
-                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-800 hover:bg-blue-100"
-              >
-                <BriefcaseBusiness className="h-4 w-4" />
-                Compare multiple opportunities
-              </button>
-            </div>
-            <TargetJobStep
-              data={initialResumeData}
-              isLoading={isLoading}
-              onBack={() => {
-                setGenerationFailure(null);
-                setStage('IMPORTED_REVIEW');
-              }}
+        {generationFailure && stage !== 'RESULTS' ? (
+          <div className="motion-rise mx-auto max-w-4xl">
+            <GenerationGuardrailPanel
+              failure={generationFailure}
               onEditDetails={editImportedDetails}
-              onGenerate={handleSubmit}
             />
           </div>
-        )}
+        ) : (
+          <>
+            {isLoading && stage !== 'RESULTS' ? (
+              <div className="motion-rise mb-8 rounded-3xl border border-blue-200/70 bg-blue-50/80 p-5 shadow-lg shadow-blue-900/5 backdrop-blur-sm" aria-live="polite">
+                <div className="flex items-start gap-4">
+                  <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-700 text-white shadow-lg shadow-blue-700/20">
+                    <Sparkles className="h-4 w-4 animate-pulse" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-blue-950">{copy.loadingTitle}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-blue-800">{copy.loadingBody}</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
-        {stage === 'SPACE' && initialResumeData && (
-          <OpportunitySpaceStep
-            data={initialResumeData}
-            onBack={() => setStage('TARGET')}
-          />
-        )}
+            {stage === 'START' ? (
+              <div className="space-y-6">
+                <section className="hero-panel motion-rise overflow-hidden rounded-[34px] border border-white/70 bg-white/80 shadow-[0_30px_90px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+                  <div className="grid items-center gap-8 p-6 sm:p-8 lg:grid-cols-[1.08fr_0.92fr] lg:p-10">
+                    <div className="relative z-10">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-blue-200/80 bg-blue-50/80 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-blue-800">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        {copy.eyebrow}
+                      </div>
 
-        {stage === 'EDIT' && (
-          <div>
-            <div className="mb-10 text-center">
-              <h2 className="mb-3 text-3xl font-serif font-bold tracking-tight text-gray-900">
-                {initialResumeData ? t.hero.reviewTitle : t.hero.buildTitle}
-              </h2>
-              <p className="mx-auto max-w-2xl text-sm leading-relaxed text-gray-500">
-                {initialResumeData ? t.hero.reviewDesc : t.hero.buildDesc}
-              </p>
-            </div>
+                      <h2 className="mt-5 max-w-3xl font-serif text-4xl font-bold leading-[1.02] tracking-[-0.035em] text-slate-950 sm:text-5xl lg:text-[58px]">
+                        {copy.title}
+                      </h2>
+                      <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-600 sm:text-[15px]">
+                        {copy.body}
+                      </p>
 
-            <ResumeForm
-              onSubmit={handleSubmit}
-              isLoading={isLoading}
-              initialData={initialResumeData}
-            />
-          </div>
-        )}
+                      <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                        <button
+                          onClick={() => setStage('UPLOAD')}
+                          className="group flex min-h-[132px] flex-col justify-between rounded-3xl bg-slate-950 p-5 text-left text-white shadow-xl shadow-slate-950/15 transition duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-950/20 focus:outline-none focus:ring-4 focus:ring-blue-200"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
+                              <Upload className="h-5 w-5" />
+                            </div>
+                            <ArrowRight className="h-4 w-4 text-white/60 transition-transform duration-300 group-hover:translate-x-1" />
+                          </div>
+                          <div className="mt-5">
+                            <p className="text-sm font-bold">{copy.uploadTitle}</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-300">{copy.uploadBody}</p>
+                          </div>
+                        </button>
 
-        {stage === 'RESULTS' && results && (
-          <div>
-            <div className="mb-10 text-center">
-              <h2 className="mb-3 text-3xl font-serif font-bold tracking-tight text-gray-900">
-                {t.hero.generatedTitle}
-              </h2>
-              <p className="mx-auto max-w-2xl text-sm text-gray-500">
-                {t.hero.generatedDesc}
-              </p>
-            </div>
+                        <button
+                          onClick={handleManualStart}
+                          className="group flex min-h-[132px] flex-col justify-between rounded-3xl border border-slate-200 bg-white/90 p-5 text-left shadow-lg shadow-slate-950/5 transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/10 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+                              <FileSignature className="h-5 w-5" />
+                            </div>
+                            <ArrowRight className="h-4 w-4 text-slate-400 transition-transform duration-300 group-hover:translate-x-1" />
+                          </div>
+                          <div className="mt-5">
+                            <p className="text-sm font-bold text-slate-950">{copy.manualTitle}</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">{copy.manualBody}</p>
+                          </div>
+                        </button>
+                      </div>
 
-            <ResumeResults {...results} userName={userName} onStartOver={handleStartOver} />
-          </div>
+                      <div className="mt-5 flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/75 p-4">
+                        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+                        <p className="text-xs leading-5 text-emerald-950">{copy.trust}</p>
+                      </div>
+                    </div>
+
+                    <div className="relative flex min-h-[390px] items-center justify-center lg:min-h-[520px]">
+                      <CareerSignalScene />
+                    </div>
+                  </div>
+                </section>
+
+                <section className="motion-rise grid gap-4 md:grid-cols-3" aria-label="CV Engine principles">
+                  <div className="glass-card rounded-3xl p-5">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                      <Database className="h-5 w-5" />
+                    </div>
+                    <h3 className="mt-4 text-sm font-bold text-slate-950">{copy.evidenceTitle}</h3>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">{copy.evidenceBody}</p>
+                  </div>
+                  <div className="glass-card rounded-3xl p-5">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-700">
+                      <Target className="h-5 w-5" />
+                    </div>
+                    <h3 className="mt-4 text-sm font-bold text-slate-950">{copy.marketTitle}</h3>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">{copy.marketBody}</p>
+                  </div>
+                  <div className="glass-card rounded-3xl p-5">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-50 text-violet-700">
+                      <BriefcaseBusiness className="h-5 w-5" />
+                    </div>
+                    <h3 className="mt-4 text-sm font-bold text-slate-950">{copy.decisionTitle}</h3>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">{copy.decisionBody}</p>
+                  </div>
+                </section>
+              </div>
+            ) : null}
+
+            {stage === 'UPLOAD' ? (
+              <div className="motion-rise mx-auto max-w-4xl">
+                <CVUpload
+                  onDataExtracted={handleCVData}
+                  onCancel={() => setStage('START')}
+                />
+              </div>
+            ) : null}
+
+            {stage === 'IMPORTED_REVIEW' && initialResumeData && importContext ? (
+              <div className="motion-rise">
+                <ImportedResumeReview
+                  data={initialResumeData}
+                  context={importContext}
+                  onEdit={editImportedDetails}
+                  onContinue={() => {
+                    setGenerationFailure(null);
+                    setStage('TARGET');
+                  }}
+                  onStartOver={handleStartOver}
+                />
+              </div>
+            ) : null}
+
+            {stage === 'TARGET' && initialResumeData ? (
+              <div className="motion-rise space-y-5">
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setStage('SPACE')}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50/90 px-4 py-2.5 text-sm font-bold text-blue-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-100"
+                  >
+                    <BriefcaseBusiness className="h-4 w-4" />
+                    Compare multiple opportunities
+                  </button>
+                </div>
+                <TargetJobStep
+                  data={initialResumeData}
+                  isLoading={isLoading}
+                  onBack={() => {
+                    setGenerationFailure(null);
+                    setStage('IMPORTED_REVIEW');
+                  }}
+                  onEditDetails={editImportedDetails}
+                  onGenerate={handleSubmit}
+                />
+              </div>
+            ) : null}
+
+            {stage === 'SPACE' && initialResumeData ? (
+              <div className="motion-rise">
+                <OpportunitySpaceStep
+                  data={initialResumeData}
+                  onBack={() => setStage('TARGET')}
+                />
+              </div>
+            ) : null}
+
+            {stage === 'EDIT' ? (
+              <div className="motion-rise">
+                <div className="mb-8 text-center">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Career evidence</p>
+                  <h2 className="mt-2 font-serif text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                    {initialResumeData ? t.hero.reviewTitle : t.hero.buildTitle}
+                  </h2>
+                  <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+                    {initialResumeData ? t.hero.reviewDesc : t.hero.buildDesc}
+                  </p>
+                </div>
+
+                <ResumeForm
+                  onSubmit={handleSubmit}
+                  isLoading={isLoading}
+                  initialData={initialResumeData}
+                />
+              </div>
+            ) : null}
+
+            {stage === 'RESULTS' && results ? (
+              <div className="motion-rise">
+                <div className="mb-8 text-center">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Trusted version</p>
+                  <h2 className="mt-2 font-serif text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                    {t.hero.generatedTitle}
+                  </h2>
+                  <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-500">
+                    {t.hero.generatedDesc}
+                  </p>
+                </div>
+
+                <ResumeResults {...results} userName={userName} onStartOver={handleStartOver} />
+              </div>
+            ) : null}
+          </>
         )}
       </main>
 
-      <footer className="mt-12 border-t border-gray-200 bg-white py-12">
-        <div className="mx-auto max-w-5xl px-6 text-center">
-          <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
-            © 2026 Em3rc0d
-          </p>
+      <footer className="relative mt-12 border-t border-white/60 bg-white/55 py-10 backdrop-blur-lg">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 text-center sm:flex-row sm:text-left">
+          <div>
+            <p className="text-xs font-bold tracking-wide text-slate-700">CV Engine</p>
+            <p className="mt-1 text-[11px] text-slate-400">Evidence before persuasion.</p>
+          </div>
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">© 2026 Em3rc0d</p>
         </div>
       </footer>
     </div>
