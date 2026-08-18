@@ -1,12 +1,9 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useState } from 'react';
 import { createWorker } from 'tesseract.js';
 import { useLanguage } from '@/components/LanguageProvider';
 import Image from 'next/image';
-
-// PDF.js will be loaded dynamically on client side only
-let pdfjsLib: any = null;
 
 interface ExtractedEducation {
     degree: string;
@@ -23,6 +20,12 @@ interface CertificateUploadProps {
     readonly allowMultiple?: boolean;
 }
 
+interface CertificatePdfResponse {
+    readonly success?: boolean;
+    readonly text?: string;
+    readonly error?: string;
+}
+
 export default function CertificateUpload(props: Readonly<CertificateUploadProps>) {
     const {
         onDataExtracted,
@@ -37,20 +40,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
     const [extractedText, setExtractedText] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
 
-    // Load PDF.js dynamically on client side only
-    useEffect(() => {
-        if (globalThis !== undefined && globalThis.window && !pdfjsLib) {
-            import('pdfjs-dist').then((pdfjs) => {
-                pdfjsLib = pdfjs;
-                // Use unpkg for the worker to match the installed version
-                // Note: v3+ uses .mjs for the worker script in many CDNs
-                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-            });
-        }
-    }, []);
-
     const parseEducationData = (text: string): ExtractedEducation => {
-        // Common patterns for education certificates
         const degreePatterns = [
             /degree\s+of\s+([A-Z][a-z\s]+)/i,
             /diploma\s+of\s+([A-Z][a-z\s]+)/i,
@@ -58,27 +48,19 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
             /[BMD][a-z]+\s+of\s+[A-Z][a-z]+/i,
             /\b(?:BA|BS|MA|MS|PhD|MBA)\b/i
         ];
-
         const institutionPatterns = [
             /(?:University|College|Institute|School)\s+of\s+[A-Z][a-z]+/i,
             /[A-Z][a-z]+\s+(?:University|College|Institute|School)/i
         ];
-
         const datePatterns = [
             /(?:awarded|given|dated)\s+(?:on\s+)?(\w+\s+\d{1,2},?\s+\d{4})/i,
             /(\d{1,2}\s+\w+\s+\d{4})/i
         ];
-
         const gpaPatterns = [
             /GPA:?\s+(\d\.\d+)/i,
             /Grade Point Average:?\s+(\d\.\d+)/i
         ];
-
-        const honorsPatterns = [
-            /Cum\s+Laude/i,
-            /distinction/i,
-            /Dean's\s+List/i
-        ];
+        const honorsPatterns = [/Cum\s+Laude/i, /distinction/i, /Dean's\s+List/i];
 
         let degree = '';
         let institution = '';
@@ -86,16 +68,14 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         let gpa = '';
         let honors = '';
 
-        // Extract degree
         for (const pattern of degreePatterns) {
             const match = pattern.exec(text);
             if (match) {
-                degree = match[0].trim(); // Use full match for degree type
+                degree = match[0].trim();
                 break;
             }
         }
 
-        // Extract institution
         for (const pattern of institutionPatterns) {
             const match = pattern.exec(text);
             if (match) {
@@ -104,7 +84,6 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
             }
         }
 
-        // Extract date
         for (const pattern of datePatterns) {
             const match = pattern.exec(text);
             if (match) {
@@ -113,17 +92,11 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
             }
         }
 
-        // Extract GPA
         const gpaMatch = gpaPatterns[0].exec(text) || gpaPatterns[1].exec(text);
-        if (gpaMatch) {
-            gpa = gpaMatch[1];
-        }
+        if (gpaMatch) gpa = gpaMatch[1];
 
-        // Extract honors
-        const honorsMatch = honorsPatterns[0].exec(text);
-        if (honorsMatch) {
-            honors = honorsMatch[0];
-        }
+        const honorsMatch = honorsPatterns.find((pattern) => pattern.test(text));
+        if (honorsMatch) honors = honorsMatch.exec(text)?.[0] ?? '';
 
         return {
             degree: degree || 'Degree not found',
@@ -134,124 +107,98 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         };
     };
 
-    const convertPdfToImage = async (file: File): Promise<Blob> => {
-        if (!pdfjsLib) {
-            throw new Error('PDF library not loaded yet. Please try again in a moment.');
-        }
+    const extractPdfText = async (file: File): Promise<string> => {
+        const formData = new FormData();
+        formData.append('file', file);
 
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const page = await pdf.getPage(1); // Get first page
-
-        const viewport = page.getViewport({ scale: 2 }); // Higher scale for better OCR
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-
-        if (!context) {
-            throw new Error('Could not get canvas context');
-        }
-
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-
-        await page.render({
-            canvasContext: context,
-            viewport: viewport,
-            canvas: canvas,
-        }).promise;
-
-        return new Promise((resolve, reject) => {
-            canvas.toBlob((blob) => {
-                if (blob) {
-                    resolve(blob);
-                } else {
-                    reject(new Error('Failed to convert PDF to image'));
-                }
-            }, 'image/png');
+        const response = await fetch('/api/extract-certificate-text', {
+            method: 'POST',
+            body: formData,
         });
+        const result = await response.json() as CertificatePdfResponse;
+
+        if (!response.ok || !result.success || !result.text) {
+            throw new Error(result.error || 'Failed to read certificate PDF');
+        }
+
+        return result.text;
     };
 
-    const processImage = async (file: File): Promise<ExtractedEducation> => {
-        setIsProcessing(true);
+    const recognizeImageText = async (file: File): Promise<string> => {
+        const worker = await createWorker('eng', 1, {
+            logger: (message) => {
+                if (message.status === 'recognizing text' && !allowMultiple) {
+                    setProgress(Math.round(message.progress * 100));
+                }
+            },
+        });
+
+        try {
+            const { data: { text } } = await worker.recognize(file);
+            return text;
+        } finally {
+            await worker.terminate();
+        }
+    };
+
+    const processFile = async (file: File): Promise<ExtractedEducation> => {
         if (!allowMultiple) {
+            setIsProcessing(true);
             setProgress(0);
             setError(null);
+            setExtractedText('');
+            setPreview(null);
         }
 
         try {
-            let fileToProcess: File | Blob = file;
+            let text: string;
 
-            // If it's a PDF, convert to image first
             if (file.type === 'application/pdf') {
-                if (!allowMultiple) setProgress(10);
-                fileToProcess = await convertPdfToImage(file);
                 if (!allowMultiple) setProgress(20);
+                text = await extractPdfText(file);
+                if (!allowMultiple) setProgress(100);
+            } else {
+                if (!allowMultiple) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => setPreview(event.target?.result as string);
+                    reader.readAsDataURL(file);
+                }
+                text = await recognizeImageText(file);
             }
 
-            // Create preview only if it's a single file upload or the first one
-            if (!allowMultiple) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    setPreview(e.target?.result as string);
-                };
-                reader.readAsDataURL(file);
-            }
-
-            // Initialize Tesseract worker
-            const worker = await createWorker('eng', 1, {
-                logger: (m) => {
-                    if (m.status === 'recognizing text' && !allowMultiple) {
-                        // Adjust progress based on whether we converted PDF
-                        const baseProgress = file.type === 'application/pdf' ? 20 : 0;
-                        setProgress(baseProgress + Math.round(m.progress * 80));
-                    }
-                },
-            });
-
-            // Perform OCR
-            const { data: { text } } = await worker.recognize(fileToProcess);
-            await worker.terminate();
-
-            if (!allowMultiple) {
-                setExtractedText(text);
-                setIsProcessing(false);
-            }
-
+            if (!allowMultiple) setExtractedText(text);
             return parseEducationData(text);
-        } catch (err) {
-            console.error('OCR Error:', err);
-            if (!allowMultiple) {
-                setError('Failed to process file. Please try again.');
-                setIsProcessing(false);
-            }
-            throw err;
+        } catch (caught) {
+            const message = caught instanceof Error ? caught.message : 'Failed to process file.';
+            console.error('Certificate extraction error:', caught);
+            if (!allowMultiple) setError(message);
+            throw caught;
+        } finally {
+            if (!allowMultiple) setIsProcessing(false);
         }
     };
 
     const handleBatchProcessing = async (validFiles: File[]) => {
         const results: ExtractedEducation[] = [];
-        let i = 0;
-        for (const file of validFiles) {
+        for (let i = 0; i < validFiles.length; i += 1) {
             try {
                 setProgress(Math.round((i / validFiles.length) * 100));
-                const educationData = await processImage(file);
-                results.push(educationData);
-            } catch (err) {
-                console.error(`Error processing ${file.name}:`, err);
+                results.push(await processFile(validFiles[i]));
+            } catch (caught) {
+                console.error(`Error processing ${validFiles[i].name}:`, caught);
             }
-            i++;
         }
         return results;
     };
 
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files;
         if (!files || files.length === 0) return;
 
-        const validFiles: File[] = Array.from(files).filter(file => {
-            const isValid = file.type.startsWith('image/') || file.type === 'application/pdf';
-            if (!isValid) setError(`Skipping ${file.name} - only image files and PDFs are supported`);
-            return isValid;
+        const validFiles = Array.from(files).filter((file) => {
+            const valid = file.type.startsWith('image/') || file.type === 'application/pdf';
+            if (!valid) setError(`Skipping ${file.name} - only image files and PDFs are supported`);
+            return valid;
         });
 
         if (validFiles.length === 0) {
@@ -268,8 +215,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                 const results = await handleBatchProcessing(validFiles);
                 if (results.length > 0) onBatchDataExtracted(results);
             } else {
-                const educationData = await processImage(validFiles[0]);
-                onDataExtracted(educationData);
+                onDataExtracted(await processFile(validFiles[0]));
             }
         } finally {
             setProgress(100);
@@ -277,30 +223,27 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         }
     };
 
-    const handleDrop = (e: React.DragEvent<HTMLButtonElement>) => {
-        e.preventDefault();
-        const file = e.dataTransfer.files?.[0];
-        if (file) {
-            const isImage = file.type.startsWith('image/');
-            const isPdf = file.type === 'application/pdf';
+    const handleDrop = (event: React.DragEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        const file = event.dataTransfer.files?.[0];
+        if (!file) return;
 
-            if (!isImage && !isPdf) {
-                setError('Please upload an image file (PNG, JPG, etc.) or PDF');
-                return;
-            }
-            processImage(file)
-                .then(data => onDataExtracted(data))
-                .catch(err => console.error('Drop processing error:', err));
+        if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+            setError('Please upload an image file (PNG, JPG, etc.) or PDF');
+            return;
         }
+
+        processFile(file)
+            .then((data) => onDataExtracted(data))
+            .catch((caught) => console.error('Drop processing error:', caught));
     };
 
-    const handleDragOver = useCallback((e: React.DragEvent<HTMLButtonElement>) => {
-        e.preventDefault();
+    const handleDragOver = useCallback((event: React.DragEvent<HTMLButtonElement>) => {
+        event.preventDefault();
     }, []);
 
     return (
         <div className="space-y-4">
-            {/* Upload Area */}
             <button
                 type="button"
                 onDrop={handleDrop}
@@ -341,46 +284,43 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                     <p className="text-xs text-gray-500">
                         {t.certificate.formats}{allowMultiple ? ` ${t.certificate.multipleAllowed}` : ''}
                     </p>
-                    <p className="text-xs text-blue-600 font-medium mt-2">
-                        📜 {t.certificate.uploadPrompt}
-                    </p>
+                    <p className="text-xs text-blue-600 font-medium mt-2">📜 {t.certificate.uploadPrompt}</p>
                 </div>
             </button>
 
-            {/* Processing Status */}
             {isProcessing && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-center space-x-3">
-                        <div className="flex-1">
-                            <div className="h-2 bg-blue-200 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-blue-600 transition-all duration-300"
-                                    style={{ width: `${progress}%` }}
-                                />
-                            </div>
-                            <p className="text-xs text-blue-600 mt-1 text-center">
-                                {t.certificate.processing} {progress}%
-                            </p>
-                        </div>
+                    <div className="h-2 bg-blue-200 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-blue-600 transition-all duration-300"
+                            style={{ width: `${progress}%` }}
+                        />
                     </div>
+                    <p className="text-xs text-blue-600 mt-1 text-center">
+                        {t.certificate.processing} {progress}%
+                    </p>
                 </div>
             )}
 
-            {/* Error Message */}
             {error && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
                     {error}
                 </div>
             )}
 
-            {/* Preview & Results (Single file only) */}
             {!allowMultiple && preview && (
                 <div className="mt-4">
-                    <Image src={preview} alt="Certificate preview" width={640} height={360} unoptimized className="max-h-48 w-auto rounded-lg mx-auto shadow-sm" />
+                    <Image
+                        src={preview}
+                        alt="Certificate preview"
+                        width={640}
+                        height={360}
+                        unoptimized
+                        className="max-h-48 w-auto rounded-lg mx-auto shadow-sm"
+                    />
                 </div>
             )}
 
-            {/* Extracted Text (Single file only) */}
             {!allowMultiple && extractedText && (
                 <details className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
                     <summary className="text-sm font-medium text-gray-900 cursor-pointer">
