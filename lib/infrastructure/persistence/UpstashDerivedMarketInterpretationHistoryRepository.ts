@@ -57,17 +57,14 @@ implements DerivedMarketInterpretationHistoryRepository {
   }
 
   async load(): Promise<DerivedMarketInterpretationHistorySnapshot | null> {
-    const [partitioned, migrated] = await Promise.all([
+    const [partitioned, legacy] = await Promise.all([
       readPartitionedMarketCollection<DerivedMarketInterpretation>({
         backend: this.backend,
         namespace: NAMESPACE,
         kind: INTERPRETATION_KIND,
       }),
-      this.backend.get<string>(MIGRATION_MARKER),
+      this.backend.get<DerivedMarketInterpretationHistorySnapshot>(LEGACY_KEY),
     ]);
-    const legacy = migrated
-      ? null
-      : await this.backend.get<DerivedMarketInterpretationHistorySnapshot>(LEGACY_KEY);
     if (legacy) validateDerivedMarketInterpretationHistorySnapshot(legacy);
 
     const interpretations = mergeImmutableRecordsById(
