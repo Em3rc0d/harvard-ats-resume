@@ -10,12 +10,23 @@ const UPPERCASE_SECTION_HEADINGS = [
   'SKILLS',
 ] as const;
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function splitUppercaseSectionHeadings(value: string): string {
-  return UPPERCASE_SECTION_HEADINGS.reduce((text, heading) => {
-    const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`\\s+(${escaped})\\s+`, 'g');
-    return text.replace(pattern, '\n$1\n');
-  }, value);
+  // Match all headings in one pass so overlapping names such as
+  // PROFESSIONAL SUMMARY / SUMMARY and WORK EXPERIENCE / EXPERIENCE cannot be
+  // split twice by successive replacements.
+  const alternatives = UPPERCASE_SECTION_HEADINGS
+    .map(escapeRegex)
+    .join('|');
+  const pattern = new RegExp(`(^|\\s+)(${alternatives})(?=\\s+|$)`, 'g');
+
+  return value.replace(
+    pattern,
+    (_match, prefix: string, heading: string) => `${prefix ? '\n' : ''}${heading}\n`,
+  );
 }
 
 /**
