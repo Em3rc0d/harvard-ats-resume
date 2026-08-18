@@ -14,8 +14,25 @@ export interface PartitionedMarketPersistenceBackend {
   get<T>(key: string): Promise<T | null>;
   members(key: string): Promise<readonly string[]>;
   many<T>(keys: readonly string[]): Promise<readonly (T | null)[]>;
+  /** Commit is atomic for the supplied record set and must fail if an immutable key already means something else. */
   commitImmutableRecords(records: readonly ImmutablePartitionRecordWrite[]): Promise<void>;
   set(key: string, value: unknown): Promise<void>;
+}
+
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.keys(value as Record<string, unknown>)
+    .sort()
+    .reduce<Record<string, unknown>>((result, key) => {
+      const item = (value as Record<string, unknown>)[key];
+      if (item !== undefined) result[key] = stableValue(item);
+      return result;
+    }, {});
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(stableValue(value));
 }
 
 /**
@@ -54,6 +71,13 @@ implements PartitionedMarketPersistenceBackend {
       transaction.sadd(record.indexKey, record.id);
     }
     await transaction.exec();
+
+    const persisted = await this.redis.mget<unknown>(...records.map((record) => record.recordKey));
+    records.forEach((record, index) => {
+      if (persisted[index] === null || stableJson(persisted[index]) !== stableJson(record.record)) {
+        throw new Error(`Immutable partition key ${record.recordKey} already contains different content.`);
+      }
+    });
   }
 
   async set(key: string, value: unknown): Promise<void> {
@@ -133,22 +157,6 @@ export async function writePartitionedMarketCollection<T>(input: {
       }),
     ]);
   }));
-}
-
-function stableValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (!value || typeof value !== 'object') return value;
-  return Object.keys(value as Record<string, unknown>)
-    .sort()
-    .reduce<Record<string, unknown>>((result, key) => {
-      const item = (value as Record<string, unknown>)[key];
-      if (item !== undefined) result[key] = stableValue(item);
-      return result;
-    }, {});
-}
-
-function stableJson(value: unknown): string {
-  return JSON.stringify(stableValue(value));
 }
 
 export function mergeImmutableRecordsById<T>(
