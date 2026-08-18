@@ -15,6 +15,7 @@ import {
   type ResumeManifest,
   type ResumeVersion,
 } from '../../domain';
+import { normalizeGeneratedResumeText } from './ResumeTextNormalization';
 
 export interface ResumeCompositionInput {
   readonly formattedResume: string;
@@ -139,13 +140,27 @@ function isDateOnlyLine(line: string): boolean {
   return /^[\s\d.,/\-–—]+(?:present|current|actual|presente)?[\s\d.,/\-–—]*$/i.test(line.trim());
 }
 
+function looksLikeIdentityHeader(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length > 120) return false;
+  if (/[.!?;:]/.test(trimmed)) return false;
+  if (trimmed.includes('|')) return true;
+
+  const words = trimmed
+    .replace(/^[-•*]\s*/, '')
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return words.length > 0 && words.length <= 5;
+}
+
 function isPresentationLine(line: string, nonEmptyIndex: number): boolean {
   const trimmed = line.trim();
   if (!trimmed) return true;
 
   const normalized = normalize(trimmed.replace(/^[-•*]\s*/, ''));
   if (SECTION_HEADINGS.has(normalized)) return true;
-  if (nonEmptyIndex === 0) return true;
+  if (nonEmptyIndex === 0 && looksLikeIdentityHeader(trimmed)) return true;
   if (/@|https?:\/\//i.test(trimmed)) return true;
   if (isDateOnlyLine(trimmed)) return true;
   return false;
@@ -153,8 +168,9 @@ function isPresentationLine(line: string, nonEmptyIndex: number): boolean {
 
 function materialClaimLines(formattedResume: string): string[] {
   let nonEmptyIndex = -1;
+  const normalizedResume = normalizeGeneratedResumeText(formattedResume);
 
-  return formattedResume
+  return normalizedResume
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => {
@@ -179,7 +195,10 @@ function supportingAssertions(
       return { assertion, ...result };
     })
     .filter((item) => {
-      if (item.score < 0.5) return false;
+      // Real CV rewrites often preserve multiple factual anchors while changing
+      // surrounding wording. Two independent anchors are sufficient for a
+      // longer claim; a one-token match is accepted only for an atomic claim.
+      if (item.score < 0.2) return false;
       if (item.count >= 2) return true;
       return claimTokens.size <= 2 && item.count === 1;
     })
@@ -187,7 +206,7 @@ function supportingAssertions(
 
   const best = ranked[0]?.score ?? 0;
   return ranked
-    .filter((item) => item.score >= Math.max(0.5, best - 0.15))
+    .filter((item) => item.score >= Math.max(0.2, best - 0.15))
     .map((item) => item.assertion);
 }
 
@@ -268,12 +287,13 @@ export function composeApprovedResumeVersion(
     throw new Error('Resume composition target id and target text must either both be present or both be absent.');
   }
 
-  const contentSha256 = sha256(input.formattedResume);
+  const renderedResume = normalizeGeneratedResumeText(input.formattedResume);
+  const contentSha256 = sha256(renderedResume);
   const targetJobDescriptionSha256 = input.targetJobDescription?.trim()
     ? sha256(input.targetJobDescription)
     : undefined;
   const targetIdentity = targetJobDescriptionSha256?.slice(0, 16) ?? 'general';
-  const claims = createGeneratedClaims(input.formattedResume, input.assertions, contentSha256);
+  const claims = createGeneratedClaims(renderedResume, input.assertions, contentSha256);
   const provenanceIdentity = claimProvenanceHash(claims).slice(0, 16);
   const versionId = domainId(
     'ResumeVersion',
@@ -310,7 +330,7 @@ export function composeApprovedResumeVersion(
     version,
     manifest,
     claims,
-    renderedResume: input.formattedResume,
+    renderedResume,
     persistence: 'EPHEMERAL_RUNTIME',
   };
 }
