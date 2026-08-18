@@ -20,9 +20,13 @@ const NAMESPACE = 'ats2:market-opportunity-index:v2';
 const MIGRATION_MARKER = `${NAMESPACE}:migration-complete`;
 const LINK_KIND = 'link';
 
+function semanticKey(link: MarketOpportunityLink): string {
+  return link.marketObservationId;
+}
+
 function compareLinks(first: MarketOpportunityLink, second: MarketOpportunityLink): number {
   const byTime = Date.parse(first.linkedAt) - Date.parse(second.linkedAt);
-  return byTime !== 0 ? byTime : first.id.localeCompare(second.id);
+  return byTime !== 0 ? byTime : semanticKey(first).localeCompare(semanticKey(second));
 }
 
 export class PartitionedMarketOpportunityIndexRepository implements MarketOpportunityIndexRepository {
@@ -30,11 +34,12 @@ export class PartitionedMarketOpportunityIndexRepository implements MarketOpport
 
   private async commitLink(link: MarketOpportunityLink): Promise<void> {
     validateMarketOpportunityLinkIntegrity(link);
+    const key = semanticKey(link);
     await this.backend.commitImmutableRecords([
       immutablePartitionRecord({
         namespace: NAMESPACE,
         kind: LINK_KIND,
-        id: link.id,
+        id: key,
         record: link,
       }),
     ]);
@@ -67,7 +72,7 @@ export class PartitionedMarketOpportunityIndexRepository implements MarketOpport
     const links = mergeImmutableRecordsById(
       legacy?.links ?? [],
       partitioned,
-      (link) => link.id,
+      semanticKey,
     ).sort(compareLinks);
     if (links.length === 0) return null;
 
