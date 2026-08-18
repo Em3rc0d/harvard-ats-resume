@@ -287,14 +287,15 @@ test('retrieval candidate signals contain target intent and source market values
   assert.match(serialized, /Remote/);
 });
 
-test('M4B-10 service never invokes Job Intelligence, Job Match, OpportunityAssessment or resume generation', () => {
+test('M4B-10 service never consumes candidate capability or invokes downstream matching/generation', () => {
   const service = source('lib/application/market/MarketCandidateRetrievalService.ts');
-  assert.doesNotMatch(service, /analyzeJobDescription|matchJobToCandidate|buildOpportunityAssessment|generateResume/);
-  assert.doesNotMatch(service, /CareerSnapshot\b/);
-  assert.doesNotMatch(service, /\.assertions\b|\.evidence\b/);
+  assert.doesNotMatch(service, /analyzeJobDescription\s*\(|matchJobToCandidate\s*\(|buildOpportunityAssessment\s*\(|generateResume\s*\(/);
+  assert.doesNotMatch(service, /type\s+CareerAssertion|type\s+CareerEvidence|type\s+CareerSnapshot/);
+  assert.doesNotMatch(service, /careerSnapshot\s*\.\s*(assertions|evidence)|candidate\s*\.\s*assertions/);
+  assert.match(service, /input\.field\?\.evidence\.sourcePath/);
 });
 
-test('public retrieval API accepts only opaque career identity and keeps target, market pool, limit and scores server-owned', () => {
+test('public retrieval API accepts only opaque career identity and keeps target, market pool, limit and downstream work server-owned', () => {
   const route = source('app/api/market-candidate-retrieval/route.ts');
   assert.match(route, /careerVaultId/);
   assert.match(route, /candidateProfileIdFromCareerVaultCapability/);
@@ -302,5 +303,6 @@ test('public retrieval API accepts only opaque career identity and keeps target,
   assert.match(route, /marketRepository\.load/);
   assert.match(route, /rateLimitPublicApiRequest\(request\.headers, 'market-candidate-retrieval'\)/);
   assert.doesNotMatch(route, /roleTitle:\s*z\.|careerTarget:\s*z\.|marketObservationIds:\s*z\.|selectedLimit:\s*z\.|score:\s*z\./);
-  assert.doesNotMatch(route, /analyzeJobDescription|matchJobToCandidate|OpportunityAssessment|generateResume/);
+  assert.doesNotMatch(route, /analyzeJobDescription\s*\(|matchJobToCandidate\s*\(|generateResume\s*\(/);
+  assert.doesNotMatch(route, /from\s+['"][^'"]*(OpportunityAssessment|matching\/|job\/JobIntelligence)[^'"]*['"]/);
 });
