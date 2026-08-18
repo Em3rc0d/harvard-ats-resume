@@ -64,6 +64,11 @@ DiscoveryResult != JobRequirement
 AcquisitionFailure != MarketClosure
 RefreshDecision != MarketOpportunityLifecycle
 RefreshFailure != CLOSED
+RetrievalSignal != CandidateFact
+RetrievalRelevance != JobMatch
+MarketPrefilter != HiringProbability
+NotSelected != NotQualified
+CareerTargetIntent != CandidateCapability
 UNKNOWN != FALSE
 SOURCE_SILENT != INFERRED_VALUE
 ```
@@ -88,7 +93,8 @@ MARKET-04B-06 Market Assessment Integration   COMPLETE
 MARKET-04B-07 Opportunity Identity/Lifecycle  COMPLETE
 MARKET-04B-08 Partitioned Market Persistence  COMPLETE
 MARKET-04B-09 Multi-job Discovery / Refresh   COMPLETE
-MARKET-04B-10 Market Candidate Retrieval      NEXT
+MARKET-04B-10 Market Candidate Retrieval      COMPLETE
+MARKET-04B-11 Selected Candidate Analysis     NEXT
 ```
 
 The specific execution documents are the authoritative details for each later stage:
@@ -105,6 +111,7 @@ The specific execution documents are the authoritative details for each later st
 - `MARKET-04B-07-OPPORTUNITY-IDENTITY-LIFECYCLE.md`
 - `MARKET-04B-08-PARTITIONED-MARKET-PERSISTENCE.md`
 - `MARKET-04B-09-PROVIDER-DISCOVERY-REFRESH.md`
+- `MARKET-04B-10-MARKET-CANDIDATE-RETRIEVAL.md`
 
 ## MARKET-01 — Application Intelligence
 
@@ -687,34 +694,82 @@ M4B-09 does not automatically interpret, project, match or assess every discover
 
 M4B-09 is complete: controlled Greenhouse/Lever/Ashby listing enumeration is bounded and provider-native, discovered locators reuse M4B-03 acquisition, parallel item acquisition preserves partial success, refresh eligibility is explicit, provider locators are reconstructed from durable provenance, unchanged/changed re-observation semantics preserve history, and provider failure remains operational evidence rather than false closure.
 
-## Next architectural step — MARKET-04B-10
+## MARKET-04B-10 — Target-bound Market Candidate Retrieval
 
-CV Engine can now maintain a bounded pool of durable external opportunities without immediately running expensive candidate analysis over every listing.
-
-The next question is:
+M4B-10 adds the cheap selection boundary that sits between a broad durable market pool and expensive candidate capability analysis.
 
 ```text
-many observed/current opportunities
+active CareerTarget
+      +
+current source-explicit market metadata
+      +
+M4B-07 lifecycle
+      ↓
+MarketCandidateSet
+      ├── candidates[]
+      └── refreshFirst[]
+```
+
+The gate deliberately does not consume CareerEvidence, CareerAssertions or CareerSnapshot capability. Candidate-specific retrieval is driven by intent (`CareerTarget`) only; candidate capability remains authoritative only when the exact downstream JobRequirement graph is matched.
+
+Retrieval signals cover source-explicit role, seniority, location, work model and employment type. Missing metadata remains UNKNOWN instead of being mined from free description text. One current material MarketObservation is evaluated per logical MarketOpportunity, so historical source states remain durable without duplicating the current retrieval pool.
+
+Lifecycle guards remain explicit:
+
+```text
+CLOSED                         -> EXCLUDED_CLOSED
+STALE + relevant role signal  -> REFRESH_FIRST
+UNKNOWN                        -> INSUFFICIENT_SIGNAL
+OPEN + aligned/no conflict     -> CANDIDATE
+OPEN + relevant + conflict     -> REVIEW
+```
+
+`REVIEW` is not a qualification failure, `REFRESH_FIRST` is not a rejection, and a listing outside the bounded selected set is not evidence that the candidate is unqualified.
+
+The public boundary is:
+
+```text
+POST /api/market-candidate-retrieval
+```
+
+and accepts only an opaque `careerVaultId`. Active target, market universe, lifecycle, retrieval policy and selected limit remain server-owned. The default selected limit is 20, with an internal maximum of 50 and a 5,000-observation bounded-scan guard for the current v1 aggregate implementation.
+
+The retrieval artifact is content-addressed and carries a digest of the complete logical market universe considered, but remains a current non-persisted view rather than pretending to be durable history.
+
+### Gate M4B-10 — TARGET_BOUND_MARKET_CANDIDATE_RETRIEVAL
+
+M4B-10 is complete: CV Engine can deterministically narrow a bounded observed market to current target-relevant candidates without creating a parallel matcher, mining candidate capability, inventing fit probabilities, losing lifecycle semantics, or treating non-selection as candidate inadequacy.
+
+## Next architectural step — MARKET-04B-11
+
+The safe next question is no longer “which listings should we inspect?” M4B-10 answers that. It is now:
+
+```text
+bounded selected MarketCandidateSet
         ↓
-which ones are relevant enough to this candidate + target
-that deeper Job Intelligence / assessment is warranted?
+run the trusted deep-analysis chain
+for only those exact current observations
+        ↓
+produce comparable OpportunityAssessments
+without losing selection provenance or workload control
 ```
 
 The next gate is:
 
 ```text
-MARKET-04B-10 — Market Candidate Retrieval / Opportunity Filtering
+MARKET-04B-11 — Selected Market Candidate Analysis / Retrieval-to-Assessment Orchestration
 ```
 
-It should introduce a conservative market read/retrieval layer that narrows observed current opportunities before full assessment while keeping retrieval signals separate from candidate truth and evidence-backed Job Match.
+It should orchestrate only M4B-10 selected current observations through existing M4B-04 interpretation, M4B-05 projection/JobSnapshot and M4B-06 exact assessment boundaries, then compose OpportunitySpace from the resulting durable assessments.
 
 Hard boundaries for the next gate:
 
 ```text
-RetrievalSignal != CandidateFact
-RetrievalRelevance != JobMatch
-MarketPrefilter != HiringProbability
-Filtering != FuzzyLogicalIdentity
+SelectedForAnalysis != Qualified
+AnalysisFailure != MarketClosure
+RetrievalOrder != JobMatchScore
+BatchAssessment != CandidateTruth
+PartialFailure != BatchRollback
 ```
 
-Negative provider disappearance/closure events, scheduled background polling and final high-volume catalog query projections remain explicit later boundaries rather than hidden inside retrieval.
+M4B-11 must remain bounded and partial-failure safe. The existence of broad M4B-09 discovery must never become authority to deep-analyze every available listing automatically.
