@@ -66,11 +66,11 @@ export class PartitionedMarketOpportunityIndexRepository implements MarketOpport
     ]);
     if (legacy) validateMarketOpportunityIndexSnapshot(legacy);
 
-    const links = mergeImmutableRecordsById(
+    const links = [...mergeImmutableRecordsById(
       legacy?.links ?? [],
       partitioned,
       semanticKey,
-    ).sort(compareLinks);
+    )].sort(compareLinks);
     if (links.length === 0) return null;
 
     const snapshot: MarketOpportunityIndexSnapshot = {
