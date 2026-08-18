@@ -2,7 +2,13 @@
 
 ## Status
 
-`COMPLETE — pending final exact-head CI and merge`
+`COMPLETE — merged via PR #41`
+
+Merge commit:
+
+```text
+009faa56b723b9939fafec38d2b1eb5974ae43bd
+```
 
 ## Why this gate exists
 
@@ -233,11 +239,12 @@ The M4B-11 behavior suite proves:
 6. the orchestration service reuses M4B-04/M4B-05/M4B-06/M4A authorities and contains no second matcher/parser;
 7. the public API keeps target, selection, budgets, lifecycle, JobSnapshot ids and scores server-owned.
 
-Implementation CI on head `7108b82e13f1662f97073eab3706fb8a0b05a073`:
+Implementation CI:
 
 ```text
-run  32097106797
-job  95590497771
+head f31e1ec326b1bc6601cbfb637a0a1d50566b56e2
+run  32097391068
+job  95591282815
 
 Install             PASS
 Dependency audit    PASS
@@ -247,7 +254,13 @@ Behavior tests      PASS
 Production build    PASS
 ```
 
-Final closure must still run again after documentation/status commits so the merge authority is the exact final head.
+PR #41 was promoted only after that exact closure head passed and was squash-merged into `develop` as:
+
+```text
+009faa56b723b9939fafec38d2b1eb5974ae43bd
+```
+
+The merge commit's parent is the M4B-10 `develop` commit `c2aa2f143ed90458251d55d10b4a99c0fce82120` and GitHub reports a valid verified signature.
 
 ## Gate
 
@@ -255,4 +268,4 @@ Final closure must still run again after documentation/status commits so the mer
 M4B-11 — BOUNDED_PARTIAL_FAILURE_SAFE_RETRIEVAL_TO_ASSESSMENT_ORCHESTRATION
 ```
 
-Once final exact-head CI passes and the PR merges, all explicit Market Architecture v0.1 gates are complete.
+All explicit Market Architecture v0.1 gates are complete.
