@@ -2,7 +2,33 @@
 
 ## Closure decision
 
-Market Architecture v0.1 is considered complete when M4B-11 is merged into `develop` with exact-head CI green.
+Market Architecture v0.1 is complete.
+
+The final explicit gate, M4B-11, passed exact-head CI and was squash-merged into `develop` through PR #41.
+
+Closure evidence:
+
+```text
+M4B-11 exact CI head
+f31e1ec326b1bc6601cbfb637a0a1d50566b56e2
+
+CI run
+32097391068
+
+CI job
+95591282815
+
+PR
+#41 — Market v0.1: Selected Candidate Analysis Orchestration
+
+merge commit
+009faa56b723b9939fafec38d2b1eb5974ae43bd
+
+merge parent / prior develop
+c2aa2f143ed90458251d55d10b4a99c0fce82120
+```
+
+The exact closure CI passed dependency audit, zero-warning lint, typecheck, the complete behavior suite and production build. GitHub reports the merge commit signature as valid/verified.
 
 The version establishes an end-to-end, source-aware and candidate-truth-safe path from external job-market observation to bounded career opportunity prioritization:
 
@@ -144,4 +170,4 @@ These are not unfinished M4B-11 work. They are later product/architecture versio
 MARKET_V0_1 = COMPLETE
 ```
 
-subject to the M4B-11 PR being merged from the exact CI-green closure head into `develop`, with `main` untouched.
+The closure is present on `develop`. `main` was not modified by the Market v0.1 closure sequence.
