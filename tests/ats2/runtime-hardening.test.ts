@@ -74,16 +74,19 @@ test('inline optimize stays on the internal endpoint and model output crosses a 
   assert.match(provider, /responseJsonSchema/);
 });
 
-test('PDF.js uses separate browser and native Node runtime contracts', () => {
+test('PDF.js is server-only and certificate PDF extraction cannot mount it in the browser', () => {
   const config = source('next.config.js');
   const certificateUpload = source('components/CertificateUpload.tsx');
+  const certificateRoute = source('app/api/extract-certificate-text/route.ts');
   const nativeResumeImport = source('lib/infrastructure/import/NativeResumeImportProvider.ts');
   const nodeRuntime = source('lib/infrastructure/import/PdfJsNodeRuntime.ts');
 
-  assert.match(certificateUpload, /import\(['"]pdfjs-dist['"]\)/);
-  assert.match(config, /pdfjs-dist\$/);
+  assert.doesNotMatch(certificateUpload, /pdfjs-dist|GlobalWorkerOptions|pdf\.worker/);
+  assert.match(certificateUpload, /\/api\/extract-certificate-text/);
+  assert.match(certificateRoute, /extractResumeText/);
   assert.match(config, /pdfjs-dist\/legacy\/build\/pdf\.mjs\$/);
   assert.match(config, /PdfJsNodeRuntime\.ts/);
+  assert.doesNotMatch(config, /pdfjs-dist\$/);
   assert.doesNotMatch(config, /serverExternalPackages:\s*\[[\s\S]*?['"]pdfjs-dist['"]/);
   assert.match(nodeRuntime, /webpackIgnore:\s*true/);
   assert.match(nodeRuntime, /pdfjs-dist\/legacy\/build\/pdf\.mjs/);
