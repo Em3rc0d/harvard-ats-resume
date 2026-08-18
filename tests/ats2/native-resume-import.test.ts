@@ -9,6 +9,7 @@ import {
   deriveCandidateEvidence,
   extractResumeText,
   materialCandidateFieldPaths,
+  reconcileCandidateToSource,
   resolveResumeImportTimeoutMs,
   validateAndMapEvidence,
   type ExtractedResumeTextDocument,
@@ -149,6 +150,32 @@ test('deterministic evidence rejects an extracted candidate value absent from th
   );
 });
 
+test('runtime source reconciliation drops one unsupported leaf without discarding supported experience evidence', () => {
+  const candidate = candidateFixture();
+  candidate.experience[0] = {
+    ...candidate.experience[0],
+    description: 'Architected an enterprise platform with global impact.',
+  };
+
+  const reconciled = reconcileCandidateToSource(candidate, documentFixture());
+
+  assert.equal(reconciled.candidate.experience.length, 1);
+  assert.equal(reconciled.candidate.experience[0]?.company, 'Acme');
+  assert.equal(reconciled.candidate.experience[0]?.role, 'Backend Engineer');
+  assert.equal(reconciled.candidate.experience[0]?.description, '');
+  assert.ok(reconciled.rejectedFieldPaths.includes('experience[0].description'));
+  assert.ok(
+    reconciled.evidenceMap.some((item) => item.fieldPath === 'experience[0].role'),
+  );
+  assert.ok(
+    !reconciled.evidenceMap.some((item) => item.fieldPath === 'experience[0].description'),
+  );
+  assert.deepEqual(
+    reconciled.evidenceMap.map((item) => item.fieldPath).sort(),
+    materialCandidateFieldPaths(reconciled.candidate).sort(),
+  );
+});
+
 test('native import rejects candidate values without source evidence', () => {
   const evidence = completeEvidence().filter((item) => item.fieldPath !== 'experience[0].role');
 
@@ -188,7 +215,7 @@ test('native resume import rejects unsafe timeout configuration', () => {
   assert.throws(() => resolveResumeImportTimeoutMs('not-a-number'), /between 30000 and 180000/);
 });
 
-test('runtime resume import derives evidence in ATS instead of requiring the model to enumerate evidenceMap', () => {
+test('runtime resume import derives source evidence in ATS and reconciles unsupported model leaves before return', () => {
   const route = readFileSync(join(process.cwd(), 'app/api/import-resume/route.ts'), 'utf8');
   const nativeProvider = readFileSync(
     join(process.cwd(), 'lib/infrastructure/import/NativeResumeImportProvider.ts'),
@@ -198,7 +225,9 @@ test('runtime resume import derives evidence in ATS instead of requiring the mod
   assert.match(route, /NativeResumeImportProvider/);
   assert.match(route, /ResumeImportTimeoutError/);
   assert.match(route, /isTimeout \? 504/);
-  assert.match(nativeProvider, /deriveCandidateEvidence\(candidate, document\)/);
+  assert.match(nativeProvider, /reconcileCandidateToSource\(candidate, document\)/);
+  assert.match(nativeProvider, /deriveCandidateEvidence\(reconciled, document\)/);
+  assert.match(nativeProvider, /no source match -> no imported fact/i);
   assert.doesNotMatch(nativeProvider, /rawImportExtractionSchema|evidenceMap: z\.array/);
   assert.doesNotMatch(route, /N8nResumeImportProvider|NEXT_PUBLIC_N8N_RESUME_URL/);
   assert.doesNotMatch(nativeProvider, /fetch\(.*N8N|NEXT_PUBLIC_N8N_RESUME_URL/);
