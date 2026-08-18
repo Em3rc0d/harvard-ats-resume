@@ -42,11 +42,11 @@ export function normalizeGeneratedResumeText(value: string): string {
   // traceable.
   normalized = normalized.replace(/\s*[•●▪◦]\s*/g, '\n• ');
 
-  // Only recover explicit uppercase standard headings. This avoids splitting
-  // ordinary prose that happens to contain words such as "experience".
-  if (normalized.split('\n').filter((line) => line.trim()).length <= 2) {
-    normalized = splitUppercaseSectionHeadings(normalized);
-  }
+  // Explicit uppercase standard headings are presentation boundaries too.
+  // Recover them regardless of the number of bullets already discovered so a
+  // compressed real-world CV cannot keep its identity/header text fused to a
+  // material summary or experience claim.
+  normalized = splitUppercaseSectionHeadings(normalized);
 
   return normalized
     .split('\n')
