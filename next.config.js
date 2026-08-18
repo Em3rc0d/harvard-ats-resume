@@ -47,17 +47,11 @@ const nextConfig = {
     config.resolve.alias.canvas = false;
 
     if (isServer) {
-      // The resume Route Handler imports PDF.js through this exact package
-      // subpath. Route it through a tiny adapter whose own dynamic import is
-      // marked webpackIgnore, so Node executes the ESM package natively during
-      // both `next dev --webpack` and `next start` instead of Webpack rewriting
-      // PDF.js' module namespace.
+      // All PDF.js execution is server-owned. Route the exact package subpath
+      // through a tiny adapter whose dynamic import is marked webpackIgnore so
+      // Node executes PDF.js natively in dev and production runtimes.
       config.resolve.alias['pdfjs-dist/legacy/build/pdf.mjs$'] =
         `${__dirname}/lib/infrastructure/import/PdfJsNodeRuntime.ts`;
-    } else {
-      // Certificate parsing runs in the browser and needs the generic legacy
-      // PDF.js entry. Keep this contract independent from native resume import.
-      config.resolve.alias['pdfjs-dist$'] = 'pdfjs-dist/legacy/build/pdf.mjs';
     }
 
     return config;
