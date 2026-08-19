@@ -1,491 +1,257 @@
-# AI Harvard ATS Resume Builder
+# CV Engine
 
-**AI-Powered ATS-Optimized Harvard-Style Resume Builder for Tech Professionals**
+**Career Opportunity Intelligence with evidence-bound AI and guardrails.**
 
-Build professional resumes that pass Applicant Tracking Systems (ATS) with AI-powered keyword matching, scoring analysis, and Harvard Business School formatting guidelines.
+CV Engine is not a keyword-stuffing ATS resume builder. It separates candidate truth, market truth, derived fit, and generated presentation so a job description cannot silently become a career fact.
 
----
+> **Core principle:** evidence before persuasion.
 
-## 🎯 Product Vision
+## Current release status
 
-This application helps you:
-- ✅ Collect structured professional data through a guided form
-- ✅ Generate Harvard-style resumes with AI enhancement
-- ✅ Optimize content for ATS systems
-- ✅ Align your resume with specific job descriptions
-- ✅ Get keyword match analysis and ATS scoring
-- ✅ Export clean, professional PDFs
+This repository is in **release-candidate hardening**. The codebase has a production build and a broad behavioral test suite, but release readiness is gated by end-to-end dogfood of the real user flows documented in `docs/release/RELEASE_SURFACE_AUDIT_v1.md`.
 
-**Core Principle:** The system **NEVER** fabricates experience or invents metrics - it only restructures and optimizes your provided data.
+Do not treat a green build alone as proof that the product is released.
 
----
+## Product model
 
-## 🚀 Quick Start
+```text
+Career Evidence / Career Vault
+            ↓
+        Career Target
+            ↓
+       Job Snapshot
+            ↓
+     Job Intelligence
+            ↓
+        Job Match
+            ↓
+ Opportunity Assessment
+            ↓
+ Apply / Prepare / Skip context
+            ↓
+   constrained resume generation
+            ↓
+ deterministic grounding
+            ↓
+ semantic grounding
+            ↓
+ claim provenance / composition
+            ↓
+ durable ResumeVersion
+```
 
-### Prerequisites
-- Node.js 18+ installed
-- Google Gemini API key ([Get FREE key here](https://makersuite.google.com/app/apikey))
+The system maintains these boundaries:
 
-### Installation
+- **Candidate evidence** describes what the candidate can support.
+- **Job descriptions** are external market requirements, never candidate evidence.
+- **Career Target** records intent/preferences, never capability.
+- **Job Match** is evidence-backed requirement analysis, not hiring probability.
+- **Opportunity Assessment** is decision support derived from existing evidence and job truth.
+- **Resume generation** may rewrite presentation, but cannot authorize new candidate facts.
+- **ResumeVersion** is emitted only after grounding and claim provenance succeed.
+
+## Trust invariants
+
+1. No source match → no imported fact.
+2. Missing evidence → remain missing; do not invent it.
+3. Job requirement ≠ candidate fact.
+4. Career preference ≠ candidate capability.
+5. No assertion support → no trusted ResumeClaim.
+6. Guardrail failure → safe stop; no trusted ResumeVersion is emitted.
+7. Unsupported parser/model leaves may be omitted while supported source-backed evidence survives.
+8. Durable Career Vault operations fail closed; they are not silently downgraded to in-memory persistence.
+
+## Public product flow
+
+The current public UI uses one audited flow:
+
+```text
+START
+  ├─ Import PDF/DOCX
+  │      ↓
+  │  Imported Resume Review
+  │      ↓
+  └─ Manual Career Evidence
+         ↓
+      Career Target
+         ↓
+ Specific Job + Opportunity Assessment
+         or
+ General Resume
+         ↓
+ Trusted Generation
+         ↓
+ Guardrails / Provenance
+         ↓
+ Results + durable ResumeVersion
+```
+
+Opportunity Space is a separate comparison surface that evaluates several job descriptions against one stable CareerSnapshot and one Career Target.
+
+## Resume import
+
+Supported resume formats:
+
+- PDF with machine-readable text
+- DOCX
+- maximum 10 MB
+
+Import pipeline:
+
+```text
+file validation
+  ↓
+server-side document text extraction
+  ↓
+Gemini structured extraction proposal
+  ↓
+source reconciliation
+  ↓
+only source-backed fields retained
+  ↓
+source receipt + evidence map
+  ↓
+Candidate Review
+```
+
+Gemini is a parser proposal source here, not the authority for candidate truth. If one proposed field cannot be found in the source, that field is removed rather than promoted as trusted evidence.
+
+## Career evidence editor
+
+The editor contains candidate evidence only:
+
+- personal information
+- optional professional summary
+- work evidence
+- education evidence
+- skills
+- projects
+- certifications
+- languages
+
+The product does **not** require a candidate to invent a summary, employer, education record, or metric just to satisfy a traditional resume template. Identity plus at least one material career-evidence dimension is required.
+
+## Job targeting and opportunity intelligence
+
+For a targeted resume, the user defines:
+
+- target role
+- preferred seniority
+- location preference
+- work model
+- complete job description
+
+Target preference and Job Match are evaluated separately. A targeted resume cannot be built from the canonical UI until the current job/target combination has a current Opportunity Assessment.
+
+Opportunity Space supports 2–10 jobs. Inputs are frozen while durable assessments are being written so results cannot be composed from a UI state that changed mid-run.
+
+## Resume generation and provenance
+
+Generation uses Gemini for constrained rewriting, then passes through deterministic and semantic safety layers before persistence:
+
+```text
+Gemini proposal
+  ↓
+text normalization
+  ↓
+deterministic grounding
+  ↓
+semantic grounding
+  ↓
+resume composition
+  ↓
+claim-to-CareerAssertion provenance
+  ↓
+Career Vault persistence
+  ↓
+ResumeVersion
+```
+
+The rendered resume is not allowed to become the authority from which career truth is inferred.
+
+## Certificate / education helper
+
+Certificate images may be OCR'd in the browser. Certificate PDFs cross a server-owned PDF text extraction boundary. Missing extraction fields stay empty; presentation strings such as “Degree not found” are never stored as candidate facts.
+
+## API surfaces
+
+Primary public routes include:
+
+- `POST /api/import-resume` — trusted PDF/DOCX intake
+- `POST /api/extract-certificate-text` — bounded PDF certificate text extraction
+- `POST /api/optimize-content` — fact-preserving inline wording assistance
+- `POST /api/assess-opportunity` — target-aware opportunity assessment
+- `POST /api/opportunity-space` — durable multi-opportunity composition
+- `POST /api/generate-resume` — trusted resume generation + provenance + durability
+
+Additional market-observation routes implement the controlled market architecture and are intentionally separate from candidate truth.
+
+## Rate limiting and durability
+
+Public API requests use endpoint-scoped, non-reversible request identities. The default public API budget is currently **50 requests per hour per scoped request identity**.
+
+Local development defaults to in-memory rate limiting to avoid stale Redis/DNS dependencies during field tests. Production uses Redis automatically when credentials exist. This fallback policy applies to rate limiting only; Career Vault durability remains fail-closed.
+
+## Environment
+
+Copy `.env.example` and configure the server-side integrations required for the flows you exercise.
+
+At minimum, model-backed resume import/generation requires:
+
+```env
+GEMINI_API_KEY=...
+```
+
+Durable Career Vault / market history requires the configured Upstash Redis credentials described in `.env.example`.
+
+Optional bounded timeouts include:
+
+```env
+RESUME_IMPORT_TIMEOUT_MS=90000
+RESUME_GENERATION_TIMEOUT_MS=120000
+```
+
+## Development
 
 ```bash
-# Navigate to project directory
-cd harvard-ats-resume
-
-# Install dependencies
-npm install
-
-# Setup environment
-cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
-
-# Run development server
+npm ci
 npm run dev
 ```
 
-### Open Browser
-Navigate to [http://localhost:3000](http://localhost:3000)
+The development server currently runs Next.js with Webpack because PDF.js runtime isolation is explicitly tested against that boundary.
 
----
+## Verification
 
-## ✨ Key Features
+Before merging release changes, run:
 
-### 1. **Guided Multi-Step Form**
-- Personal Information
-- Professional Summary
-- Work Experience (with quantifiable achievements)
-- Education
-- Skills (Hard & Soft)
-- Job Description (Optional but recommended)
-
-### 2. **🎓 Certificate Upload with OCR** (NEW!)
-- Upload diploma or certificate images
-- Automatic text extraction using Tesseract.js OCR
-- Auto-populate education fields (degree, institution, dates, GPA, honors)
-- Supports PNG, JPG, GIF, PDF, and other image formats
-- Client-side processing (privacy-first, no server uploads)
-- See [certificates/README.md](./certificates/README.md) for details
-
-### 3. **AI-Powered Enhancement** (Google Gemini)
-- Restructures content for clarity
-- Uses strong action verbs
-- Maintains Harvard format
-- Integrates job description keywords naturally
-- **Never invents or fabricates information**
-
-### 4. **ATS Scoring Algorithm** (Server-Side)
-- Extracts keywords from job description
-- Matches against resume content
-- Calculates percentage-based score
-- Shows matched and missing keywords
-- Provides actionable suggestions
-
-### 5. **Professional Output**
-- Harvard Business School format
-- ATS-compatible formatting
-- 1-page optimized
-- Clean PDF export
-- Print-ready layout
-
----
-
-## 🏗️ Technical Architecture
-
-```
-User Input (React Hook Form)
-       ↓
-POST /api/generate-resume
-       ↓
-Zod Schema Validation
-       ↓
-Rate Limiting (5 req/hour)
-       ↓
-Input Sanitization
-       ↓
-Gemini AI Enhancement
-       ↓
-ATS Keyword Extraction
-       ↓
-Score Calculation
-       ↓
-Response: {
-  formattedResume,
-  atsScore,
-  matchedKeywords,
-  missingKeywords,
-  suggestions
-}
-```
-
----
-
-## 📁 Project Structure
-
-```
-harvard-ats-resume/
-├── app/
-│   ├── api/generate-resume/
-│   │   └── route.ts          # Main API endpoint
-│   ├── layout.tsx            # Root layout with SEO
-│   ├── page.tsx              # Main page component
-│   └── globals.css           # Global styles
-├── components/
-│   ├── ResumeForm.tsx        # Guided form (React Hook Form)
-│   ├── ResumeResults.tsx     # Results display with ATS score
-│   ├── CertificateUpload.tsx # OCR certificate upload component
-│   └── VoiceInput.tsx        # Voice input component
-├── lib/
-│   ├── schemas.ts            # Zod validation schemas
-│   ├── gemini.ts             # Gemini AI integration
-│   ├── ats-scoring.ts        # ATS algorithm (keyword extraction)
-│   └── rate-limit.ts         # Rate limiting utility
-├── certificates/
-│   ├── README.md             # Certificate upload documentation
-│   ├── .gitignore            # Protect privacy of uploaded images
-│   └── localhost.pem         # SSL certificates for HTTPS
-├── package.json
-├── tsconfig.json
-├── tailwind.config.js
-└── next.config.js            # Security headers
-```
-
----
-
-## 🔒 Security Features
-
-### Input Validation
-- ✅ Zod schema validation on all inputs
-- ✅ Type safety with TypeScript
-- ✅ Length limits on all fields
-- ✅ Email/URL format validation
-
-### API Security
-- ✅ Rate limiting (5 requests per hour)
-- ✅ Input sanitization (XSS prevention)
-- ✅ HTTP method restrictions (POST only)
-- ✅ Environment variable protection
-
-### Security Headers
-- ✅ Strict-Transport-Security
-- ✅ X-Frame-Options: SAMEORIGIN
-- ✅ X-Content-Type-Options: nosniff
-- ✅ X-XSS-Protection
-
----
-
-## 📊 ATS Scoring Algorithm
-
-The ATS score is calculated **server-side** (not by AI) using the following algorithm:
-
-### Step 1: Extract Keywords from Job Description
-```typescript
-- Tokenize text
-- Remove stopwords
-- Filter technical terms and nouns
-- Identify multi-word terms (e.g., "machine learning")
-- Count frequency
-```
-
-### Step 2: Match Against Resume
-```typescript
-- Check if keywords appear in resume text
-- Check if keywords appear in skills array
-- Count matches
-```
-
-### Step 3: Calculate Score
-```typescript
-atsScore = (matched_keywords / total_keywords) * 100
-```
-
-### Result
-```typescript
-{
-  atsScore: 84,
-  matchedKeywords: ["React", "Node.js", "AWS"],
-  missingKeywords: ["GraphQL", "Docker"],
-  suggestions: [...]
-}
-```
-
----
-
-## 🎨 Harvard Resume Format
-
-The AI generates resumes in Harvard Business School format:
-
-```
-FULL NAME
-Location | Email | LinkedIn | GitHub
-
-PROFESSIONAL SUMMARY
-[2-3 sentences highlighting key qualifications]
-
-EXPERIENCE
-Company Name — Role Title
-Start Date - End Date
-• Led team of X engineers, achieving Y% improvement in Z metric
-• Developed feature that increased user engagement by X%
-• Implemented system reducing costs by $X annually
-
-EDUCATION
-Institution Name
-Degree, Start Date - End Date
-
-SKILLS
-Technical Skills: React, Python, AWS, Docker
-Soft Skills: Leadership, Communication
-```
-
----
-
-## 🔧 API Documentation
-
-### POST /api/generate-resume
-
-**Request Body:**
-```json
-{
-  "personalInfo": {
-    "fullName": "string",
-    "location": "string",
-    "email": "string",
-    "linkedin": "string",
-    "github": "string"
-  },
-  "summary": "string",
-  "experience": [
-    {
-      "company": "string",
-      "role": "string",
-      "startDate": "string",
-      "endDate": "string",
-      "description": "string",
-      "technologies": ["string"]
-    }
-  ],
-  "education": [
-    {
-      "institution": "string",
-      "degree": "string",
-      "startDate": "string",
-      "endDate": "string"
-    }
-  ],
-  "skills": {
-    "hardSkills": ["string"],
-    "softSkills": ["string"]
-  },
-  "jobDescription": "string | null"
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "formattedResume": "string",
-    "atsScore": 84,
-    "matchedKeywords": ["React", "Node.js"],
-    "missingKeywords": ["GraphQL"],
-    "suggestions": ["Add measurable achievements..."]
-  }
-}
-```
-
-**Rate Limit (429):**
-```json
-{
-  "success": false,
-  "error": "Rate limit exceeded...",
-  "retryAfter": "2024-02-16T10:30:00.000Z"
-}
-```
-
----
-
-## 🎯 Target Audience
-
-- 🎓 University students
-- 💻 Junior developers
-- 🚀 Tech professionals
-- 🌍 International job applicants
-- 🎖️ Bootcamp graduates
-
----
-
-## 🆚 Differentiation
-
-**This is NOT a generic resume builder.**
-
-### Positioning
-"AI ATS-Optimized Harvard Resume Builder for Tech Professionals"
-
-### Key Differentiators
-1. ✅ **OCR Certificate Upload** - Auto-fill education from diploma images
-2. ✅ Job description alignment
-3. ✅ Keyword gap detection
-4. ✅ Real-time ATS score
-5. ✅ Structured Harvard formatting
-6. ✅ **No hallucinated experience** - only enhancement
-7. ✅ Algorithm-based scoring (not AI guessing)
-8. ✅ Voice input for faster data entry
-
----
-
-## 📦 Deployment
-
-### Vercel (Recommended)
 ```bash
-# Push to GitHub
-git init
-git add .
-git commit -m "Initial commit"
-git push
-
-# Deploy to Vercel
-# 1. Import repository on vercel.com
-# 2. Add GEMINI_API_KEY environment variable
-# 3. Deploy!
+npm audit --audit-level=moderate
+npm run lint
+npm run typecheck
+npm test
+npm run build
+node scripts/verify-pdfjs-server-bundle.mjs
 ```
 
-### Environment Variables
-```
-GEMINI_API_KEY=your_production_key
-NEXT_PUBLIC_APP_URL=https://yourdomain.com
-```
+CI performs those gates. The PDF.js bundle check verifies that the server runtime keeps the native PDF.js dynamic import boundary intact instead of allowing Webpack to corrupt the module namespace.
 
----
+## Release evidence
 
-## 🧪 Testing
+See:
 
-### Manual Testing
-```bash
-# Test API endpoint
-curl -X POST http://localhost:3000/api/generate-resume \
-  -H "Content-Type: application/json" \
-  -d @test-data.json
-```
+- `docs/release/RELEASE_SURFACE_AUDIT_v1.md` — page/button/state audit and release gate
+- `docs/ats-v2/` — ATS v2 trust/provenance work
+- market architecture documentation in the repository for Career Opportunity Intelligence / MarketObservation work
 
-### Test Rate Limiting
-```bash
-# Make 6 requests quickly (5th should work, 6th should be rate limited)
-for i in {1..6}; do
-  echo "Request $i"
-  curl -X POST http://localhost:3000/api/generate-resume \
-    -H "Content-Type: application/json" \
-    -d @test-data.json
-done
-```
+## What CV Engine does not claim
 
----
+CV Engine does not claim to:
 
-## 💡 Usage Tips
+- predict whether a company will hire the candidate;
+- turn missing job requirements into candidate experience;
+- invent metrics to make bullets sound stronger;
+- infer credentials, seniority, ownership, impact, or technologies without evidence;
+- guarantee that a resume will “beat” an ATS;
+- treat an AI model response as a trusted career record by itself.
 
-### For Best Results
-
-1. **Be Specific**: Provide detailed achievements with metrics
-   - ❌ "Worked on backend"
-   - ✅ "Developed REST API handling 10,000+ requests/day, reducing latency by 40%"
-
-2. **Use Numbers**: Quantify your impact
-   - Team size (Led 5 engineers)
-   - Percentages (Increased by 30%)
-   - Dollar amounts (Saved $200K annually)
-
-3. **Include Job Description**: Always paste the job posting
-   - Gets keyword analysis
-   - Receives ATS score
-   - Gets targeted suggestions
-
-4. **List Relevant Skills**: Focus on job-specific technical skills
-   - Match technologies from job description
-   - Include proficiency levels if relevant
-
----
-
-## 🗺️ Roadmap
-
-### Phase 1 (MVP) ✅
-- [x] Guided form with validation
-- [x] Resume generation with Gemini AI
-- [x] ATS scoring algorithm
-- [x] Keyword matching analysis
-- [x] PDF export
-- [x] Rate limiting
-- [x] **OCR Certificate Upload** (NEW!)
-- [x] Voice input for text fields
-
-### Phase 2 (Planned)
-- [ ] User authentication (Clerk)
-- [ ] Draft saving (MongoDB)
-- [ ] Resume versioning (per job)
-- [ ] Cover letter generator
-- [ ] Resume templates (multiple styles)
-- [ ] A/B testing different versions
-
-### Phase 3 (Future)
-- [ ] SaaS model with Stripe
-- [ ] Resume analytics dashboard
-- [ ] LinkedIn profile import
-- [ ] Job matching recommendations
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
----
-
-## 📝 License
-
-MIT License - feel free to use for personal and commercial projects.
-
----
-
-## 🙏 Acknowledgments
-
-- **Google Gemini**: AI-powered content enhancement
-- **Tesseract.js**: OCR for certificate text extraction
-- **Next.js**: React framework
-- **React Hook Form**: Form state management
-- **Zod**: Runtime validation
-- **Harvard Business School**: Resume format inspiration
-
----
-
-## 📞 Support
-
-For support or questions:
-- 📧 Open an issue on GitHub
-- 📚 Check documentation
-- 💬 Discussion forum
-
----
-
-**Built with ❤️ for job seekers worldwide**
-
-*Empowering candidates with AI-powered professional resumes that pass ATS systems*
-
----
-
-## Quick Links
-
-- 🚀 [Live Demo](#) (Coming soon)
-- 📖 [Full Documentation](#)
-- 🔒 [Security Policy](#)
-- 🐛 [Report Bug](#)
-- 💡 [Request Feature](#)
-
----
-
-**Last Updated**: February 2024  
-**Version**: 1.0.0 (MVP)  
-**Status**: Production Ready ✅
+The product is designed to help a person decide and present more clearly **without corrupting the evidence that decision depends on**.
