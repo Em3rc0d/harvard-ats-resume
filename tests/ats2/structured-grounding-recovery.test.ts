@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { validateGeneratedResumeGrounding } from '../../lib/application/grounding/GroundingValidator';
+import { projectLegacyResumeRequest } from '../../lib/application/legacy/LegacyResumeAdapter';
+import { reconcileCandidateToSource } from '../../lib/infrastructure/import/NativeResumeImportProvider';
+import type { ResumeImportContext } from '../../lib/application/import/ResumeImportProvider';
 import type { ResumeRequest } from '../../lib/schemas';
 
 function candidate(overrides: Partial<ResumeRequest> = {}): ResumeRequest {
@@ -124,4 +127,101 @@ test('supported institution + degree structured line is approved without reconfi
 
   assert.equal(report.status, 'APPROVED');
   assert.deepEqual(report.factsToConfirm, []);
+});
+
+test('candidate-confirmed academic distinction authorizes only the exact stored distinction', () => {
+  const data = candidate({
+    education: [{
+      institution: 'Universidad Nacional Mayor de San Marcos (UNMSM)',
+      degree: 'Ingeniería de Sistemas',
+      startDate: '',
+      endDate: '',
+      honors: 'Quinto superior',
+    }],
+  });
+
+  const approved = validateGeneratedResumeGrounding(
+    data,
+    'EDUCATION\nUniversidad Nacional Mayor de San Marcos (UNMSM) — Ingeniería de Sistemas — Quinto superior',
+  );
+  assert.equal(approved.status, 'APPROVED');
+
+  const stronger = validateGeneratedResumeGrounding(
+    data,
+    'EDUCATION\nUniversidad Nacional Mayor de San Marcos (UNMSM) — Ingeniería de Sistemas — Primer puesto',
+  );
+  assert.equal(stronger.status, 'NEEDS_USER_CONFIRMATION');
+  assert.deepEqual(stronger.factsToConfirm, ['Primer puesto']);
+});
+
+test('resume source reconciliation preserves source-exact academic honors and evidence path', () => {
+  const imported = candidate({
+    education: [{
+      institution: 'Universidad Nacional Mayor de San Marcos (UNMSM)',
+      degree: 'Ingeniería de Sistemas',
+      startDate: '2021',
+      endDate: '2026',
+      honors: 'Quinto superior',
+    }],
+  });
+  const { jobDescription: _jobDescription, ...draft } = imported;
+  const source = {
+    format: 'PDF' as const,
+    text: 'Jane Candidate jane@example.com Lima, Peru Universidad Nacional Mayor de San Marcos (UNMSM) Ingeniería de Sistemas 2021 2026 Quinto superior TypeScript',
+    pages: [{
+      page: 1,
+      text: 'Jane Candidate jane@example.com Lima, Peru Universidad Nacional Mayor de San Marcos (UNMSM) Ingeniería de Sistemas 2021 2026 Quinto superior TypeScript',
+    }],
+  };
+
+  const reconciled = reconcileCandidateToSource(draft, source);
+  assert.equal(reconciled.candidate.education[0]?.honors, 'Quinto superior');
+  assert.ok(reconciled.evidenceMap.some((item) => item.fieldPath === 'education[0].honors' && item.excerpt === 'Quinto superior'));
+});
+
+test('manual confirmation after import becomes CANDIDATE_ADDED evidence, not verified fact', () => {
+  const data = candidate({
+    education: [{
+      institution: 'Universidad Nacional Mayor de San Marcos (UNMSM)',
+      degree: 'Ingeniería de Sistemas',
+      startDate: '',
+      endDate: '',
+      honors: 'Quinto superior',
+    }],
+  });
+  const context: ResumeImportContext = {
+    receipt: {
+      receiptId: 'receipt-honors',
+      originalFileName: 'candidate.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 100,
+      sha256: 'a'.repeat(64),
+      capturedAt: '2026-08-19T20:00:00.000Z',
+      importer: 'native-resume-import',
+      importerVersion: 'fixture',
+    },
+    evidenceMap: [
+      {
+        fieldPath: 'education[0].institution',
+        excerpt: 'Universidad Nacional Mayor de San Marcos (UNMSM)',
+        locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].institution' },
+      },
+      {
+        fieldPath: 'education[0].degree',
+        excerpt: 'Ingeniería de Sistemas',
+        locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].degree' },
+      },
+    ],
+  };
+
+  const projection = projectLegacyResumeRequest(data, {
+    projectionKey: 'honors-confirmation',
+    capturedAt: '2026-08-19T21:00:00.000Z',
+    sourceContext: context,
+  });
+
+  const honorsEvidence = projection.evidence.find((item) => item.locator?.fieldPath === 'education[0].honors');
+  assert.ok(honorsEvidence);
+  assert.equal(honorsEvidence.reviewState, 'CANDIDATE_ADDED');
+  assert.ok(projection.assertions.some((item) => item.statement.includes('Academic distinction: Quinto superior.')));
 });
