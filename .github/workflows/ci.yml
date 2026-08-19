@@ -68,7 +68,9 @@ jobs:
           exit 1
 
       - name: Browser acceptance
-        run: node scripts/release-browser-acceptance.mjs
+        run: |
+          node scripts/release-browser-acceptance.mjs
+          node scripts/release-browser-terminal-surfaces.mjs
 
       - name: Stop browser acceptance server
         if: always()
