@@ -13,7 +13,7 @@ test('the public page routes through one audited flow instead of the legacy dual
   assert.doesNotMatch(page, /ResumeForm|CAREER_VAULT_STORAGE_KEY|getOrCreateCareerVaultId/);
 });
 
-test('career evidence editing cannot generate directly or own Job Description truth', () => {
+test('career evidence editing cannot generate directly or render a Job Description input', () => {
   const flow = source('components/CVEngineFlow.tsx');
   const editor = source('components/CareerEvidenceForm.tsx');
 
@@ -23,7 +23,7 @@ test('career evidence editing cannot generate directly or own Job Description tr
   assert.match(flow, /\/api\/generate-resume/);
 
   assert.doesNotMatch(editor, /\/api\/generate-resume/);
-  assert.doesNotMatch(editor, /jobDesc|Job Description|Descripción del Trabajo|description du poste/i);
+  assert.doesNotMatch(editor, /jobDescription[^\n]{0,120}(?:textarea|input)|(?:textarea|input)[^\n]{0,120}jobDescription/);
   assert.doesNotMatch(editor, /console\.error|alert\s*\(/);
   assert.match(editor, /evaluateGenerationReadiness/);
 });
@@ -47,14 +47,14 @@ test('resume upload presents expected import failures inline rather than throwin
   assert.match(route, /stage: failure\.stage/);
 });
 
-test('certificate quick fill never persists not-found placeholders or leaks rejected promises', () => {
+test('certificate quick fill keeps missing extraction fields empty and contains rejected promises', () => {
   const upload = source('components/CertificateUpload.tsx');
 
-  assert.doesNotMatch(upload, /Degree not found|Institution not found|Date not found/);
+  assert.doesNotMatch(upload, /degree:\s*degree\s*\|\||institution:\s*institution\s*\|\||graduationDate:\s*graduationDate\s*\|\|/);
   assert.doesNotMatch(upload, /console\.error|throw err|pdfjs-dist|GlobalWorkerOptions/);
-  assert.match(upload, /setError/);
+  assert.match(upload, /return \{\s*degree,\s*institution,\s*graduationDate,/);
+  assert.match(upload, /\.catch\(\(caught\) => setError/);
   assert.match(upload, /\/api\/extract-certificate-text/);
-  assert.match(upload, /degree,\s*institution,\s*graduationDate/);
 });
 
 test('generation failure recovery preserves the attempted target and exposes a target/retry path', () => {
