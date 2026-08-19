@@ -74,6 +74,7 @@ jobs:
           CV_ENGINE_PLAYWRIGHT_MODULE: file:///tmp/cv-engine-playwright/node_modules/playwright/index.mjs
         run: |
           node scripts/release-browser-acceptance.mjs
+          node scripts/release-browser-editor-controls.mjs
           node scripts/release-browser-terminal-surfaces.mjs
           node scripts/release-browser-market-surfaces.mjs
 
