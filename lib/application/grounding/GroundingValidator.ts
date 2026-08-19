@@ -180,6 +180,7 @@ function refineEducationViolation(
     record.degree,
     record.startDate,
     record.endDate,
+    record.honors ?? '',
   ].map(normalize).filter(Boolean));
   const unsupported = remaining.filter((part) => !supported.has(normalize(part)));
 
@@ -222,8 +223,8 @@ function rebuildReport(violations: readonly GroundingViolation[]): GroundingRepo
  * A language proficiency must match the exact candidate-provided proficiency;
  * a supported language never authorizes a stronger generated level. Likewise,
  * a supported institution/degree never authorizes an additional academic
- * distinction. Unsupported education facets remain explicit confirmation
- * requests rather than being hidden inside one whole-line violation.
+ * distinction. An explicit education.honors value is candidate evidence and can
+ * support that exact distinction; otherwise it remains a confirmation request.
  */
 export function validateGeneratedResumeGrounding(
   data: ResumeRequest,
