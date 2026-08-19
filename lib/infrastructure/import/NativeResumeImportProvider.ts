@@ -9,7 +9,7 @@ import type {
   ResumeImportProvider,
 } from '../../application/import/ResumeImportProvider';
 
-const IMPORTER_VERSION = 'native-text-gemini-v3-source-reconciled';
+const IMPORTER_VERSION = 'native-text-gemini-v4-academic-honors';
 const GEMINI_IMPORT_MODEL = 'gemini-2.5-flash';
 const DEFAULT_REQUEST_TIMEOUT_MS = 90_000;
 const MIN_REQUEST_TIMEOUT_MS = 30_000;
@@ -95,6 +95,7 @@ const rawCandidateSchema = z.object({
     degree: z.string(),
     startDate: z.string(),
     endDate: z.string(),
+    honors: z.string(),
   })),
   skills: z.object({
     hardSkills: z.array(z.string()),
@@ -162,8 +163,9 @@ const RESPONSE_JSON_SCHEMA = {
           degree: { type: 'string' },
           startDate: { type: 'string' },
           endDate: { type: 'string' },
+          honors: { type: 'string' },
         },
-        required: ['institution', 'degree', 'startDate', 'endDate'],
+        required: ['institution', 'degree', 'startDate', 'endDate', 'honors'],
       },
     },
     skills: {
@@ -234,7 +236,8 @@ Extract only facts explicitly present in the resume text. Do not infer, embellis
 Every non-empty scalar string you return must preserve source wording and must be recoverable from one contiguous source passage after conservative whitespace/punctuation normalization.
 For experience and project descriptions, never merge separate bullets and never paraphrase. Copy one source-exact sentence/bullet or return an empty string.
 Do not create a professional summary unless the source contains an explicit summary/profile/objective section; otherwise return an empty summary.
-Do not infer technologies, seniority, ownership, scope, achievements, dates, locations, education, certifications, language proficiency, or metrics.
+Academic honors or distinctions belong only in education.honors and only when that exact distinction is explicitly present in the source.
+Do not infer technologies, seniority, ownership, scope, achievements, dates, locations, education, academic honors, certifications, language proficiency, or metrics.
 Never create Job Description data; this import contract contains candidate data only.
 If a field is absent or cannot be represented source-exactly, use an empty string or empty array instead of guessing.
 Return only JSON matching the response schema.`;
@@ -280,12 +283,14 @@ function sanitizeCandidate(raw: RawCandidate): ImportedCandidateDraft {
         degree: clean(item.degree),
         startDate: clean(item.startDate),
         endDate: clean(item.endDate),
+        honors: clean(item.honors),
       }))
       .filter((item) => isMeaningfulRecord([
         item.institution,
         item.degree,
         item.startDate,
         item.endDate,
+        item.honors,
       ])),
     skills: {
       hardSkills: raw.skills.hardSkills.map(clean).filter(Boolean),
@@ -375,6 +380,7 @@ function materialCandidateFields(candidate: ImportedCandidateDraft): MaterialCan
     add(`education[${index}].degree`, item.degree);
     add(`education[${index}].startDate`, item.startDate);
     add(`education[${index}].endDate`, item.endDate);
+    add(`education[${index}].honors`, item.honors ?? '');
   });
 
   candidate.skills.hardSkills.forEach((skill, index) => add(`skills.hardSkills[${index}]`, skill));
@@ -559,12 +565,14 @@ export function reconcileCandidateToSource(
         degree: keep(`education[${originalIndex}].degree`, item.degree),
         startDate: keep(`education[${originalIndex}].startDate`, item.startDate),
         endDate: keep(`education[${originalIndex}].endDate`, item.endDate),
+        honors: keep(`education[${originalIndex}].honors`, item.honors ?? ''),
       }))
       .filter((item) => isMeaningfulRecord([
         item.institution,
         item.degree,
         item.startDate,
         item.endDate,
+        item.honors,
       ])),
     skills: {
       hardSkills: candidate.skills.hardSkills

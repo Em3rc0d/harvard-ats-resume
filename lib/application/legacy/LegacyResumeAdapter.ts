@@ -143,18 +143,23 @@ function collectAssertionSeeds(data: ResumeRequest): AssertionSeed[] {
 
   data.education.forEach((education, index) => {
     const prefix = `education[${index}]`;
+    const honors = education.honors?.trim() ?? '';
     const educationParts = [
       part(`${prefix}.institution`, education.institution),
       part(`${prefix}.degree`, education.degree),
       part(`${prefix}.startDate`, education.startDate),
       part(`${prefix}.endDate`, education.endDate),
+      part(`${prefix}.honors`, honors),
     ];
     const completeLegacyShape = Boolean(
       education.degree.trim() && education.institution.trim() &&
       education.startDate.trim() && education.endDate.trim(),
     );
     const statement = completeLegacyShape
-      ? `Studied ${education.degree} at ${education.institution} from ${education.startDate} to ${education.endDate}.`
+      ? [
+          `Studied ${education.degree} at ${education.institution} from ${education.startDate} to ${education.endDate}.`,
+          honors ? `Academic distinction: ${honors}.` : '',
+        ].filter(Boolean).join(' ')
       : [
           'Education.',
           education.degree.trim() ? `Degree: ${education.degree}.` : '',
@@ -162,6 +167,7 @@ function collectAssertionSeeds(data: ResumeRequest): AssertionSeed[] {
           education.startDate.trim() || education.endDate.trim()
             ? `Period: ${education.startDate || 'unspecified'} to ${education.endDate || 'unspecified'}.`
             : '',
+          honors ? `Academic distinction: ${honors}.` : '',
         ].filter(Boolean).join(' ');
     pushSeed(seeds, statement, educationParts);
   });

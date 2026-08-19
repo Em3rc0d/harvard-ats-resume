@@ -77,6 +77,9 @@ export const educationSchema = z.object({
   degree: optionalEvidenceString(300),
   startDate: optionalEvidenceString(100),
   endDate: optionalEvidenceString(100),
+  // Academic distinctions are candidate facts in their own right. Keep them
+  // separate from degree so a user can confirm or remove them independently.
+  honors: z.string().trim().max(500).optional(),
 }).superRefine((value, context) => {
   if (!value.institution.trim() && !value.degree.trim()) {
     context.addIssue({

@@ -39,6 +39,7 @@ const COPY = {
     projects: 'Projects',
     certifications: 'Certifications',
     languages: 'Languages',
+    distinction: 'Academic distinction',
     noItems: 'No items extracted.',
     edit: 'Edit career details',
     continue: 'Continue to target job',
@@ -60,6 +61,7 @@ const COPY = {
     projects: 'Proyectos',
     certifications: 'Certificaciones',
     languages: 'Idiomas',
+    distinction: 'Distinción académica',
     noItems: 'No se extrajeron elementos.',
     edit: 'Editar datos de carrera',
     continue: 'Continuar a vacante objetivo',
@@ -81,6 +83,7 @@ const COPY = {
     projects: 'Projets',
     certifications: 'Certifications',
     languages: 'Langues',
+    distinction: 'Distinction académique',
     noItems: 'Aucun élément extrait.',
     edit: 'Modifier les informations',
     continue: 'Continuer vers le poste cible',
@@ -102,6 +105,7 @@ const COPY = {
     projects: 'Projetos',
     certifications: 'Certificações',
     languages: 'Idiomas',
+    distinction: 'Distinção acadêmica',
     noItems: 'Nenhum item extraído.',
     edit: 'Editar dados da carreira',
     continue: 'Continuar para vaga-alvo',
@@ -224,6 +228,9 @@ export default function ImportedResumeReview({
                     <p className="font-semibold text-gray-950">{item.degree}</p>
                     <p className="text-sm text-gray-600">{item.institution}</p>
                     <p className="mt-1 text-xs text-gray-400">{item.startDate} — {item.endDate}</p>
+                    {item.honors?.trim() ? (
+                      <p className="mt-2 text-xs font-semibold text-indigo-700">{copy.distinction}: {item.honors}</p>
+                    ) : null}
                   </div>
                   <EvidenceBadge label={copy.fromCv} />
                 </div>
