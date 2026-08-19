@@ -65,3 +65,15 @@ test('generation failure recovery preserves the attempted target and exposes a t
   assert.match(flow, /Retry trusted generation|Reintentar generación confiable/);
   assert.doesNotMatch(flow, /console\.error\('Error generating resume/);
 });
+
+test('results export, print and reset controls are explicit and expected PDF failures stay inline', () => {
+  const results = source('components/ResumeResults.tsx');
+
+  assert.match(results, /const \[downloadError, setDownloadError\]/);
+  assert.match(results, /setDownloadError\(copy\.downloadError\)/);
+  assert.match(results, /window\.print\(\)/);
+  assert.match(results, /onClick=\{onStartOver\}/);
+  assert.match(results, /safeFileName\(userName\)/);
+  assert.doesNotMatch(results, /alert\s*\(/);
+  assert.doesNotMatch(results, /console\.error/);
+});
