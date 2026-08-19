@@ -168,7 +168,10 @@ test('targeted UX invalidates an assessment when CareerTarget changes and requir
   const route = readFileSync(join(process.cwd(), 'app/api/assess-opportunity/route.ts'), 'utf8');
 
   assert.match(targetStep, /assessedTargetKey === targetKey/);
-  assert.match(targetStep, /careerTarget:\s*\{/);
+  assert.match(targetStep, /const targetSnapshot =/);
+  assert.match(targetStep, /careerTarget:\s*targetSnapshot/);
+  assert.match(targetStep, /const jobSnapshot = normalizedJobDescription/);
+  assert.match(targetStep, /change\(\);\s*invalidateAssessment\(\)/);
   assert.match(targetStep, /!result\.data\.careerTarget\?\.relevance/);
   assert.match(route, /TARGET_PREFERENCE_DOES_NOT_CHANGE_JOB_MATCH/);
   assert.match(route, /recordTargetOpportunityEvaluation/);
