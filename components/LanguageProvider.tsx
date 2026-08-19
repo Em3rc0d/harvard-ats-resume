@@ -1,6 +1,14 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useMemo, useSyncExternalStore, ReactNode } from 'react';
+import React, {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useSyncExternalStore,
+    ReactNode,
+} from 'react';
 import { translations } from '@/lib/translations';
 
 type Language = 'en' | 'es' | 'fr' | 'pt';
@@ -16,15 +24,24 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 const LANGUAGE_STORAGE_KEY = 'language';
 const LANGUAGE_CHANGE_EVENT = 'cvengine:language-change';
 const SUPPORTED_LANGUAGES: readonly Language[] = ['en', 'es', 'fr', 'pt'];
+let volatileLanguage: Language = 'en';
 
 function isLanguage(value: string | null): value is Language {
     return value !== null && SUPPORTED_LANGUAGES.includes(value as Language);
 }
 
+function safeStoredLanguage(): Language | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+        return isLanguage(saved) ? saved : null;
+    } catch {
+        return null;
+    }
+}
+
 function getLanguageSnapshot(): Language {
-    if (typeof window === 'undefined') return 'en';
-    const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    return isLanguage(saved) ? saved : 'en';
+    return safeStoredLanguage() ?? volatileLanguage;
 }
 
 function getServerLanguageSnapshot(): Language {
@@ -56,9 +73,18 @@ export function LanguageProvider({ children }: Readonly<{ children: ReactNode }>
     );
 
     const handleSetLanguage = useCallback((lang: Language) => {
-        window.localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+        volatileLanguage = lang;
+        try {
+            window.localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+        } catch {
+            // Restricted/private storage must not disable language switching.
+        }
         window.dispatchEvent(new Event(LANGUAGE_CHANGE_EVENT));
     }, []);
+
+    useEffect(() => {
+        document.documentElement.lang = language;
+    }, [language]);
 
     const value = useMemo(() => ({
         language,
