@@ -93,8 +93,13 @@ try {
   await click('Generate trusted resume');
   await visible('Resume Quality');
   await visible('ATS Parseability');
+
+  const integrityDisclosure = page.locator('summary').filter({ hasText: 'Current version integrity' }).first();
+  await integrityDisclosure.waitFor({ state: 'visible', timeout: 10_000 });
+  await integrityDisclosure.click();
   await visible('Saved to Career Vault');
-  await visible('Current version integrity');
+  await visible('Complete claim provenance');
+  await visible('Content hash verified');
 
   await page.evaluate(() => { window.print = () => { document.body.dataset.printCalled = 'true'; }; });
   await click('Print');
