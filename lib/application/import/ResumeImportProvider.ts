@@ -9,27 +9,13 @@ export const evidenceLocatorSchema = z.object({
   fieldPath: z.string().min(1).optional(),
 }).superRefine((locator, context) => {
   if (locator.granularity === 'PAGE' && locator.page === undefined) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'PAGE locator requires a page number.',
-      path: ['page'],
-    });
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'PAGE locator requires a page number.', path: ['page'] });
   }
-
   if (locator.granularity === 'SECTION' && !locator.section) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'SECTION locator requires a section label.',
-      path: ['section'],
-    });
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'SECTION locator requires a section label.', path: ['section'] });
   }
-
   if (locator.granularity === 'FIELD' && !locator.fieldPath) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'FIELD locator requires a fieldPath.',
-      path: ['fieldPath'],
-    });
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'FIELD locator requires a fieldPath.', path: ['fieldPath'] });
   }
 });
 
@@ -60,10 +46,10 @@ export type SourceReceipt = z.infer<typeof sourceReceiptSchema>;
 export const resumeImportContextSchema = z.object({
   receipt: sourceReceiptSchema,
   evidenceMap: z.array(importedEvidenceSchema),
+  rejectedFieldPaths: z.array(z.string().min(1)).default([]),
 });
 
 export type ResumeImportContext = z.infer<typeof resumeImportContextSchema>;
-
 export type ImportedCandidateDraft = Omit<ResumeRequest, 'jobDescription'>;
 
 export interface ResumeImportFile {
@@ -76,6 +62,7 @@ export interface ResumeImportFile {
 export interface ProviderResumeExtraction {
   readonly candidate: ImportedCandidateDraft;
   readonly evidenceMap: readonly ImportedEvidence[];
+  readonly rejectedFieldPaths?: readonly string[];
   readonly importer: string;
   readonly importerVersion: string;
 }
