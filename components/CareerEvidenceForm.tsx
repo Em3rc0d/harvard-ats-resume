@@ -38,6 +38,7 @@ const COPY = {
     optimize: 'Improve wording safely', optimizing: 'Improving…', optimizeError: 'This wording could not be optimized safely.',
     personal: 'Personal information', summary: 'Professional summary', experience: 'Work experience', education: 'Education',
     skills: 'Skills', projects: 'Projects', certifications: 'Certifications', languages: 'Languages',
+    honors: 'Academic honors / distinction',
     sourceRule: 'If something is not true or not yours, leave it out. Missing evidence is safer than invented evidence.',
   },
   es: {
@@ -49,6 +50,7 @@ const COPY = {
     optimize: 'Mejorar redacción de forma segura', optimizing: 'Mejorando…', optimizeError: 'Esta redacción no pudo optimizarse de forma segura.',
     personal: 'Información personal', summary: 'Resumen profesional', experience: 'Experiencia laboral', education: 'Educación',
     skills: 'Habilidades', projects: 'Proyectos', certifications: 'Certificaciones', languages: 'Idiomas',
+    honors: 'Distinción / mérito académico',
     sourceRule: 'Si algo no es verdadero o no te pertenece, déjalo fuera. Es mejor que falte evidencia a inventarla.',
   },
   fr: {
@@ -59,6 +61,7 @@ const COPY = {
     optimize: 'Améliorer la formulation en sécurité', optimizing: 'Amélioration…', optimizeError: "Cette formulation n'a pas pu être optimisée en sécurité.",
     personal: 'Informations personnelles', summary: 'Résumé professionnel', experience: 'Expérience', education: 'Formation',
     skills: 'Compétences', projects: 'Projets', certifications: 'Certifications', languages: 'Langues',
+    honors: 'Distinction académique',
     sourceRule: "Si une information n'est pas vraie ou ne vous appartient pas, laissez-la de côté.",
   },
   pt: {
@@ -69,6 +72,7 @@ const COPY = {
     optimize: 'Melhorar texto com segurança', optimizing: 'Melhorando…', optimizeError: 'Este texto não pôde ser otimizado com segurança.',
     personal: 'Informações pessoais', summary: 'Resumo profissional', experience: 'Experiência profissional', education: 'Educação',
     skills: 'Habilidades', projects: 'Projetos', certifications: 'Certificações', languages: 'Idiomas',
+    honors: 'Distinção / mérito acadêmico',
     sourceRule: 'Se algo não for verdadeiro ou não for seu, deixe de fora. Evidência ausente é melhor que evidência inventada.',
   },
 } as const;
@@ -239,9 +243,21 @@ export default function CareerEvidenceForm({ initialData, onComplete, onCancel }
               index={-20}
               onDataExtracted={() => undefined}
               onBatchDataExtracted={(items) => {
-                const sourceBacked = items.filter((item) => item.institution || item.degree || item.graduationDate);
+                const sourceBacked = items.filter((item) => item.institution || item.degree || item.graduationDate || item.honors);
                 if (sourceBacked.length === 0) return;
-                setData((current) => ({ ...current, education: [...current.education, ...sourceBacked.map((item) => ({ institution: item.institution, degree: item.degree, startDate: '', endDate: item.graduationDate }))] }));
+                setData((current) => ({
+                  ...current,
+                  education: [
+                    ...current.education,
+                    ...sourceBacked.map((item) => ({
+                      institution: item.institution,
+                      degree: item.degree,
+                      startDate: '',
+                      endDate: item.graduationDate,
+                      honors: item.honors ?? '',
+                    })),
+                  ],
+                }));
               }}
             />
             {data.education.map((item, index) => (
@@ -254,10 +270,13 @@ export default function CareerEvidenceForm({ initialData, onComplete, onCancel }
                   <input value={item.degree} onChange={(event) => setData((current) => ({ ...current, education: current.education.map((entry, i) => i === index ? { ...entry, degree: event.target.value } : entry) }))} className="input-field" placeholder={t.fields.degree} />
                   <input value={item.startDate} onChange={(event) => setData((current) => ({ ...current, education: current.education.map((entry, i) => i === index ? { ...entry, startDate: event.target.value } : entry) }))} className="input-field" placeholder={t.fields.startDate} />
                   <input value={item.endDate} onChange={(event) => setData((current) => ({ ...current, education: current.education.map((entry, i) => i === index ? { ...entry, endDate: event.target.value } : entry) }))} className="input-field" placeholder={t.fields.endDate} />
+                  <label className="text-xs font-semibold text-gray-600 md:col-span-2">{copy.honors} <span className="font-normal text-gray-400">({copy.optional})</span>
+                    <input value={item.honors ?? ''} onChange={(event) => setData((current) => ({ ...current, education: current.education.map((entry, i) => i === index ? { ...entry, honors: event.target.value } : entry) }))} className="input-field mt-1" placeholder="Quinto superior, cum laude, Dean's List…" />
+                  </label>
                 </div>
               </div>
             ))}
-            <button type="button" onClick={() => setData((current) => ({ ...current, education: [...current.education, { institution: '', degree: '', startDate: '', endDate: '' }] }))} className="btn-secondary w-full"><Plus className="mr-2 inline h-4 w-4" />{copy.add} {copy.education}</button>
+            <button type="button" onClick={() => setData((current) => ({ ...current, education: [...current.education, { institution: '', degree: '', startDate: '', endDate: '', honors: '' }] }))} className="btn-secondary w-full"><Plus className="mr-2 inline h-4 w-4" />{copy.add} {copy.education}</button>
           </div>
         )}
 
