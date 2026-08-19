@@ -26,6 +26,29 @@ interface CertificatePdfResponse {
     readonly error?: string;
 }
 
+const ERROR_COPY = {
+    en: {
+        invalid: 'Upload an image file (PNG, JPG, etc.) or PDF.',
+        partial: 'Some files could not be processed. Review every extracted field before continuing.',
+        generic: 'This certificate could not be processed safely.',
+    },
+    es: {
+        invalid: 'Sube una imagen (PNG, JPG, etc.) o un PDF.',
+        partial: 'Algunos archivos no pudieron procesarse. Revisa cada campo extraído antes de continuar.',
+        generic: 'Este certificado no pudo procesarse de forma segura.',
+    },
+    fr: {
+        invalid: 'Téléchargez une image (PNG, JPG, etc.) ou un PDF.',
+        partial: "Certains fichiers n'ont pas pu être traités. Vérifiez chaque champ extrait avant de continuer.",
+        generic: "Ce certificat n'a pas pu être traité en toute sécurité.",
+    },
+    pt: {
+        invalid: 'Envie uma imagem (PNG, JPG, etc.) ou PDF.',
+        partial: 'Alguns arquivos não puderam ser processados. Revise cada campo extraído antes de continuar.',
+        generic: 'Este certificado não pôde ser processado com segurança.',
+    },
+} as const;
+
 export default function CertificateUpload(props: Readonly<CertificateUploadProps>) {
     const {
         onDataExtracted,
@@ -33,7 +56,8 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         index = 0,
         allowMultiple = false
     } = props;
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
+    const errorCopy = ERROR_COPY[language];
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [preview, setPreview] = useState<string | null>(null);
@@ -87,7 +111,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         for (const pattern of datePatterns) {
             const match = pattern.exec(text);
             if (match) {
-                graduationDate = match[1] || match[0];
+                graduationDate = (match[1] || match[0]).trim();
                 break;
             }
         }
@@ -98,10 +122,12 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         const honorsMatch = honorsPatterns.find((pattern) => pattern.test(text));
         if (honorsMatch) honors = honorsMatch.exec(text)?.[0] ?? '';
 
+        // Missing OCR/parser output remains missing. Never write presentation
+        // placeholders such as "Degree not found" into candidate truth fields.
         return {
-            degree: degree || 'Degree not found',
-            institution: institution || 'Institution not found',
-            graduationDate: graduationDate || 'Date not found',
+            degree,
+            institution,
+            graduationDate,
             gpa: gpa || undefined,
             honors: honors || undefined,
         };
@@ -118,7 +144,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         const result = await response.json() as CertificatePdfResponse;
 
         if (!response.ok || !result.success || !result.text) {
-            throw new Error(result.error || 'Failed to read certificate PDF');
+            throw new Error(result.error || errorCopy.generic);
         }
 
         return result.text;
@@ -168,11 +194,6 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
 
             if (!allowMultiple) setExtractedText(text);
             return parseEducationData(text);
-        } catch (caught) {
-            const message = caught instanceof Error ? caught.message : 'Failed to process file.';
-            console.error('Certificate extraction error:', caught);
-            if (!allowMultiple) setError(message);
-            throw caught;
         } finally {
             if (!allowMultiple) setIsProcessing(false);
         }
@@ -180,14 +201,16 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
 
     const handleBatchProcessing = async (validFiles: File[]) => {
         const results: ExtractedEducation[] = [];
+        let failures = 0;
         for (let i = 0; i < validFiles.length; i += 1) {
             try {
                 setProgress(Math.round((i / validFiles.length) * 100));
                 results.push(await processFile(validFiles[i]));
-            } catch (caught) {
-                console.error(`Error processing ${validFiles[i].name}:`, caught);
+            } catch {
+                failures += 1;
             }
         }
+        if (failures > 0) setError(errorCopy.partial);
         return results;
     };
 
@@ -195,14 +218,12 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
-        const validFiles = Array.from(files).filter((file) => {
-            const valid = file.type.startsWith('image/') || file.type === 'application/pdf';
-            if (!valid) setError(`Skipping ${file.name} - only image files and PDFs are supported`);
-            return valid;
-        });
+        const validFiles = Array.from(files).filter((file) =>
+            file.type.startsWith('image/') || file.type === 'application/pdf');
 
         if (validFiles.length === 0) {
-            setError('Please upload at least one image file (PNG, JPG, etc.) or PDF');
+            setError(errorCopy.invalid);
+            event.target.value = '';
             return;
         }
 
@@ -215,9 +236,14 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                 const results = await handleBatchProcessing(validFiles);
                 if (results.length > 0) onBatchDataExtracted(results);
             } else {
-                onDataExtracted(await processFile(validFiles[0]));
+                try {
+                    onDataExtracted(await processFile(validFiles[0]));
+                } catch (caught) {
+                    setError(caught instanceof Error ? caught.message : errorCopy.generic);
+                }
             }
         } finally {
+            event.target.value = '';
             setProgress(100);
             setIsProcessing(false);
         }
@@ -229,13 +255,13 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
         if (!file) return;
 
         if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-            setError('Please upload an image file (PNG, JPG, etc.) or PDF');
+            setError(errorCopy.invalid);
             return;
         }
 
-        processFile(file)
+        void processFile(file)
             .then((data) => onDataExtracted(data))
-            .catch((caught) => console.error('Drop processing error:', caught));
+            .catch((caught) => setError(caught instanceof Error ? caught.message : errorCopy.generic));
     };
 
     const handleDragOver = useCallback((event: React.DragEvent<HTMLButtonElement>) => {
@@ -262,7 +288,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
                     disabled={isProcessing}
                     multiple={allowMultiple}
                 />
-                <span className="sr-only">Upload Certificate</span>
+                <span className="sr-only">{t.certificate.uploadPrompt}</span>
                 <div className="space-y-2">
                     <svg
                         className="mx-auto h-12 w-12 text-gray-400"
@@ -303,7 +329,7 @@ export default function CertificateUpload(props: Readonly<CertificateUploadProps
             )}
 
             {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm" role="alert">
                     {error}
                 </div>
             )}

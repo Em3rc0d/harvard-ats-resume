@@ -61,7 +61,6 @@ function requireSafeProjectionKey(value: string): string {
   if (!SAFE_KEY.test(value)) {
     throw new Error(`Legacy projection key must be stable and URL-safe: ${value}`);
   }
-
   return value;
 }
 
@@ -69,112 +68,168 @@ function part(fieldPath: string, excerpt: string): EvidencePart {
   return { fieldPath, excerpt: excerpt.trim() };
 }
 
+function pushSeed(
+  seeds: AssertionSeed[],
+  statement: string,
+  evidenceParts: readonly EvidencePart[],
+): void {
+  const materialParts = evidenceParts.filter((item) => item.excerpt.length > 0);
+  if (!statement.trim() || materialParts.length === 0) return;
+  seeds.push({ statement: statement.trim(), evidenceParts: materialParts });
+}
+
+/**
+ * Projection preserves the familiar legacy statements when all historical DTO
+ * fields exist, but it never manufactures empty prose for source-reconciled
+ * gaps. Missing evidence produces no assertion for that missing fact.
+ */
 function collectAssertionSeeds(data: ResumeRequest): AssertionSeed[] {
-  const seeds: AssertionSeed[] = [
-    {
-      statement: `Professional summary: ${data.summary}`,
-      evidenceParts: [part('summary', data.summary)],
-    },
-    {
-      statement: `Candidate location: ${data.personalInfo.location}.`,
-      evidenceParts: [part('personalInfo.location', data.personalInfo.location)],
-    },
-  ];
+  const seeds: AssertionSeed[] = [];
+
+  if (data.summary.trim()) {
+    pushSeed(seeds, `Professional summary: ${data.summary}`, [part('summary', data.summary)]);
+  }
+
+  pushSeed(
+    seeds,
+    `Candidate location: ${data.personalInfo.location}.`,
+    [part('personalInfo.location', data.personalInfo.location)],
+  );
 
   data.experience.forEach((experience, index) => {
     const prefix = `experience[${index}]`;
-    seeds.push({
-      statement: `Worked at ${experience.company} as ${experience.role} from ${experience.startDate} to ${experience.endDate}. ${experience.description}`,
-      evidenceParts: [
-        part(`${prefix}.company`, experience.company),
-        part(`${prefix}.role`, experience.role),
-        part(`${prefix}.startDate`, experience.startDate),
-        part(`${prefix}.endDate`, experience.endDate),
-        part(`${prefix}.description`, experience.description),
-      ],
-    });
+    const experienceParts = [
+      part(`${prefix}.company`, experience.company),
+      part(`${prefix}.role`, experience.role),
+      part(`${prefix}.startDate`, experience.startDate),
+      part(`${prefix}.endDate`, experience.endDate),
+      part(`${prefix}.description`, experience.description),
+    ];
+
+    const completeLegacyShape = Boolean(
+      experience.company.trim() &&
+      experience.role.trim() &&
+      experience.startDate.trim() &&
+      experience.endDate.trim() &&
+      experience.description.trim(),
+    );
+
+    const statement = completeLegacyShape
+      ? `Worked at ${experience.company} as ${experience.role} from ${experience.startDate} to ${experience.endDate}. ${experience.description}`
+      : [
+          'Work experience.',
+          experience.company.trim() ? `Company: ${experience.company}.` : '',
+          experience.role.trim() ? `Role: ${experience.role}.` : '',
+          experience.startDate.trim() || experience.endDate.trim()
+            ? `Period: ${experience.startDate || 'unspecified'} to ${experience.endDate || 'unspecified'}.`
+            : '',
+          experience.description.trim() ? experience.description : '',
+        ].filter(Boolean).join(' ');
+
+    pushSeed(seeds, statement, experienceParts);
 
     experience.technologies.forEach((technology, techIndex) => {
-      seeds.push({
-        statement: `Used ${technology} at ${experience.company} while serving as ${experience.role}.`,
-        evidenceParts: [
-          part(`${prefix}.technologies[${techIndex}]`, technology),
-          part(`${prefix}.company`, experience.company),
-          part(`${prefix}.role`, experience.role),
-        ],
-      });
+      const technologyParts = [
+        part(`${prefix}.technologies[${techIndex}]`, technology),
+        part(`${prefix}.company`, experience.company),
+        part(`${prefix}.role`, experience.role),
+      ];
+      const technologyStatement = experience.company.trim() && experience.role.trim()
+        ? `Used ${technology} at ${experience.company} while serving as ${experience.role}.`
+        : `Technical experience: ${technology}.`;
+      pushSeed(seeds, technologyStatement, technologyParts);
     });
   });
 
   data.education.forEach((education, index) => {
     const prefix = `education[${index}]`;
-    seeds.push({
-      statement: `Studied ${education.degree} at ${education.institution} from ${education.startDate} to ${education.endDate}.`,
-      evidenceParts: [
-        part(`${prefix}.institution`, education.institution),
-        part(`${prefix}.degree`, education.degree),
-        part(`${prefix}.startDate`, education.startDate),
-        part(`${prefix}.endDate`, education.endDate),
-      ],
-    });
+    const educationParts = [
+      part(`${prefix}.institution`, education.institution),
+      part(`${prefix}.degree`, education.degree),
+      part(`${prefix}.startDate`, education.startDate),
+      part(`${prefix}.endDate`, education.endDate),
+    ];
+    const completeLegacyShape = Boolean(
+      education.degree.trim() && education.institution.trim() &&
+      education.startDate.trim() && education.endDate.trim(),
+    );
+    const statement = completeLegacyShape
+      ? `Studied ${education.degree} at ${education.institution} from ${education.startDate} to ${education.endDate}.`
+      : [
+          'Education.',
+          education.degree.trim() ? `Degree: ${education.degree}.` : '',
+          education.institution.trim() ? `Institution: ${education.institution}.` : '',
+          education.startDate.trim() || education.endDate.trim()
+            ? `Period: ${education.startDate || 'unspecified'} to ${education.endDate || 'unspecified'}.`
+            : '',
+        ].filter(Boolean).join(' ');
+    pushSeed(seeds, statement, educationParts);
   });
 
   data.skills.hardSkills.forEach((skill, index) => {
-    seeds.push({
-      statement: `Technical skill: ${skill}.`,
-      evidenceParts: [part(`skills.hardSkills[${index}]`, skill)],
-    });
+    pushSeed(seeds, `Technical skill: ${skill}.`, [part(`skills.hardSkills[${index}]`, skill)]);
   });
 
   data.skills.softSkills.forEach((skill, index) => {
-    seeds.push({
-      statement: `Soft skill: ${skill}.`,
-      evidenceParts: [part(`skills.softSkills[${index}]`, skill)],
-    });
+    pushSeed(seeds, `Soft skill: ${skill}.`, [part(`skills.softSkills[${index}]`, skill)]);
   });
 
   (data.projects ?? []).forEach((project, index) => {
     const prefix = `projects[${index}]`;
-    seeds.push({
-      statement: `Project ${project.name}: ${project.description}`,
-      evidenceParts: [
-        part(`${prefix}.name`, project.name),
-        part(`${prefix}.description`, project.description),
-      ],
-    });
+    const projectParts = [
+      part(`${prefix}.name`, project.name),
+      part(`${prefix}.description`, project.description),
+      part(`${prefix}.link`, project.link ?? ''),
+    ];
+    const projectStatement = project.name.trim() && project.description.trim()
+      ? `Project ${project.name}: ${project.description}`
+      : [
+          project.name.trim() ? `Project: ${project.name}.` : 'Project evidence.',
+          project.description.trim() ? project.description : '',
+          project.link?.trim() ? `Link: ${project.link}.` : '',
+        ].filter(Boolean).join(' ');
+    pushSeed(seeds, projectStatement, projectParts);
 
     project.technologies.forEach((technology, techIndex) => {
-      seeds.push({
-        statement: `Used ${technology} on project ${project.name}.`,
-        evidenceParts: [
-          part(`${prefix}.technologies[${techIndex}]`, technology),
-          part(`${prefix}.name`, project.name),
-        ],
-      });
+      const technologyStatement = project.name.trim()
+        ? `Used ${technology} on project ${project.name}.`
+        : `Project technology: ${technology}.`;
+      pushSeed(seeds, technologyStatement, [
+        part(`${prefix}.technologies[${techIndex}]`, technology),
+        part(`${prefix}.name`, project.name),
+      ]);
     });
   });
 
   (data.certifications ?? []).forEach((certification, index) => {
     const prefix = `certifications[${index}]`;
-    seeds.push({
-      statement: `Certification ${certification.name}, issued by ${certification.issuer}, dated ${certification.date}.`,
-      evidenceParts: [
-        part(`${prefix}.name`, certification.name),
-        part(`${prefix}.issuer`, certification.issuer),
-        part(`${prefix}.date`, certification.date),
-      ],
-    });
+    const certificationParts = [
+      part(`${prefix}.name`, certification.name),
+      part(`${prefix}.issuer`, certification.issuer),
+      part(`${prefix}.date`, certification.date),
+    ];
+    const completeLegacyShape = Boolean(
+      certification.name.trim() && certification.issuer.trim() && certification.date.trim(),
+    );
+    const statement = completeLegacyShape
+      ? `Certification ${certification.name}, issued by ${certification.issuer}, dated ${certification.date}.`
+      : [
+          certification.name.trim() ? `Certification: ${certification.name}.` : 'Certification evidence.',
+          certification.issuer.trim() ? `Issuer: ${certification.issuer}.` : '',
+          certification.date.trim() ? `Date: ${certification.date}.` : '',
+        ].filter(Boolean).join(' ');
+    pushSeed(seeds, statement, certificationParts);
   });
 
   (data.languages ?? []).forEach((language, index) => {
     const prefix = `languages[${index}]`;
-    seeds.push({
-      statement: `Language ${language.language} proficiency: ${language.proficiency}.`,
-      evidenceParts: [
-        part(`${prefix}.language`, language.language),
-        part(`${prefix}.proficiency`, language.proficiency),
-      ],
-    });
+    const statement = language.proficiency.trim()
+      ? `Language ${language.language} proficiency: ${language.proficiency}.`
+      : `Language: ${language.language}.`;
+    pushSeed(seeds, statement, [
+      part(`${prefix}.language`, language.language),
+      part(`${prefix}.proficiency`, language.proficiency),
+    ]);
   });
 
   return seeds;
@@ -184,14 +239,6 @@ function normalized(value: string): string {
   return value.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-/**
- * Converts the current ResumeRequest DTO into ATS v2 candidate truth.
- *
- * Job Description is deliberately absent from candidate evidence. When a
- * trusted import context exists, unchanged fields remain linked to the upload;
- * edits/additions are supported by a separate MANUAL_REVIEW source instead.
- * Import extraction can never promote a value to VERIFIED_FACT.
- */
 export function projectLegacyResumeRequest(
   data: ResumeRequest,
   options: LegacyResumeProjectionOptions = {},
@@ -274,7 +321,6 @@ export function projectLegacyResumeRequest(
     if (cached) return cached;
 
     const imported = importedByPath.get(evidencePart.fieldPath);
-
     if (sourceContext && imported) {
       const unchanged = normalized(imported.excerpt) === normalized(evidencePart.excerpt);
       const importedEvidence = createEvidence({
@@ -333,13 +379,9 @@ export function projectLegacyResumeRequest(
   };
 
   const assertions: CareerAssertion[] = collectAssertionSeeds(data).map((seed, index) => {
-    const supportingEvidence = seed.evidenceParts
-      .filter((item) => item.excerpt.length > 0)
-      .map(supportEvidenceFor);
+    const supportingEvidence = seed.evidenceParts.map(supportEvidenceFor);
     const evidenceIds: CareerEvidenceId[] = supportingEvidence.map((item) => item.id);
-    const sourceIds: CareerSourceId[] = Array.from(
-      new Set(supportingEvidence.map((item) => item.sourceId)),
-    );
+    const sourceIds: CareerSourceId[] = Array.from(new Set(supportingEvidence.map((item) => item.sourceId)));
     const ordinal = String(index + 1).padStart(3, '0');
 
     return createCareerAssertion({
@@ -363,21 +405,12 @@ export function projectLegacyResumeRequest(
   };
 }
 
-/**
- * Builds the ATS v2 truth boundary around the current request contract.
- * Every canonical resume claim is backed by candidate assertions whose source
- * provenance is preserved when a trusted import receipt is available.
- */
 export function buildLegacyTruthContext(
   data: ResumeRequest,
   options: LegacyResumeProjectionOptions = {},
 ): LegacyTruthContext {
   const projectionKey = requireSafeProjectionKey(options.projectionKey ?? 'legacy');
-  const projection = projectLegacyResumeRequest(data, {
-    ...options,
-    projectionKey,
-  });
-
+  const projection = projectLegacyResumeRequest(data, { ...options, projectionKey });
   let claimLedger = createClaimLedger(projection.assertions);
 
   projection.assertions.forEach((assertion, index) => {

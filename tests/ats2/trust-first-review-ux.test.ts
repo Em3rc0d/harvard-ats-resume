@@ -108,10 +108,13 @@ test('imported review model keeps source receipt and section counts separate fro
 
 test('imported flow routes through Career Review and Target before trusted generation', () => {
   const page = readFileSync(join(process.cwd(), 'app/page.tsx'), 'utf8');
-  assert.match(page, /IMPORTED_REVIEW/);
-  assert.match(page, /stage === 'TARGET'/);
-  assert.match(page, /ImportedResumeReview/);
-  assert.match(page, /TargetJobStep/);
+  const flow = readFileSync(join(process.cwd(), 'components/CVEngineFlow.tsx'), 'utf8');
+  assert.match(page, /CVEngineFlow/);
+  assert.match(flow, /IMPORTED_REVIEW/);
+  assert.match(flow, /stage === 'TARGET'/);
+  assert.match(flow, /ImportedResumeReview/);
+  assert.match(flow, /TargetJobStep/);
+  assert.match(flow, /CareerEvidenceForm/);
 });
 
 test('target job UX keeps Job Description and CareerTarget outside candidate evidence', () => {

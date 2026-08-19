@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { ResumeRequest } from '@/lib/schemas';
 import type { ResumeImportContext } from '@/lib/application/import/ResumeImportProvider';
 import { useLanguage } from '@/components/LanguageProvider';
-import { FileCheck2, ShieldCheck, Upload } from 'lucide-react';
+import { AlertTriangle, FileCheck2, RotateCcw, ShieldCheck, Upload } from 'lucide-react';
 
 interface CVUploadProps {
   onDataExtracted: (data: ResumeRequest, sourceContext: ResumeImportContext) => void;
@@ -18,26 +18,57 @@ interface ImportResponse {
     context: ResumeImportContext;
   };
   error?: string;
+  errorCode?: string;
+  stage?: string;
+  canRetry?: boolean;
 }
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx'] as const;
 
 const PROCESS_COPY = {
   en: {
     trust: 'Your file is processed through the server-side trusted import boundary. Job descriptions are never extracted from your resume.',
-    pipeline: ['Read machine-readable document text', 'Extract candidate facts', 'Verify every extracted field against the source'],
+    pipeline: ['Read machine-readable document text', 'Extract candidate facts', 'Verify extracted fields against the source'],
+    invalidType: 'Use a PDF or DOCX resume.',
+    tooLarge: 'This file is larger than 10 MB.',
+    network: 'CV Engine could not reach the resume import service. Check your connection and try again.',
+    retry: 'Choose another file',
+    stage: 'Import stage',
   },
   es: {
     trust: 'Tu archivo se procesa mediante la frontera confiable de importación del servidor. Las descripciones de vacantes nunca se extraen de tu CV.',
-    pipeline: ['Leer el texto legible del documento', 'Extraer hechos del candidato', 'Verificar cada campo contra la fuente'],
+    pipeline: ['Leer el texto legible del documento', 'Extraer hechos del candidato', 'Verificar los campos extraídos contra la fuente'],
+    invalidType: 'Usa un CV en formato PDF o DOCX.',
+    tooLarge: 'Este archivo supera los 10 MB.',
+    network: 'CV Engine no pudo comunicarse con el servicio de importación. Verifica tu conexión e inténtalo nuevamente.',
+    retry: 'Elegir otro archivo',
+    stage: 'Etapa de importación',
   },
   fr: {
     trust: "Votre fichier passe par la frontière d'importation fiable côté serveur. Les descriptions de poste ne sont jamais extraites de votre CV.",
-    pipeline: ['Lire le texte exploitable du document', 'Extraire les faits du candidat', 'Vérifier chaque champ extrait dans la source'],
+    pipeline: ['Lire le texte exploitable du document', 'Extraire les faits du candidat', 'Vérifier les champs extraits dans la source'],
+    invalidType: 'Utilisez un CV PDF ou DOCX.',
+    tooLarge: 'Ce fichier dépasse 10 Mo.',
+    network: "CV Engine n'a pas pu joindre le service d'importation. Vérifiez votre connexion et réessayez.",
+    retry: 'Choisir un autre fichier',
+    stage: "Étape d'importation",
   },
   pt: {
     trust: 'Seu arquivo é processado pela fronteira confiável de importação no servidor. Descrições de vagas nunca são extraídas do currículo.',
-    pipeline: ['Ler o texto processável do documento', 'Extrair fatos do candidato', 'Verificar cada campo extraído na fonte'],
+    pipeline: ['Ler o texto processável do documento', 'Extrair fatos do candidato', 'Verificar os campos extraídos na fonte'],
+    invalidType: 'Use um currículo PDF ou DOCX.',
+    tooLarge: 'Este arquivo excede 10 MB.',
+    network: 'O CV Engine não conseguiu acessar o serviço de importação. Verifique sua conexão e tente novamente.',
+    retry: 'Escolher outro arquivo',
+    stage: 'Etapa de importação',
   },
 } as const;
+
+function extension(fileName: string): string {
+  const dot = fileName.lastIndexOf('.');
+  return dot >= 0 ? fileName.slice(dot).toLowerCase() : '';
+}
 
 export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploadProps>) {
   const { t, language } = useLanguage();
@@ -45,46 +76,67 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorMeta, setErrorMeta] = useState<{ code?: string; stage?: string } | null>(null);
+
+  const rejectLocally = (message: string) => {
+    setIsDragging(false);
+    setError(message);
+    setErrorMeta(null);
+  };
 
   const processFile = async (file: File) => {
     if (isUploading) return;
 
+    if (!ALLOWED_EXTENSIONS.includes(extension(file.name) as (typeof ALLOWED_EXTENSIONS)[number])) {
+      rejectLocally(processCopy.invalidType);
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      rejectLocally(processCopy.tooLarge);
+      return;
+    }
+
     setIsUploading(true);
     setIsDragging(false);
     setError(null);
+    setErrorMeta(null);
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      // The browser talks only to our server-side import boundary.
-      // File parsing, structured extraction, and provenance validation stay server-side.
       const response = await fetch('/api/import-resume', {
         method: 'POST',
         body: formData,
       });
 
-      const result = await response.json() as ImportResponse;
-
-      if (!response.ok || !result.success || !result.data) {
-        throw new Error(result.error || 'Failed to import resume');
+      let result: ImportResponse;
+      try {
+        result = await response.json() as ImportResponse;
+      } catch {
+        setError(processCopy.network);
+        setErrorMeta({ code: 'INVALID_SERVER_RESPONSE', stage: 'RESPONSE' });
+        return;
       }
 
-      // Resume import never supplies Job Description truth. The target
-      // job remains a separate user-controlled input after review.
+      // Expected API failures are product states, not thrown browser errors.
+      // Rendering them inline prevents Next's development overlay from turning a
+      // handled import failure into what looks like an application crash.
+      if (!response.ok || !result.success || !result.data) {
+        setError(result.error || t.upload.error);
+        setErrorMeta({ code: result.errorCode, stage: result.stage });
+        return;
+      }
+
       const mappedData: ResumeRequest = {
         ...result.data.resume,
         jobDescription: '',
       };
 
       onDataExtracted(mappedData, result.data.context);
-    } catch (err) {
-      console.error('Upload error:', err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to extract information from CV. Please try again or fill manually.',
-      );
+    } catch {
+      setError(processCopy.network);
+      setErrorMeta({ code: 'NETWORK_FAILURE', stage: 'REQUEST' });
     } finally {
       setIsUploading(false);
     }
@@ -133,7 +185,7 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
         >
           <input
             type="file"
-            accept=".pdf,.docx"
+            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             onChange={handleFileUpload}
             disabled={isUploading}
             className="hidden"
@@ -173,13 +225,27 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
         </div>
 
         {error && (
-          <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
-            {error}
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-left" role="alert">
+            <div className="flex gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-red-800">{error}</p>
+                {(errorMeta?.code || errorMeta?.stage) && (
+                  <p className="mt-2 font-mono text-[10px] text-red-500">
+                    {errorMeta.code ?? 'IMPORT_FAILURE'}{errorMeta.stage ? ` · ${processCopy.stage}: ${errorMeta.stage}` : ''}
+                  </p>
+                )}
+                <label htmlFor="cv-upload" className="mt-3 inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-red-700 hover:underline">
+                  <RotateCcw className="h-3.5 w-3.5" /> {processCopy.retry}
+                </label>
+              </div>
+            </div>
           </div>
         )}
 
         <div className="border-t border-gray-100 pt-4">
           <button
+            type="button"
             onClick={onCancel}
             disabled={isUploading}
             className="text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50"

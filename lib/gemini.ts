@@ -1,10 +1,9 @@
-import type { ResumeRequest } from './schemas';
+import {
+  hasMaterialCareerEvidence,
+  type ResumeRequest,
+} from './schemas';
 import { GeminiResumeProvider } from './infrastructure/ai/GeminiResumeProvider';
 
-/**
- * Generate a resume through the ATS v2 AI provider boundary while preserving
- * the legacy function contract used by the current API route.
- */
 export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
   success: boolean;
   formattedResume?: string;
@@ -35,94 +34,91 @@ export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
 }
 
 /**
- * Sanitize user input before sending to AI.
- * This is transport hygiene only; prompt-injection and factual grounding are
- * enforced by separate ATS v2 boundaries.
+ * Sanitize user input before trusted downstream work. This is transport hygiene,
+ * not evidence creation. A structurally valid but identity-only candidate is
+ * stopped here as a second server-side defense behind GenerationReadiness.
  */
 export function sanitizeResumeData(data: ResumeRequest): ResumeRequest {
-  const sanitizeString = (str: string): string => {
-    return str
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-      .replace(/javascript:/gi, '')
-      .trim()
-      .slice(0, 50000);
-  };
+  const sanitizeString = (str: string): string => str
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/javascript:/gi, '')
+    .trim()
+    .slice(0, 50000);
 
-  return JSON.parse(
-    JSON.stringify(data, (_key, value) => {
-      if (typeof value === 'string') {
-        return sanitizeString(value);
-      }
-      return value;
-    })
-  );
+  const sanitized = JSON.parse(
+    JSON.stringify(data, (_key, value) => typeof value === 'string' ? sanitizeString(value) : value),
+  ) as ResumeRequest;
+
+  if (!hasMaterialCareerEvidence(sanitized)) {
+    throw new Error('Candidate data contains no material career evidence.');
+  }
+
+  return sanitized;
 }
 
-/**
- * Helper to format resume sections to reduce cognitive complexity.
- */
 function formatExperiences(experience: ResumeRequest['experience']): string {
-  if (!experience || experience.length === 0) return '';
+  if (experience.length === 0) return '';
   let text = 'EXPERIENCE\n';
-  experience.forEach(exp => {
-    text += `${exp.company.toUpperCase()} — ${exp.role.toUpperCase()}\n`;
-    text += `${exp.startDate} - ${exp.endDate}\n`;
-    const points = exp.description
+  experience.forEach((item) => {
+    const identity = [item.company, item.role].filter((value) => value.trim()).join(' — ');
+    if (identity) text += `${identity}\n`;
+
+    const period = [item.startDate, item.endDate].filter((value) => value.trim()).join(' - ');
+    if (period) text += `${period}\n`;
+
+    item.description
       .split('\n')
       .map((point) => point.trim())
-      .filter((point) => point.length > 0);
-    points.forEach((point) => {
-      const cleanPoint = point.replace(/^[•*-]\s*/, '');
-      text += `• ${cleanPoint}\n`;
-    });
-    text += '\n';
-  });
-  return text;
-}
+      .filter(Boolean)
+      .forEach((point) => {
+        text += `• ${point.replace(/^[•*-]\s*/, '')}\n`;
+      });
 
-function formatProjects(projects: NonNullable<ResumeRequest['projects']>): string {
-  if (!projects || projects.length === 0) return '';
-  let text = 'PROJECTS\n';
-  projects.forEach(proj => {
-    text += `${proj.name.toUpperCase()}\n`;
-    text += `${proj.description}\n`;
-    if (proj.technologies && proj.technologies.length > 0) {
-      text += `Technologies: ${proj.technologies.join(', ')}\n`;
+    if (item.technologies.length > 0) {
+      text += `Technologies: ${item.technologies.join(', ')}\n`;
     }
     text += '\n';
   });
   return text;
 }
 
+function formatProjects(projects: NonNullable<ResumeRequest['projects']>): string {
+  if (projects.length === 0) return '';
+  let text = 'PROJECTS\n';
+  projects.forEach((project) => {
+    if (project.name.trim()) text += `${project.name}\n`;
+    if (project.description.trim()) text += `${project.description}\n`;
+    if (project.technologies.length > 0) text += `Technologies: ${project.technologies.join(', ')}\n`;
+    if (project.link?.trim()) text += `${project.link}\n`;
+    text += '\n';
+  });
+  return text;
+}
+
 function formatEducation(education: ResumeRequest['education']): string {
-  if (!education || education.length === 0) return '';
+  if (education.length === 0) return '';
   let text = 'EDUCATION\n';
-  education.forEach(edu => {
-    text += `${edu.institution}\n`;
-    text += `${edu.degree}, ${edu.startDate} - ${edu.endDate}\n\n`;
+  education.forEach((item) => {
+    if (item.institution.trim()) text += `${item.institution}\n`;
+    if (item.degree.trim()) text += `${item.degree}\n`;
+    const period = [item.startDate, item.endDate].filter((value) => value.trim()).join(' - ');
+    if (period) text += `${period}\n`;
+    text += '\n';
   });
   return text;
 }
 
 function formatSkills(skills: ResumeRequest['skills']): string {
+  if (skills.hardSkills.length === 0 && skills.softSkills.length === 0) return '';
   let text = 'SKILLS\n';
-  if (skills.hardSkills?.length > 0) {
-    text += `Technical Skills: ${skills.hardSkills.join(', ')}\n`;
-  }
-  if (skills.softSkills?.length > 0) {
-    text += `Soft Skills: ${skills.softSkills.join(', ')}\n`;
-  }
-  return text + '\n';
+  if (skills.hardSkills.length > 0) text += `Technical Skills: ${skills.hardSkills.join(', ')}\n`;
+  if (skills.softSkills.length > 0) text += `Soft Skills: ${skills.softSkills.join(', ')}\n`;
+  return `${text}\n`;
 }
 
-/**
- * Format structured resume data into Harvard-style text.
- */
 export function formatResumeFromData(data: ResumeRequest): string {
-  let text = '';
-
-  text += `${data.personalInfo.fullName.toUpperCase()}\n`;
+  let text = `${data.personalInfo.fullName.toUpperCase()}\n`;
   const contactParts = [
     data.personalInfo.location,
     data.personalInfo.email,
@@ -135,27 +131,27 @@ export function formatResumeFromData(data: ResumeRequest): string {
   ].filter(Boolean);
   text += `${contactParts.join(' | ')}\n\n`;
 
-  text += `PROFESSIONAL SUMMARY\n${data.summary}\n\n`;
-
+  if (data.summary.trim()) text += `PROFESSIONAL SUMMARY\n${data.summary}\n\n`;
   text += formatExperiences(data.experience);
   text += formatProjects(data.projects ?? []);
   text += formatEducation(data.education);
   text += formatSkills(data.skills);
 
-  const certifications = data.certifications;
-  if (certifications && certifications.length > 0) {
+  if ((data.certifications?.length ?? 0) > 0) {
     text += 'CERTIFICATIONS\n';
-    certifications.forEach(cert => {
-      text += `${cert.name} — ${cert.issuer}, ${cert.date}\n`;
+    data.certifications!.forEach((item) => {
+      const line = [item.name, item.issuer, item.date].filter((value) => value.trim()).join(' — ');
+      if (line) text += `${line}\n`;
     });
     text += '\n';
   }
 
-  const languages = data.languages;
-  if (languages && languages.length > 0) {
+  if ((data.languages?.length ?? 0) > 0) {
     text += 'LANGUAGES\n';
-    const langs = languages.map(language => `${language.language}: ${language.proficiency}`);
-    text += `${langs.join(' | ')}\n`;
+    const languages = data.languages!
+      .map((item) => [item.language, item.proficiency].filter((value) => value.trim()).join(': '))
+      .filter(Boolean);
+    if (languages.length > 0) text += `${languages.join(' | ')}\n`;
   }
 
   return text.trim();
