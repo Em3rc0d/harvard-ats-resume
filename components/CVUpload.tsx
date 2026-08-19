@@ -35,6 +35,7 @@ const PROCESS_COPY = {
     network: 'CV Engine could not reach the resume import service. Check your connection and try again.',
     retry: 'Choose another file',
     stage: 'Import stage',
+    cancel: 'Cancel',
   },
   es: {
     trust: 'Tu archivo se procesa mediante la frontera confiable de importación del servidor. Las descripciones de vacantes nunca se extraen de tu CV.',
@@ -44,6 +45,7 @@ const PROCESS_COPY = {
     network: 'CV Engine no pudo comunicarse con el servicio de importación. Verifica tu conexión e inténtalo nuevamente.',
     retry: 'Elegir otro archivo',
     stage: 'Etapa de importación',
+    cancel: 'Cancelar',
   },
   fr: {
     trust: "Votre fichier passe par la frontière d'importation fiable côté serveur. Les descriptions de poste ne sont jamais extraites de votre CV.",
@@ -53,6 +55,7 @@ const PROCESS_COPY = {
     network: "CV Engine n'a pas pu joindre le service d'importation. Vérifiez votre connexion et réessayez.",
     retry: 'Choisir un autre fichier',
     stage: "Étape d'importation",
+    cancel: 'Annuler',
   },
   pt: {
     trust: 'Seu arquivo é processado pela fronteira confiável de importação no servidor. Descrições de vagas nunca são extraídas do currículo.',
@@ -62,6 +65,7 @@ const PROCESS_COPY = {
     network: 'O CV Engine não conseguiu acessar o serviço de importação. Verifique sua conexão e tente novamente.',
     retry: 'Escolher outro arquivo',
     stage: 'Etapa de importação',
+    cancel: 'Cancelar',
   },
 } as const;
 
@@ -250,7 +254,7 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
             disabled={isUploading}
             className="text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50"
           >
-            {t.upload.cancel}
+            {processCopy.cancel}
           </button>
         </div>
       </div>
