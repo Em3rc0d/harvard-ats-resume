@@ -26,26 +26,18 @@ function fileExtension(fileName: string): string {
 
 export function resolveResumeMimeType(fileName: string, suppliedMimeType: string): string {
   const expected = SUPPORTED_FILE_TYPES.get(fileExtension(fileName));
-  if (!expected) {
-    throw new Error('Unsupported resume file type. Use PDF or DOCX.');
-  }
+  if (!expected) throw new Error('Unsupported resume file type. Use PDF or DOCX.');
 
   const supplied = suppliedMimeType.trim().toLowerCase();
   if (supplied && supplied !== 'application/octet-stream' && supplied !== expected) {
     throw new Error('Resume file extension and MIME type do not match.');
   }
-
   return expected;
 }
 
 export function validateResumeFileSize(byteSize: number): void {
-  if (!Number.isInteger(byteSize) || byteSize <= 0) {
-    throw new Error('Resume file is empty.');
-  }
-
-  if (byteSize > MAX_RESUME_FILE_BYTES) {
-    throw new Error('Resume file exceeds the 10 MB limit.');
-  }
+  if (!Number.isInteger(byteSize) || byteSize <= 0) throw new Error('Resume file is empty.');
+  if (byteSize > MAX_RESUME_FILE_BYTES) throw new Error('Resume file exceeds the 10 MB limit.');
 }
 
 export function sha256Hex(bytes: Uint8Array): string {
@@ -90,10 +82,8 @@ export async function importResumeWithProvenance(
       importerVersion: extraction.importerVersion,
     },
     evidenceMap: extraction.evidenceMap,
+    rejectedFieldPaths: extraction.rejectedFieldPaths ?? [],
   });
 
-  return {
-    resume: extraction.candidate,
-    context,
-  };
+  return { resume: extraction.candidate, context };
 }
