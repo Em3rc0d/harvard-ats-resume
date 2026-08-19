@@ -55,12 +55,6 @@ export const personalInfoSchema = z.object({
   github: profileUrlSchema('github.com', 'Invalid GitHub URL'),
 });
 
-/**
- * A work record may be incomplete because source reconciliation deliberately
- * removes leaves that cannot be proved from the uploaded document. We preserve
- * the remaining source-backed record instead of asking the candidate to invent
- * a missing date or description merely to satisfy a form shape.
- */
 export const workExperienceSchema = z.object({
   company: optionalEvidenceString(250),
   role: optionalEvidenceString(250),
@@ -132,7 +126,13 @@ export const languageSchema = z.object({
   proficiency: optionalEvidenceString(200),
 });
 
-const resumeRequestBaseSchema = z.object({
+/**
+ * Structural request schema stays a ZodObject because several trusted API
+ * boundaries extend/omit it. The cross-field "material career evidence" rule
+ * is evaluated by GenerationReadiness before generation/assessment in the
+ * canonical product flow and by the truth projection boundary downstream.
+ */
+export const resumeRequestSchema = z.object({
   personalInfo: personalInfoSchema,
   summary: optionalEvidenceString(2000),
   experience: z.array(workExperienceSchema).default([]),
@@ -144,9 +144,9 @@ const resumeRequestBaseSchema = z.object({
   jobDescription: z.string().optional().nullable(),
 });
 
-type ResumeEvidenceShape = z.infer<typeof resumeRequestBaseSchema>;
+export type ResumeRequest = z.infer<typeof resumeRequestSchema>;
 
-export function hasMaterialCareerEvidence(data: ResumeEvidenceShape): boolean {
+export function hasMaterialCareerEvidence(data: ResumeRequest): boolean {
   return Boolean(
     data.summary.trim() ||
     data.experience.length > 0 ||
@@ -159,19 +159,6 @@ export function hasMaterialCareerEvidence(data: ResumeEvidenceShape): boolean {
   );
 }
 
-// Candidate shape is flexible; candidate truth is not. We require at least one
-// material evidence dimension, but never require the user to invent a summary,
-// employer, degree or credential that their career does not contain.
-export const resumeRequestSchema = resumeRequestBaseSchema.superRefine((data, context) => {
-  if (!hasMaterialCareerEvidence(data)) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['careerEvidence'],
-      message: 'Add at least one material career evidence item before continuing.',
-    });
-  }
-});
-
 export type PersonalInfo = z.infer<typeof personalInfoSchema>;
 export type WorkExperience = z.infer<typeof workExperienceSchema>;
 export type Education = z.infer<typeof educationSchema>;
@@ -179,7 +166,6 @@ export type Skills = z.infer<typeof skillsSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type Certification = z.infer<typeof certificationSchema>;
 export type Language = z.infer<typeof languageSchema>;
-export type ResumeRequest = z.infer<typeof resumeRequestSchema>;
 
 const jobMatchRequirementResponseSchema = z.object({
   id: z.string(),
