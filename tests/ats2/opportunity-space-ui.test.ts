@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 test('controlled OpportunitySpace UI assesses 2-10 jobs against one target and composes durable assessment IDs', () => {
   const surface = readFileSync(join(process.cwd(), 'components/OpportunitySpaceStep.tsx'), 'utf8');
+  const flow = readFileSync(join(process.cwd(), 'components/CVEngineFlow.tsx'), 'utf8');
   const page = readFileSync(join(process.cwd(), 'app/page.tsx'), 'utf8');
 
   assert.match(surface, /jobs\.length >= 10/);
@@ -16,7 +17,9 @@ test('controlled OpportunitySpace UI assesses 2-10 jobs against one target and c
   assert.match(surface, /opportunityAssessmentIds: assessed\.map/);
   assert.match(surface, /DURABLE_OPPORTUNITY_SPACE/);
   assert.match(surface, /entry\.targetRelevance\.level/);
-  assert.match(page, /type FlowStage = .*'SPACE'/);
-  assert.match(page, /Compare multiple opportunities/);
-  assert.match(page, /<OpportunitySpaceStep/);
+
+  assert.match(flow, /type FlowStage = .*'SPACE'/);
+  assert.match(flow, /Compare multiple opportunities/);
+  assert.match(flow, /<OpportunitySpaceStep/);
+  assert.match(page, /CVEngineFlow/);
 });
