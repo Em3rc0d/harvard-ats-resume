@@ -48,3 +48,34 @@ jobs:
 
       - name: Verify PDF.js server runtime bundle
         run: node scripts/verify-pdfjs-server-bundle.mjs
+
+      - name: Install browser acceptance runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.62.0
+          npx playwright install chromium --with-deps
+
+      - name: Start browser acceptance server
+        run: |
+          npm run dev > /tmp/cv-engine-e2e.log 2>&1 &
+          echo $! > /tmp/cv-engine-e2e.pid
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/cv-engine-e2e.log
+          exit 1
+
+      - name: Browser acceptance
+        run: node scripts/release-browser-acceptance.mjs
+
+      - name: Stop browser acceptance server
+        if: always()
+        run: |
+          if [ -f /tmp/cv-engine-e2e.pid ]; then
+            kill "$(cat /tmp/cv-engine-e2e.pid)" || true
+          fi
+          if [ -f /tmp/cv-engine-e2e.log ]; then
+            tail -n 200 /tmp/cv-engine-e2e.log
+          fi
