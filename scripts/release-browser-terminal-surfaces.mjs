@@ -77,9 +77,10 @@ try {
     await route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ success: false, error: 'Unsupported candidate wording requires confirmation.', grounding: { status: 'NEEDS_USER_CONFIRMATION', factsToConfirm: ['Led an unsupported enterprise program.'], violations: [{ kind: 'UNSUPPORTED_NARRATIVE_CLAIM', value: 'Led an unsupported enterprise program.', message: 'Narrative claim requires confirmation.', source: 'GENERATED_ONLY' }] } }) });
   });
   await click('Generate trusted resume');
-  await visible('We paused before adding unsupported career facts');
+  await visible('Some draft facts still need your evidence');
   await visible('Led an unsupported enterprise program');
-  await click('Edit my career evidence');
+  await visible('candidate-asserted evidence');
+  await click('Review / add career evidence');
   await visible('Build only what you can defend');
   assert.deepEqual(pageErrors, [], `Guardrail flow produced browser errors: ${pageErrors.join(' | ')}`);
 
