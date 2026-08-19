@@ -61,14 +61,14 @@ try {
   await page.getByRole('button', { name: 'Remove Work experience 1' }).click();
   assert.equal(await page.getByText('Work experience #1', { exact: true }).count(), 0);
 
-  // Education certificate PDF quick-fill + manual add/remove.
+  // Education certificate PDF quick-fill + manual academic distinction add/remove.
   await click('Next');
   await visible('Education');
   await page.route('**/api/extract-certificate-text', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ success: true, text: 'Certificate of Software Engineering Example University awarded on June 10, 2024' }),
+      body: JSON.stringify({ success: true, text: 'Certificate of Software Engineering Example University awarded on June 10, 2024 with distinction' }),
     });
   });
   await page.locator('#certificate-upload--20').setInputFiles({
@@ -79,8 +79,12 @@ try {
   await page.getByRole('button', { name: 'Remove Education 1' }).click();
   assert.equal(await page.getByText('Education #1', { exact: true }).count(), 0);
   await page.unroute('**/api/extract-certificate-text');
+
   await click('Add Education');
   await visible('Education #1');
+  const honorsInput = page.locator('input[placeholder*="Quinto superior"]').first();
+  await honorsInput.fill('Quinto superior');
+  assert.equal(await honorsInput.inputValue(), 'Quinto superior');
   await page.getByRole('button', { name: 'Remove Education 1' }).click();
 
   // Skills editor accepts/deduplicates comma-separated evidence.
