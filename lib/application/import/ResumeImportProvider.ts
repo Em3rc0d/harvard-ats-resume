@@ -46,7 +46,7 @@ export type SourceReceipt = z.infer<typeof sourceReceiptSchema>;
 export const resumeImportContextSchema = z.object({
   receipt: sourceReceiptSchema,
   evidenceMap: z.array(importedEvidenceSchema),
-  rejectedFieldPaths: z.array(z.string().min(1)).default([]),
+  rejectedFieldPaths: z.array(z.string().min(1)).optional(),
 });
 
 export type ResumeImportContext = z.infer<typeof resumeImportContextSchema>;
