@@ -152,7 +152,7 @@ test('target job step blocks generation until candidate generation readiness pas
 test('targeted resume generation requires a current target-aware Opportunity Assessment before build', () => {
   const target = readFileSync(join(process.cwd(), 'components/TargetJobStep.tsx'), 'utf8');
   assert.match(target, /fetch\('\/api\/assess-opportunity'/);
-  assert.match(target, /mode === 'TARGETED'.*Boolean\(currentAssessment && targetRelevance\)/s);
+  assert.match(target, /mode === 'TARGETED'[\s\S]*Boolean\(currentAssessment && targetRelevance\)/);
   assert.match(target, /assessedTargetKey === targetKey/);
   assert.match(target, /mode === 'GENERAL'/);
   assert.match(target, /currentAssessment && <OpportunityAssessmentCard assessment=\{currentAssessment\}/);
