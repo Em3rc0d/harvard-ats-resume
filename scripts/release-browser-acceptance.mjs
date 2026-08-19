@@ -23,6 +23,13 @@ async function clickButtonWithText(text) {
   await button.click();
 }
 
+async function acceptResponsibleUse() {
+  const dialog = page.getByRole('dialog', { name: 'Before you continue' });
+  await dialog.waitFor({ state: 'visible', timeout: 10_000 });
+  await page.getByRole('button', { name: 'I understand — continue with real information' }).click();
+  await dialog.waitFor({ state: 'detached', timeout: 10_000 });
+}
+
 async function assertNoPageErrors(context) {
   assert.deepEqual(pageErrors, [], `${context}: browser page errors detected: ${pageErrors.join(' | ')}`);
 }
@@ -62,60 +69,25 @@ const importContext = {
     importerVersion: 'browser-acceptance-v1',
   },
   evidenceMap: [
-    {
-      fieldPath: 'personalInfo.fullName',
-      excerpt: 'Jane Candidate',
-      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'personalInfo.fullName' },
-    },
-    {
-      fieldPath: 'personalInfo.email',
-      excerpt: 'jane@example.com',
-      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'personalInfo.email' },
-    },
-    {
-      fieldPath: 'personalInfo.location',
-      excerpt: 'Lima, Peru',
-      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'personalInfo.location' },
-    },
-    {
-      fieldPath: 'education[0].institution',
-      excerpt: 'Universidad Nacional Mayor de San Marcos (UNMSM)',
-      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].institution' },
-    },
-    {
-      fieldPath: 'education[0].degree',
-      excerpt: 'Ingeniería de Sistemas',
-      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].degree' },
-    },
-    {
-      fieldPath: 'education[0].startDate',
-      excerpt: '2021',
-      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].startDate' },
-    },
-    {
-      fieldPath: 'education[0].endDate',
-      excerpt: '2026',
-      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].endDate' },
-    },
-    {
-      fieldPath: 'education[0].honors',
-      excerpt: 'Quinto superior',
-      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].honors' },
-    },
-    {
-      fieldPath: 'skills.hardSkills[0]',
-      excerpt: 'TypeScript',
-      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'skills.hardSkills[0]' },
-    },
+    { fieldPath: 'personalInfo.fullName', excerpt: 'Jane Candidate', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'personalInfo.fullName' } },
+    { fieldPath: 'personalInfo.email', excerpt: 'jane@example.com', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'personalInfo.email' } },
+    { fieldPath: 'personalInfo.location', excerpt: 'Lima, Peru', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'personalInfo.location' } },
+    { fieldPath: 'education[0].institution', excerpt: 'Universidad Nacional Mayor de San Marcos (UNMSM)', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].institution' } },
+    { fieldPath: 'education[0].degree', excerpt: 'Ingeniería de Sistemas', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].degree' } },
+    { fieldPath: 'education[0].startDate', excerpt: '2021', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].startDate' } },
+    { fieldPath: 'education[0].endDate', excerpt: '2026', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].endDate' } },
+    { fieldPath: 'education[0].honors', excerpt: 'Quinto superior', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].honors' } },
+    { fieldPath: 'skills.hardSkills[0]', excerpt: 'TypeScript', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'skills.hardSkills[0]' } },
   ],
 };
 
 try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
+  await expectVisible('Before you continue');
+  await acceptResponsibleUse();
   await expectVisible('Build from career truth');
   await assertNoPageErrors('START');
 
-  // Global language control must update both the document language and live product copy.
   const languageSelect = page.locator('select[aria-label="Select language"]');
   await languageSelect.selectOption('es');
   await page.waitForFunction(() => document.documentElement.lang === 'es');
@@ -124,13 +96,11 @@ try {
   await page.waitForFunction(() => document.documentElement.lang === 'en');
   await expectVisible('Build from career truth');
 
-  // Upload cancellation is a real browser transition.
   await clickButtonWithText('Start from my CV');
   await expectVisible('Upload Your Resume');
   await clickButtonWithText('Cancel');
   await expectVisible('Build from career truth');
 
-  // Expected import API failures must render inline and never reach a dev overlay/page error.
   await page.route('**/api/import-resume', async (route) => {
     await route.fulfill({
       status: 422,
@@ -145,36 +115,22 @@ try {
     });
   });
   await clickButtonWithText('Start from my CV');
-  await page.locator('#cv-upload').setInputFiles({
-    name: 'candidate.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from('%PDF-1.4 browser acceptance fixture'),
-  });
+  await page.locator('#cv-upload').setInputFiles({ name: 'candidate.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 browser acceptance fixture') });
   await expectVisible('NO_SOURCE_BACKED_CANDIDATE_CONTENT');
   await expectVisible('SOURCE_RECONCILIATION');
   await assertNoPageErrors('UPLOAD typed failure');
 
-  // The same upload surface must transition to review on a successful server response.
   await page.unroute('**/api/import-resume');
   await page.route('**/api/import-resume', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ success: true, data: { resume: sourceBackedResume, context: importContext } }),
-    });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { resume: sourceBackedResume, context: importContext } }) });
   });
-  await page.locator('#cv-upload').setInputFiles({
-    name: 'candidate.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from('%PDF-1.4 browser acceptance fixture success'),
-  });
+  await page.locator('#cv-upload').setInputFiles({ name: 'candidate.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 browser acceptance fixture success') });
   await expectVisible('We found your career information');
   await expectVisible('candidate.pdf');
   await expectVisible('Academic distinction: Quinto superior');
   await clickButtonWithText('Use another resume');
   await expectVisible('Build from career truth');
 
-  // Manual evidence: verify section navigation and add/remove controls by clicking them.
   await clickButtonWithText('Build my evidence');
   await expectVisible('Build only what you can defend');
   await page.locator('input[autocomplete="name"]').fill('Jane Candidate');
@@ -207,14 +163,12 @@ try {
   await clickButtonWithText('Continue to target');
   await expectVisible('What are you applying for?');
 
-  // General-target controls: selection enables generation, Back returns to evidence.
   await clickButtonWithText('General resume');
   const generateButton = page.locator('button').filter({ hasText: 'Generate trusted resume' }).first();
   assert.equal(await generateButton.isEnabled(), true, 'General resume generation should be enabled for ready evidence');
   await clickButtonWithText('Back to career review');
   await expectVisible('Build only what you can defend');
 
-  // Brand/home is the universal reset from a deep stage.
   await page.getByRole('button', { name: 'CV Engine home' }).click();
   await expectVisible('Build from career truth');
   await assertNoPageErrors('full browser acceptance flow');
