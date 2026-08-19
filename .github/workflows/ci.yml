@@ -51,15 +51,16 @@ jobs:
 
       - name: Install browser acceptance runtime
         run: |
-          npm install --no-save --package-lock=false playwright@1.62.0
-          npx playwright install chromium --with-deps
+          mkdir -p /tmp/cv-engine-playwright
+          npm install --prefix /tmp/cv-engine-playwright --package-lock=false --ignore-scripts playwright@1.62.0
+          /tmp/cv-engine-playwright/node_modules/.bin/playwright install chromium --with-deps
 
       - name: Start browser acceptance server
         run: |
           npm run dev > /tmp/cv-engine-e2e.log 2>&1 &
           echo $! > /tmp/cv-engine-e2e.pid
           for attempt in {1..60}; do
-            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+            if curl --fail --silent http://localhost:3000/ > /dev/null; then
               exit 0
             fi
             sleep 1
@@ -68,6 +69,9 @@ jobs:
           exit 1
 
       - name: Browser acceptance
+        env:
+          CV_ENGINE_E2E_BASE_URL: http://localhost:3000
+          CV_ENGINE_PLAYWRIGHT_MODULE: file:///tmp/cv-engine-playwright/node_modules/playwright/index.mjs
         run: |
           node scripts/release-browser-acceptance.mjs
           node scripts/release-browser-terminal-surfaces.mjs
