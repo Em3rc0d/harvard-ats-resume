@@ -10,19 +10,11 @@ page.on('pageerror', (error) => pageErrors.push(error.message));
 
 const resume = {
   personalInfo: { fullName: 'Jane Candidate', email: 'jane@example.com', location: 'Lima, Peru', linkedin: '', github: '' },
-  summary: '',
-  experience: [],
-  education: [],
-  skills: { hardSkills: ['TypeScript'], softSkills: [] },
-  projects: [],
-  certifications: [],
-  languages: [],
+  summary: '', experience: [], education: [],
+  skills: { hardSkills: ['TypeScript'], softSkills: [] }, projects: [], certifications: [], languages: [],
 };
 const context = {
-  receipt: {
-    receiptId: 'resume-import-browser-market', originalFileName: 'candidate.pdf', mimeType: 'application/pdf', byteSize: 256,
-    sha256: 'c'.repeat(64), capturedAt: '2026-08-19T20:00:00.000Z', importer: 'browser-acceptance-fixture', importerVersion: 'browser-acceptance-v1',
-  },
+  receipt: { receiptId: 'resume-import-browser-market', originalFileName: 'candidate.pdf', mimeType: 'application/pdf', byteSize: 256, sha256: 'c'.repeat(64), capturedAt: '2026-08-19T20:00:00.000Z', importer: 'browser-acceptance-fixture', importerVersion: 'browser-acceptance-v1' },
   evidenceMap: [
     { fieldPath: 'personalInfo.fullName', excerpt: 'Jane Candidate', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'personalInfo.fullName' } },
     { fieldPath: 'personalInfo.email', excerpt: 'jane@example.com', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'personalInfo.email' } },
@@ -41,19 +33,25 @@ async function click(text) {
   await button.waitFor({ state: 'visible', timeout: 10_000 });
   await button.click();
 }
+async function acceptResponsibleUse() {
+  const dialog = page.getByRole('dialog', { name: 'Before you continue' });
+  await dialog.waitFor({ state: 'visible', timeout: 10_000 });
+  await page.getByRole('button', { name: 'I understand — continue with real information' }).click();
+  await dialog.waitFor({ state: 'detached', timeout: 10_000 });
+}
 
 try {
   await page.route('**/api/import-resume', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { resume, context } }) });
   });
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
+  await acceptResponsibleUse();
   await click('Start from my CV');
   await page.locator('#cv-upload').setInputFiles({ name: 'candidate.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 market acceptance fixture') });
   await visible('We found your career information');
   await click('Continue to target job');
   await visible('What are you applying for?');
 
-  // Specific-job assessment must lock mutable controls during the durable request and recover cleanly after failure.
   await click('Specific job');
   const roleInput = page.locator('input[placeholder="e.g. Senior Backend Engineer"]');
   const jobInput = page.locator('#target-job-description');
@@ -76,7 +74,6 @@ try {
   assert.equal(await roleInput.inputValue(), 'Backend Engineer');
   assert.match(await jobInput.inputValue(), /PostgreSQL/);
 
-  // Opportunity Space: real add/remove, immutable request lock, inline failure, and recovery.
   await click('Compare multiple opportunities');
   await visible('Compare where your attention is worth spending');
   let opportunityTextareas = page.locator('textarea[placeholder="Paste a complete job description…"]');
