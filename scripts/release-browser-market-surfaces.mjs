@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
 
-const baseUrl = process.env.CV_ENGINE_E2E_BASE_URL || 'http://127.0.0.1:3000';
+const playwrightModule = process.env.CV_ENGINE_PLAYWRIGHT_MODULE || 'playwright';
+const { chromium } = await import(playwrightModule);
+const baseUrl = process.env.CV_ENGINE_E2E_BASE_URL || 'http://localhost:3000';
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 const pageErrors = [];
