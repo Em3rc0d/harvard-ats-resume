@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
 
-const baseUrl = process.env.CV_ENGINE_E2E_BASE_URL || 'http://127.0.0.1:3000';
+const playwrightModule = process.env.CV_ENGINE_PLAYWRIGHT_MODULE || 'playwright';
+const { chromium } = await import(playwrightModule);
+const baseUrl = process.env.CV_ENGINE_E2E_BASE_URL || 'http://localhost:3000';
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 const pageErrors = [];
@@ -83,12 +84,13 @@ try {
   await expectVisible('Build from career truth');
   await assertNoPageErrors('START');
 
-  // Global language control must change visible product copy and <html lang>.
+  // Global language control must update both the document language and live product copy.
   const languageSelect = page.locator('select[aria-label="Select language"]');
   await languageSelect.selectOption('es');
-  await expectVisible('Construye desde la verdad de tu carrera');
-  assert.equal(await page.locator('html').getAttribute('lang'), 'es');
+  await page.waitForFunction(() => document.documentElement.lang === 'es');
+  await expectVisible('Empezar desde mi CV');
   await page.locator('select[aria-label="Seleccionar idioma"]').selectOption('en');
+  await page.waitForFunction(() => document.documentElement.lang === 'en');
   await expectVisible('Build from career truth');
 
   // Upload cancellation is a real browser transition.
