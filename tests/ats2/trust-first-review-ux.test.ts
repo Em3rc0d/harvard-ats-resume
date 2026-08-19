@@ -130,6 +130,8 @@ test('imported review exposes experience technologies that were previously hidde
   assert.match(review, /item\.technologies\.map/);
   assert.match(review, /sourceSha256/);
   assert.match(review, /From CV/);
+  assert.match(review, /Academic distinction/);
+  assert.match(review, /item\.honors/);
 });
 
 test('resume upload implements actual drag and drop instead of copy-only affordance', () => {
@@ -143,6 +145,8 @@ test('grounding and semantic grounding failures are surfaced as actionable evide
   const guardrail = readFileSync(join(process.cwd(), 'components/GenerationGuardrailPanel.tsx'), 'utf8');
   assert.match(guardrail, /factsToConfirm/);
   assert.match(guardrail, /generatedClaim/);
-  assert.match(guardrail, /Edit my career evidence/);
-  assert.match(guardrail, /invented evidence is not/i);
+  assert.match(guardrail, /Review \/ add career evidence/);
+  assert.match(guardrail, /candidate-asserted evidence/i);
+  assert.match(guardrail, /does not make it externally verified/i);
+  assert.match(guardrail, /false or uncertain, leave it out/i);
 });
