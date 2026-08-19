@@ -37,7 +37,13 @@ const sourceBackedResume = {
   },
   summary: '',
   experience: [],
-  education: [],
+  education: [{
+    institution: 'Universidad Nacional Mayor de San Marcos (UNMSM)',
+    degree: 'Ingeniería de Sistemas',
+    startDate: '2021',
+    endDate: '2026',
+    honors: 'Quinto superior',
+  }],
   skills: { hardSkills: ['TypeScript'], softSkills: [] },
   projects: [],
   certifications: [],
@@ -70,6 +76,31 @@ const importContext = {
       fieldPath: 'personalInfo.location',
       excerpt: 'Lima, Peru',
       locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'personalInfo.location' },
+    },
+    {
+      fieldPath: 'education[0].institution',
+      excerpt: 'Universidad Nacional Mayor de San Marcos (UNMSM)',
+      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].institution' },
+    },
+    {
+      fieldPath: 'education[0].degree',
+      excerpt: 'Ingeniería de Sistemas',
+      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].degree' },
+    },
+    {
+      fieldPath: 'education[0].startDate',
+      excerpt: '2021',
+      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].startDate' },
+    },
+    {
+      fieldPath: 'education[0].endDate',
+      excerpt: '2026',
+      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].endDate' },
+    },
+    {
+      fieldPath: 'education[0].honors',
+      excerpt: 'Quinto superior',
+      locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'education[0].honors' },
     },
     {
       fieldPath: 'skills.hardSkills[0]',
@@ -139,6 +170,7 @@ try {
   });
   await expectVisible('We found your career information');
   await expectVisible('candidate.pdf');
+  await expectVisible('Academic distinction: Quinto superior');
   await clickButtonWithText('Use another resume');
   await expectVisible('Build from career truth');
 
