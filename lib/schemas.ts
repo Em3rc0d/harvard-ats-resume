@@ -7,20 +7,16 @@ export function normalizeProfileUrlInput(value: unknown, expectedHost: string): 
 
   const trimmed = value.trim();
   if (!trimmed) return '';
-
   const candidate = PROFILE_URL_SCHEME.test(trimmed) ? trimmed : `https://${trimmed}`;
 
   try {
     const parsed = new URL(candidate);
     const hostname = parsed.hostname.toLowerCase();
     const normalizedExpectedHost = expectedHost.toLowerCase();
-    const isAllowedHost =
-      hostname === normalizedExpectedHost || hostname === `www.${normalizedExpectedHost}`;
+    const isAllowedHost = hostname === normalizedExpectedHost || hostname === `www.${normalizedExpectedHost}`;
     const isHttp = parsed.protocol === 'http:' || parsed.protocol === 'https:';
 
-    if (!isAllowedHost || !isHttp || parsed.username || parsed.password) {
-      return trimmed;
-    }
+    if (!isAllowedHost || !isHttp || parsed.username || parsed.password) return trimmed;
 
     parsed.protocol = 'https:';
     parsed.hostname = normalizedExpectedHost;
@@ -38,12 +34,9 @@ function profileUrlSchema(expectedHost: string, message: string) {
       z.string().url(message).refine((value) => {
         try {
           const parsed = new URL(value);
-          return (
-            parsed.protocol === 'https:' &&
+          return parsed.protocol === 'https:' &&
             parsed.hostname.toLowerCase() === expectedHost.toLowerCase() &&
-            !parsed.username &&
-            !parsed.password
-          );
+            !parsed.username && !parsed.password;
         } catch {
           return false;
         }
@@ -52,66 +45,98 @@ function profileUrlSchema(expectedHost: string, message: string) {
   ).optional();
 }
 
-// Personal Information Schema
+const optionalEvidenceString = (max: number) => z.string().max(max).default('');
+
 export const personalInfoSchema = z.object({
-  fullName: z.string().min(2, 'Full name is required').max(100),
-  location: z.string().min(2, 'Location is required').max(100),
-  email: z.string().email('Invalid email address'),
+  fullName: z.string().trim().min(2, 'Full name is required').max(100),
+  location: z.string().trim().min(2, 'Location is required').max(100),
+  email: z.string().trim().email('Invalid email address'),
   linkedin: profileUrlSchema('linkedin.com', 'Invalid LinkedIn URL'),
   github: profileUrlSchema('github.com', 'Invalid GitHub URL'),
 });
 
-// Work Experience Schema
+/**
+ * A work record may be incomplete because source reconciliation deliberately
+ * removes leaves that cannot be proved from the uploaded document. We preserve
+ * the remaining source-backed record instead of asking the candidate to invent
+ * a missing date or description merely to satisfy a form shape.
+ */
 export const workExperienceSchema = z.object({
-  company: z.string().min(1, 'Company name is required'),
-  role: z.string().min(1, 'Role is required'),
-  startDate: z.string().min(1, 'Start date is required'),
-  endDate: z.string().min(1, 'End date is required'),
-  description: z.string().min(10, 'Description must be at least 10 characters'),
-  technologies: z.array(z.string()).default([]),
+  company: optionalEvidenceString(250),
+  role: optionalEvidenceString(250),
+  startDate: optionalEvidenceString(100),
+  endDate: optionalEvidenceString(100),
+  description: optionalEvidenceString(5000),
+  technologies: z.array(z.string().trim().min(1).max(200)).default([]),
+}).superRefine((value, context) => {
+  if (!value.company.trim() && !value.role.trim() && !value.description.trim() && value.technologies.length === 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['company'],
+      message: 'Work experience needs at least one material source-backed field.',
+    });
+  }
 });
 
-// Education Schema
 export const educationSchema = z.object({
-  institution: z.string().min(1, 'Institution name is required'),
-  degree: z.string().min(1, 'Degree is required'),
-  startDate: z.string().min(1, 'Start date is required'),
-  endDate: z.string().min(1, 'End date is required'),
+  institution: optionalEvidenceString(300),
+  degree: optionalEvidenceString(300),
+  startDate: optionalEvidenceString(100),
+  endDate: optionalEvidenceString(100),
+}).superRefine((value, context) => {
+  if (!value.institution.trim() && !value.degree.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['institution'],
+      message: 'Education needs an institution or degree.',
+    });
+  }
 });
 
-// Skills Schema
 export const skillsSchema = z.object({
-  hardSkills: z.array(z.string()).min(1, 'At least one hard skill is required'),
-  softSkills: z.array(z.string()).default([]),
+  hardSkills: z.array(z.string().trim().min(1).max(200)).default([]),
+  softSkills: z.array(z.string().trim().min(1).max(200)).default([]),
 });
 
-// Project Schema
 export const projectSchema = z.object({
-  name: z.string().min(1, 'Project name is required'),
-  description: z.string().min(10, 'Description is required'),
-  technologies: z.array(z.string()).default([]),
-  link: z.string().url('Invalid URL').optional().or(z.literal('')),
+  name: optionalEvidenceString(300),
+  description: optionalEvidenceString(5000),
+  technologies: z.array(z.string().trim().min(1).max(200)).default([]),
+  link: z.union([z.literal(''), z.string().url('Invalid URL')]).default(''),
+}).superRefine((value, context) => {
+  if (!value.name.trim() && !value.description.trim() && value.technologies.length === 0 && !value.link.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['name'],
+      message: 'Project needs at least one material source-backed field.',
+    });
+  }
 });
 
-// Certification Schema
 export const certificationSchema = z.object({
-  name: z.string().min(1, 'Certification name is required'),
-  issuer: z.string().min(1, 'Issuer is required'),
-  date: z.string().min(1, 'Date is required'),
+  name: optionalEvidenceString(300),
+  issuer: optionalEvidenceString(300),
+  date: optionalEvidenceString(100),
+}).superRefine((value, context) => {
+  if (!value.name.trim() && !value.issuer.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['name'],
+      message: 'Certification needs a name or issuer.',
+    });
+  }
 });
 
-// Language Schema
 export const languageSchema = z.object({
-  language: z.string().min(1, 'Language is required'),
-  proficiency: z.string().min(1, 'Proficiency is required'),
+  language: z.string().trim().min(1, 'Language is required').max(200),
+  proficiency: optionalEvidenceString(200),
 });
 
-// Complete Resume Request Schema
-export const resumeRequestSchema = z.object({
+const resumeRequestBaseSchema = z.object({
   personalInfo: personalInfoSchema,
-  summary: z.string().min(20, 'Summary must be at least 20 characters').max(2000),
-  experience: z.array(workExperienceSchema).min(1, 'At least one work experience is required'),
-  education: z.array(educationSchema).min(1, 'At least one education entry is required'),
+  summary: optionalEvidenceString(2000),
+  experience: z.array(workExperienceSchema).default([]),
+  education: z.array(educationSchema).default([]),
   skills: skillsSchema,
   projects: z.array(projectSchema).default([]).optional(),
   certifications: z.array(certificationSchema).default([]).optional(),
@@ -119,7 +144,34 @@ export const resumeRequestSchema = z.object({
   jobDescription: z.string().optional().nullable(),
 });
 
-// Types
+type ResumeEvidenceShape = z.infer<typeof resumeRequestBaseSchema>;
+
+export function hasMaterialCareerEvidence(data: ResumeEvidenceShape): boolean {
+  return Boolean(
+    data.summary.trim() ||
+    data.experience.length > 0 ||
+    data.education.length > 0 ||
+    data.skills.hardSkills.length > 0 ||
+    data.skills.softSkills.length > 0 ||
+    (data.projects?.length ?? 0) > 0 ||
+    (data.certifications?.length ?? 0) > 0 ||
+    (data.languages?.length ?? 0) > 0
+  );
+}
+
+// Candidate shape is flexible; candidate truth is not. We require at least one
+// material evidence dimension, but never require the user to invent a summary,
+// employer, degree or credential that their career does not contain.
+export const resumeRequestSchema = resumeRequestBaseSchema.superRefine((data, context) => {
+  if (!hasMaterialCareerEvidence(data)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['careerEvidence'],
+      message: 'Add at least one material career evidence item before continuing.',
+    });
+  }
+});
+
 export type PersonalInfo = z.infer<typeof personalInfoSchema>;
 export type WorkExperience = z.infer<typeof workExperienceSchema>;
 export type Education = z.infer<typeof educationSchema>;
@@ -164,7 +216,6 @@ export const jobMatchResponseSchema = z.object({
   requirements: z.array(jobMatchRequirementResponseSchema),
 });
 
-// API Response Schema
 export const resumeResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
