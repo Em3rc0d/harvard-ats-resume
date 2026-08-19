@@ -16,10 +16,106 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Multipart framing is small, but the request-level guard needs some allowance
-// beyond the exact 10 MB file limit. Exact file.size is validated after parsing
-// and before arrayBuffer() allocates a second copy of the upload.
 const MAX_RESUME_MULTIPART_REQUEST_BYTES = MAX_RESUME_FILE_BYTES + (1024 * 1024);
+
+type ImportFailure = {
+  readonly status: number;
+  readonly errorCode: string;
+  readonly stage: 'VALIDATION' | 'DOCUMENT_TEXT' | 'AI_EXTRACTION' | 'SOURCE_RECONCILIATION' | 'RUNTIME';
+  readonly canRetry: boolean;
+  readonly error: string;
+};
+
+function classifyImportFailure(error: unknown): ImportFailure {
+  const message = error instanceof Error ? error.message : 'Resume import failed.';
+
+  if (error instanceof ResumeImportTimeoutError) {
+    return {
+      status: 504,
+      errorCode: 'RESUME_IMPORT_TIMEOUT',
+      stage: 'AI_EXTRACTION',
+      canRetry: true,
+      error: 'Resume extraction timed out while waiting for the AI parser. Please try again.',
+    };
+  }
+
+  if (
+    message.includes('Unsupported resume file type') ||
+    message.includes('extension and MIME type') ||
+    message.includes('file is empty') ||
+    message.includes('10 MB limit')
+  ) {
+    return {
+      status: 422,
+      errorCode: 'INVALID_RESUME_FILE',
+      stage: 'VALIDATION',
+      canRetry: true,
+      error: message,
+    };
+  }
+
+  if (message.includes('no usable machine-readable text')) {
+    return {
+      status: 422,
+      errorCode: 'RESUME_TEXT_UNREADABLE',
+      stage: 'DOCUMENT_TEXT',
+      canRetry: true,
+      error: 'This resume has no usable machine-readable text. Export a text-based PDF or upload a DOCX version.',
+    };
+  }
+
+  if (message.includes('no usable source-backed candidate content')) {
+    return {
+      status: 422,
+      errorCode: 'NO_SOURCE_BACKED_CANDIDATE_CONTENT',
+      stage: 'SOURCE_RECONCILIATION',
+      canRetry: true,
+      error: 'CV Engine could read the document, but it could not safely link enough extracted candidate data back to the source. Try a DOCX/text-based PDF or enter the evidence manually.',
+    };
+  }
+
+  if (message.includes('no usable candidate content')) {
+    return {
+      status: 422,
+      errorCode: 'NO_CANDIDATE_CONTENT',
+      stage: 'AI_EXTRACTION',
+      canRetry: true,
+      error: 'The document was readable, but no usable candidate information was extracted.',
+    };
+  }
+
+  if (message.includes('Gemini returned an empty') || message.includes('Gemini returned invalid JSON')) {
+    return {
+      status: 502,
+      errorCode: 'AI_EXTRACTION_INVALID_RESPONSE',
+      stage: 'AI_EXTRACTION',
+      canRetry: true,
+      error: 'The resume parser returned an invalid extraction response. Your file was not accepted as trusted career evidence. Please try again.',
+    };
+  }
+
+  if (
+    message.includes('Resume extraction value is not present') ||
+    message.includes('Resume extraction evidence is not present') ||
+    message.includes('Resume extraction is missing source evidence')
+  ) {
+    return {
+      status: 422,
+      errorCode: 'SOURCE_RECONCILIATION_REJECTED',
+      stage: 'SOURCE_RECONCILIATION',
+      canRetry: true,
+      error: 'The parser proposed information that could not be safely reconciled with the source resume. Unsupported values were not accepted.',
+    };
+  }
+
+  return {
+    status: 502,
+    errorCode: 'RESUME_IMPORT_RUNTIME_FAILURE',
+    stage: 'RUNTIME',
+    canRetry: true,
+    error: 'CV Engine could not complete the trusted resume import. Please try again or continue with manual career evidence.',
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,11 +124,14 @@ export async function POST(request: NextRequest) {
       const requestBytes = Number(contentLength);
       if (Number.isFinite(requestBytes) && requestBytes > MAX_RESUME_MULTIPART_REQUEST_BYTES) {
         return NextResponse.json(
-          { success: false, error: 'Resume upload request exceeds the allowed size.' },
           {
-            status: 413,
-            headers: { 'Cache-Control': 'no-store, max-age=0' },
+            success: false,
+            error: 'Resume upload request exceeds the allowed size.',
+            errorCode: 'RESUME_REQUEST_TOO_LARGE',
+            stage: 'VALIDATION',
+            canRetry: true,
           },
+          { status: 413, headers: { 'Cache-Control': 'no-store, max-age=0' } },
         );
       }
     }
@@ -44,15 +143,12 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: 'Rate limit exceeded. Please try the resume import again later.',
+          errorCode: 'RESUME_IMPORT_RATE_LIMITED',
+          stage: 'VALIDATION',
+          canRetry: true,
           retryAfter: new Date(rateLimitResult.reset).toISOString(),
         },
-        {
-          status: 429,
-          headers: {
-            ...rateLimitHeaders,
-            'Cache-Control': 'no-store, max-age=0',
-          },
-        },
+        { status: 429, headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' } },
       );
     }
 
@@ -61,27 +157,27 @@ export async function POST(request: NextRequest) {
 
     if (!(file instanceof File)) {
       return NextResponse.json(
-        { success: false, error: 'A resume file is required.' },
         {
-          status: 400,
-          headers: {
-            ...rateLimitHeaders,
-            'Cache-Control': 'no-store, max-age=0',
-          },
+          success: false,
+          error: 'A resume file is required.',
+          errorCode: 'RESUME_FILE_REQUIRED',
+          stage: 'VALIDATION',
+          canRetry: true,
         },
+        { status: 400, headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' } },
       );
     }
 
     if (file.size > MAX_RESUME_FILE_BYTES) {
       return NextResponse.json(
-        { success: false, error: 'Resume file exceeds the 10 MB limit.' },
         {
-          status: 413,
-          headers: {
-            ...rateLimitHeaders,
-            'Cache-Control': 'no-store, max-age=0',
-          },
+          success: false,
+          error: 'Resume file exceeds the 10 MB limit.',
+          errorCode: 'RESUME_FILE_TOO_LARGE',
+          stage: 'VALIDATION',
+          canRetry: true,
         },
+        { status: 413, headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' } },
       );
     }
     validateResumeFileSize(file.size);
@@ -98,43 +194,28 @@ export async function POST(request: NextRequest) {
       { success: true, data: imported },
       {
         status: 200,
-        headers: {
-          ...rateLimitHeaders,
-          'Cache-Control': 'no-store, max-age=0',
-        },
+        headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' },
       },
     );
   } catch (error) {
-    console.error('Resume import error:', error);
-
-    const message = error instanceof Error ? error.message : 'Resume import failed.';
-    const isTimeout = error instanceof ResumeImportTimeoutError;
-    const isClientError =
-      message.includes('Unsupported resume file type') ||
-      message.includes('extension and MIME type') ||
-      message.includes('file is empty') ||
-      message.includes('10 MB limit') ||
-      message.includes('no usable candidate content') ||
-      message.includes('no usable machine-readable text');
-
-    const status = isTimeout ? 504 : isClientError ? 422 : 502;
-    const responseError = isTimeout
-      ? 'Resume extraction timed out while waiting for the AI parser. Please try again.'
-      : isClientError
-        ? message
-        : 'Failed to extract information from the resume. Please try again or fill it manually.';
+    const failure = classifyImportFailure(error);
+    // The server owns diagnostic logging. Browser clients receive a stable,
+    // actionable failure code instead of the implementation exception.
+    console.error('Resume import boundary failure', {
+      errorCode: failure.errorCode,
+      stage: failure.stage,
+      cause: error instanceof Error ? error.message : String(error),
+    });
 
     return NextResponse.json(
       {
         success: false,
-        error: responseError,
+        error: failure.error,
+        errorCode: failure.errorCode,
+        stage: failure.stage,
+        canRetry: failure.canRetry,
       },
-      {
-        status,
-        headers: {
-          'Cache-Control': 'no-store, max-age=0',
-        },
-      },
+      { status: failure.status, headers: { 'Cache-Control': 'no-store, max-age=0' } },
     );
   }
 }
