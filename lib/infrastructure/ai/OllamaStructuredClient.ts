@@ -25,6 +25,12 @@ interface OllamaChatResponse {
   };
   readonly done?: boolean;
   readonly done_reason?: string;
+  readonly total_duration?: number;
+  readonly load_duration?: number;
+  readonly prompt_eval_count?: number;
+  readonly prompt_eval_duration?: number;
+  readonly eval_count?: number;
+  readonly eval_duration?: number;
 }
 
 function trimTrailingSlash(value: string): string {
@@ -121,6 +127,17 @@ function installedModelMatches(configured: string, installed: string): boolean {
   return installed === configured || installed === `${configured}:latest`;
 }
 
+function nanosToMilliseconds(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.round(value / 1_000_000)
+    : undefined;
+}
+
+function tokensPerSecond(count: number | undefined, durationNs: number | undefined): number | undefined {
+  if (!count || !durationNs || durationNs <= 0) return undefined;
+  return Number((count / (durationNs / 1_000_000_000)).toFixed(2));
+}
+
 export class OllamaStructuredClient {
   readonly baseUrl: string;
   readonly model: string;
@@ -186,6 +203,7 @@ export class OllamaStructuredClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), request.timeoutMs);
     const model = request.model ? resolveOllamaModel(request.model) : this.model;
+    const maxOutputTokens = request.maxOutputTokens ?? 4_096;
 
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
@@ -207,7 +225,7 @@ export class OllamaStructuredClient {
             temperature: request.temperature ?? 0,
             seed: 42,
             num_ctx: this.contextWindow,
-            num_predict: request.maxOutputTokens ?? 8_192,
+            num_predict: maxOutputTokens,
           },
         }),
       });
@@ -217,6 +235,20 @@ export class OllamaStructuredClient {
       }
 
       const payload = await response.json() as OllamaChatResponse;
+      console.info('Local Ollama inference completed:', {
+        model: payload.model || model,
+        promptTokens: payload.prompt_eval_count,
+        outputTokens: payload.eval_count,
+        totalMs: nanosToMilliseconds(payload.total_duration),
+        loadMs: nanosToMilliseconds(payload.load_duration),
+        promptEvalMs: nanosToMilliseconds(payload.prompt_eval_duration),
+        outputEvalMs: nanosToMilliseconds(payload.eval_duration),
+        outputTokensPerSecond: tokensPerSecond(payload.eval_count, payload.eval_duration),
+        doneReason: payload.done_reason,
+        contextWindow: this.contextWindow,
+        maxOutputTokens,
+      });
+
       const content = payload.message?.content?.trim();
       if (!content) {
         throw new AIProviderFailure({
@@ -239,6 +271,12 @@ export class OllamaStructuredClient {
     } catch (error) {
       if (error instanceof AIProviderFailure) throw error;
       if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        console.warn('Local Ollama inference budget exhausted:', {
+          model,
+          timeoutMs: request.timeoutMs,
+          contextWindow: this.contextWindow,
+          maxOutputTokens,
+        });
         throw new AIProviderFailure({
           provider: OLLAMA_PROVIDER,
           kind: 'REQUEST_TIMEOUT',
