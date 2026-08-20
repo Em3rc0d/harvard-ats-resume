@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { normalizeCandidatePresentationText } from '../../lib/application/presentation/InlineCandidateTextCleanup';
 import { normalizeGeneratedResumeText } from '../../lib/application/resume/ResumeTextNormalization';
-import { resolveResumeGenerationTimeoutMs } from '../../lib/infrastructure/ai/GeminiResumeProvider';
+import { resolveResumeGenerationTimeoutMs } from '../../lib/infrastructure/ai/OllamaResumeProvider';
 
 function source(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
@@ -49,17 +49,17 @@ test('generated resume normalization recovers compressed uppercase sections and 
   assert.match(output, /\nEXPERIENCE\nACME — BACKEND ENGINEER\n• Built TypeScript APIs\./);
 });
 
-test('inline optimize stays on the internal endpoint and model output crosses a deterministic truth guard', () => {
+test('inline optimize stays on the internal endpoint and local-model output crosses a deterministic truth guard', () => {
   const config = source('next.config.js');
   const form = source('components/ResumeForm.tsx');
   const route = source('app/api/optimize-content/route.ts');
   const optimizer = source('lib/application/presentation/CandidateTextOptimizer.ts');
-  const provider = source('lib/infrastructure/ai/GeminiCandidateTextOptimizer.ts');
+  const provider = source('lib/infrastructure/ai/OllamaCandidateTextOptimizer.ts');
 
   assert.match(config, /NEXT_PUBLIC_N8N_OPTIMIZE_URL:\s*['"]\/api\/optimize-content['"]/);
   assert.doesNotMatch(form, /https?:\/\/[^'"`]*n8n|webhook[^'"`]*n8n/i);
   assert.match(route, /optimizeCandidateText/);
-  assert.match(route, /GeminiCandidateTextOptimizer/);
+  assert.match(route, /OllamaCandidateTextOptimizer/);
   assert.doesNotMatch(route, /jobDescription|CareerTarget|JobRequirement|MatchReport/);
 
   assert.match(optimizer, /PRESENTATION_ONLY_FALLBACK/);
@@ -71,7 +71,8 @@ test('inline optimize stays on the internal endpoint and model output crosses a 
 
   assert.match(provider, /source text is the ONLY authority/i);
   assert.match(provider, /Never add metrics/);
-  assert.match(provider, /responseJsonSchema/);
+  assert.match(provider, /generateStructured/);
+  assert.match(provider, /schema:\s*RESPONSE_SCHEMA/);
 });
 
 test('PDF.js is server-only and certificate PDF extraction cannot mount it in the browser', () => {
