@@ -1,0 +1,56 @@
+name: ATS-AI-04 importer latency migration
+
+on:
+  push:
+    branches:
+      - agent/ats-ai-04-local-intelligence-runtime
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/ats-ai-04-local-intelligence-runtime
+
+      - name: Apply bounded import model policy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lib/infrastructure/import/NativeResumeImportProvider.ts')
+          text = path.read_text()
+          replacements = [
+              (
+                  "import { OllamaStructuredClient } from '../ai/OllamaStructuredClient';",
+                  "import { OllamaStructuredClient, resolveOllamaModel } from '../ai/OllamaStructuredClient';",
+              ),
+              (
+                  "const DEFAULT_REQUEST_TIMEOUT_MS = 90_000;\nconst MIN_REQUEST_TIMEOUT_MS = 30_000;\nconst MAX_REQUEST_TIMEOUT_MS = 180_000;",
+                  "export const DEFAULT_OLLAMA_IMPORT_MODEL = 'qwen3:4b-instruct' as const;\nexport const IMPORT_MAX_OUTPUT_TOKENS = 3_072;\nconst DEFAULT_REQUEST_TIMEOUT_MS = 180_000;\nconst MIN_REQUEST_TIMEOUT_MS = 30_000;\nconst MAX_REQUEST_TIMEOUT_MS = 300_000;",
+              ),
+              (
+                  "model: process.env.OLLAMA_IMPORT_MODEL?.trim() || client.model,",
+                  "model: resolveOllamaModel(\n        process.env.OLLAMA_IMPORT_MODEL?.trim() || DEFAULT_OLLAMA_IMPORT_MODEL,\n      ),",
+              ),
+              (
+                  "maxOutputTokens: 8_192,",
+                  "maxOutputTokens: IMPORT_MAX_OUTPUT_TOKENS,",
+              ),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'Expected importer source fragment not found: {old!r}')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+
+      - name: Commit importer latency policy
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- lib/infrastructure/import/NativeResumeImportProvider.ts
+          git commit -m "ATS-AI-04: bound local resume import inference"
+          git push origin HEAD:agent/ats-ai-04-local-intelligence-runtime
