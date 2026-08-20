@@ -13,11 +13,12 @@ import {
 } from './OllamaStructuredClient';
 
 export const OLLAMA_RESUME_PROVIDER = OLLAMA_PROVIDER;
-export const OLLAMA_RESUME_MODEL = resolveOllamaModel();
+export const DEFAULT_OLLAMA_RESUME_MODEL = 'qwen3:8b' as const;
 export const OLLAMA_RESUME_CONTRACT_VERSION = 'ats2-local-structured-resume-v1';
-const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
+export const RESUME_MAX_OUTPUT_TOKENS = 4_096;
+const DEFAULT_REQUEST_TIMEOUT_MS = 240_000;
 const MIN_REQUEST_TIMEOUT_MS = 30_000;
-const MAX_REQUEST_TIMEOUT_MS = 240_000;
+const MAX_REQUEST_TIMEOUT_MS = 360_000;
 
 export function resolveResumeGenerationTimeoutMs(
   rawValue: string | undefined = process.env.RESUME_GENERATION_TIMEOUT_MS,
@@ -111,9 +112,11 @@ export class OllamaResumeProvider implements AIResumeProvider {
       prompt: buildUserContent(data),
       schema: RESPONSE_JSON_SCHEMA,
       timeoutMs: requestTimeoutMs,
-      model: process.env.OLLAMA_RESUME_MODEL?.trim() || this.client.model,
+      model: resolveOllamaModel(
+        process.env.OLLAMA_RESUME_MODEL?.trim() || DEFAULT_OLLAMA_RESUME_MODEL,
+      ),
       temperature: 0,
-      maxOutputTokens: 8_192,
+      maxOutputTokens: RESUME_MAX_OUTPUT_TOKENS,
     });
 
     let proposal: ResumeGenerationProposal;
