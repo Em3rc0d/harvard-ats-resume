@@ -56,7 +56,9 @@ services:
     environment:
       OLLAMA_HOST: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
-      OLLAMA_IMPORT_MODEL: ${OLLAMA_IMPORT_MODEL:-qwen3:8b}
+      # Resume import v3 performs bounded section extraction; it intentionally
+      # uses a smaller model than final resume generation on CPU-only hosts.
+      OLLAMA_IMPORT_MODEL: ${OLLAMA_IMPORT_MODEL:-qwen3:1.7b}
       OLLAMA_RESUME_MODEL: ${OLLAMA_RESUME_MODEL:-qwen3:8b}
       OLLAMA_OPTIMIZE_MODEL: ${OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct}
     entrypoint: ["/bin/sh", "-c"]
@@ -89,12 +91,12 @@ services:
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
-      OLLAMA_IMPORT_MODEL: ${OLLAMA_IMPORT_MODEL:-qwen3:8b}
+      OLLAMA_IMPORT_MODEL: ${OLLAMA_IMPORT_MODEL:-qwen3:1.7b}
       OLLAMA_RESUME_MODEL: ${OLLAMA_RESUME_MODEL:-qwen3:8b}
       OLLAMA_OPTIMIZE_MODEL: ${OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct}
       OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-16384}
-      # Docker local inference has its own bounded budgets so stale host .env
-      # values from the former remote-provider runtime cannot reintroduce 90s/120s limits.
+      # Import v3 caps each bounded section request at 90 seconds internally.
+      # This value remains the outer compatibility budget used by the importer.
       RESUME_IMPORT_TIMEOUT_MS: ${DOCKER_RESUME_IMPORT_TIMEOUT_MS:-180000}
       RESUME_GENERATION_TIMEOUT_MS: ${DOCKER_RESUME_GENERATION_TIMEOUT_MS:-240000}
       RATE_LIMIT_BACKEND: redis
