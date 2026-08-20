@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - agent/ats-ai-04-local-intelligence-runtime
+    paths-ignore:
+      - evidence/ATS-AI-04-LATENCY-VERIFICATION.md
 
 concurrency:
   group: ats-ai-04-latency-verification
