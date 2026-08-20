@@ -14,6 +14,7 @@ import {
   classifyAIProviderError,
   type AIProviderFailureView,
 } from '@/lib/application/ai/AIProviderFailure';
+import { OLLAMA_PROVIDER } from '@/lib/infrastructure/ai/OllamaStructuredClient';
 import {
   getRateLimitHeaders,
   rateLimitPublicApiRequest,
@@ -23,7 +24,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MAX_RESUME_MULTIPART_REQUEST_BYTES = MAX_RESUME_FILE_BYTES + (1024 * 1024);
-const RESUME_IMPORT_AI_PROVIDER = 'google-gemini';
+const RESUME_IMPORT_AI_PROVIDER = OLLAMA_PROVIDER;
 
 type ImportFailure = {
   readonly status: number;
@@ -211,8 +212,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     const failure = classifyImportFailure(error);
-    // The server owns diagnostic logging. Browser clients receive a stable,
-    // actionable failure code instead of the implementation exception.
     console.error('Resume import boundary failure', {
       errorCode: failure.errorCode,
       stage: failure.stage,
