@@ -12,7 +12,6 @@
     "test": "tsc -p tsconfig.behavior.json && node --test .test-dist/tests/ats2/*.test.js"
   },
   "dependencies": {
-    "@google/genai": "^2.16.0",
     "@hookform/resolvers": "^3.9.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.2",
