@@ -9,6 +9,7 @@ on:
     branches:
       - main
       - develop
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -48,6 +49,12 @@ jobs:
 
       - name: Verify PDF.js server runtime bundle
         run: node scripts/verify-pdfjs-server-bundle.mjs
+
+      - name: Validate Docker Compose topology
+        run: docker compose config --quiet
+
+      - name: Build CV Engine Docker image
+        run: docker build --tag cv-engine-ci .
 
       - name: Install browser acceptance runtime
         run: |
