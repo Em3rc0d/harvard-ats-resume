@@ -118,18 +118,20 @@ test('Ollama readiness fails closed when the configured model is not installed',
   }
 });
 
-test('Docker stack owns app, local model and durable Redis dependencies', () => {
+test('Docker stack owns app, pinned local model runtime, and durable Redis dependencies', () => {
   const compose = source('docker-compose.yml');
   const dockerfile = source('Dockerfile');
   const health = source('app/api/health/route.ts');
 
-  assert.match(compose, /ollama\/ollama:latest/);
+  assert.match(compose, /ollama\/ollama:0\.32\.6/);
   assert.match(compose, /ollama pull "\$\$\{OLLAMA_MODEL\}"/);
   assert.match(compose, /OLLAMA_BASE_URL: http:\/\/ollama:11434/);
   assert.match(compose, /redis:7-alpine/);
   assert.match(compose, /hiett\/serverless-redis-http:latest/);
+  assert.match(compose, /wget --spider -q http:\/\/127\.0\.0\.1:80/);
   assert.match(compose, /UPSTASH_REDIS_REST_URL: http:\/\/redis-http:80/);
   assert.match(compose, /service_completed_successfully/);
+  assert.match(compose, /redis-http:\s*\n\s*condition: service_healthy/);
   assert.match(dockerfile, /node:24-bookworm-slim/);
   assert.match(dockerfile, /\/api\/health/);
   assert.match(health, /client\.assertReady\(\)/);
