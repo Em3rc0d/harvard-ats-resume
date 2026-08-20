@@ -1,0 +1,34 @@
+name: Fix ATS-AI-04 provider regression assertions
+
+on:
+  push:
+    branches:
+      - agent/ats-ai-04-local-intelligence-runtime
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/ats-ai-04-local-intelligence-runtime
+
+      - name: Update provider-specific source assertions
+        run: |
+          sed -i 's/new GeminiCandidateTextOptimizer()/new OllamaCandidateTextOptimizer()/g' tests/ats2/api-abuse-guards.test.ts
+          sed -i 's/const geminiResult = await generateResumeWithGemini/const localAIResult = await generateResumeWithAI/g' tests/ats2/durable-persistence-runtime.test.ts
+
+      - name: Commit migrated assertions
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- tests/ats2/api-abuse-guards.test.ts tests/ats2/durable-persistence-runtime.test.ts
+          if git diff --cached --quiet; then
+            echo "No provider assertion migration required"
+            exit 0
+          fi
+          git commit -m "ATS-AI-04: make provider-order tests local-runtime aware"
+          git push origin HEAD:agent/ats-ai-04-local-intelligence-runtime
