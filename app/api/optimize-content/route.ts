@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { optimizeCandidateText } from '@/lib/application/presentation/CandidateTextOptimizer';
-import { GeminiCandidateTextOptimizer } from '@/lib/infrastructure/ai/GeminiCandidateTextOptimizer';
+import { OllamaCandidateTextOptimizer } from '@/lib/infrastructure/ai/OllamaCandidateTextOptimizer';
 import { getRateLimitHeaders, rateLimitPublicApiRequest } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -14,9 +14,9 @@ const requestSchema = z.object({
 /**
  * Fact-preserving inline rewrite for the legacy Optimize buttons.
  *
- * The model may improve presentation, but the application layer validates that
- * the rewrite did not introduce unsupported structured facts or novel domain
- * vocabulary. Unsafe/unavailable model output falls back to deterministic
+ * The local model may improve presentation, but the application layer validates
+ * that the rewrite did not introduce unsupported structured facts or novel
+ * domain vocabulary. Unsafe/unavailable model output falls back to deterministic
  * presentation cleanup rather than silently becoming candidate truth.
  */
 export async function POST(request: NextRequest) {
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     const result = await optimizeCandidateText(
       parsed.data.summary,
-      new GeminiCandidateTextOptimizer(),
+      new OllamaCandidateTextOptimizer(),
     );
 
     return NextResponse.json(
