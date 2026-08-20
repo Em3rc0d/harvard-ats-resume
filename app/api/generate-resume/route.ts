@@ -18,8 +18,11 @@ import {
   CareerVaultIntegrityError,
   persistCareerVault,
 } from '@/lib/application/career-vault/CareerVaultService';
-import { CareerVaultUnavailableError } from '@/lib/application/career-vault/CareerVaultRepository';
-import { createCareerVaultRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashCareerVaultRepository';
+import { createCareerVaultRepository } from '@/lib/infrastructure/persistence/UpstashCareerVaultRepository';
+import {
+  createDurableRedisRuntimeFromEnv,
+  DurablePersistenceUnavailableError,
+} from '@/lib/infrastructure/persistence/DurableRedisRuntime';
 import {
   GEMINI_RESUME_CONTRACT_VERSION,
   GEMINI_RESUME_MODEL,
@@ -106,19 +109,30 @@ export async function POST(request: NextRequest) {
     const capturedAt = new Date().toISOString();
     const vaultIdentity = deriveCareerVaultIdentity(sanitizedData, careerVaultId, sourceContext);
 
-    // G12 requires durable persistence. Unlike rate limiting, Career Vault must
-    // never silently fall back to process memory because a successful response
-    // is now a durability claim.
+    // Any successful response below is a durability claim. Check the shared
+    // durable backend before performing Job Match or paying for model work.
+    // This readiness probe never replaces the later save -> reload -> integrity
+    // verification performed by persistCareerVault.
     let careerVaultRepository;
     try {
-      careerVaultRepository = createCareerVaultRepositoryFromEnv();
+      const durableRuntime = createDurableRedisRuntimeFromEnv();
+      await durableRuntime.assertReady();
+      careerVaultRepository = createCareerVaultRepository(durableRuntime.redis);
     } catch (storageError) {
-      if (storageError instanceof CareerVaultUnavailableError) {
+      if (storageError instanceof DurablePersistenceUnavailableError) {
+        console.error('Durable persistence preflight failed for resume generation:', {
+          reason: storageError.reason,
+        });
         return NextResponse.json(
           {
             success: false,
-            error: 'Career Vault storage is not configured. Resume generation is unavailable because ATS v2 cannot make a false durability claim.',
-            persistence: { status: 'UNAVAILABLE' },
+            error: 'Durable storage is temporarily unavailable. Resume generation was not started because CV Engine cannot make a false persistence claim.',
+            persistence: {
+              status: 'UNAVAILABLE',
+              stage: 'PREFLIGHT',
+              reason: storageError.reason,
+              retryable: storageError.reason === 'BACKEND_UNAVAILABLE',
+            },
           },
           {
             status: 503,
@@ -381,6 +395,7 @@ export async function POST(request: NextRequest) {
             : 'Career Vault storage could not durably commit and verify this resume version. No durability claim was emitted.',
           persistence: {
             status: integrityFailure ? 'INTEGRITY_REJECTED' : 'FAILED',
+            stage: 'COMMIT_VERIFY',
           },
         },
         {
