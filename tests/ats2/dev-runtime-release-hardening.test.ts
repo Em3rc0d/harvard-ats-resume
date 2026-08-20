@@ -21,8 +21,8 @@ test('server resume PDF import bypasses Webpack transformation through an exact 
   assert.match(nativeImporter, /import\(['"]pdfjs-dist\/legacy\/build\/pdf\.mjs['"]\)/);
 });
 
-test('generation contract preserves candidate language and deterministic record separators', () => {
-  const provider = source('lib/infrastructure/ai/GeminiResumeProvider.ts');
+test('local generation contract preserves candidate language and deterministic record separators', () => {
+  const provider = source('lib/infrastructure/ai/OllamaResumeProvider.ts');
 
   assert.match(provider, /Do not translate candidate content/i);
   assert.match(provider, /COMPANY — ROLE/);
