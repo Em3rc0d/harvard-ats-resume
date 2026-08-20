@@ -5,9 +5,10 @@ import {
   validateResumeFileSize,
 } from '@/lib/application/import/ResumeImportService';
 import {
-  NativeResumeImportProvider,
+  OllamaResumeImportV2Provider,
+  ResumeExtractionIncompleteError,
   ResumeImportTimeoutError,
-} from '@/lib/infrastructure/import/NativeResumeImportProvider';
+} from '@/lib/infrastructure/import/OllamaResumeImportV2Provider';
 import {
   aiProviderFailureHttpStatus,
   aiProviderFailureMessage,
@@ -47,6 +48,16 @@ function classifyImportFailure(error: unknown): ImportFailure {
       canRetry: providerFailure.retryable,
       error: aiProviderFailureMessage(providerFailure, 'resume import'),
       provider: providerFailure.toView(),
+    };
+  }
+
+  if (error instanceof ResumeExtractionIncompleteError) {
+    return {
+      status: 502,
+      errorCode: 'RESUME_EXTRACTION_INCOMPLETE',
+      stage: 'AI_EXTRACTION',
+      canRetry: true,
+      error: 'The local AI omitted one or more explicit resume sections, so CV Engine rejected the incomplete extraction instead of treating it as career truth. Please retry or continue with manual career evidence.',
     };
   }
 
@@ -196,7 +207,7 @@ export async function POST(request: NextRequest) {
     validateResumeFileSize(file.size);
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const provider = new NativeResumeImportProvider();
+    const provider = new OllamaResumeImportV2Provider();
     const imported = await importResumeWithProvenance(provider, {
       originalFileName: file.name,
       suppliedMimeType: file.type,
