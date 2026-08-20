@@ -4,21 +4,25 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { normalizeCandidatePresentationText } from '../../lib/application/presentation/InlineCandidateTextCleanup';
 import { normalizeGeneratedResumeText } from '../../lib/application/resume/ResumeTextNormalization';
-import { resolveResumeGenerationTimeoutMs } from '../../lib/infrastructure/ai/OllamaResumeProvider';
+import {
+  RESUME_MAX_OUTPUT_TOKENS,
+  resolveResumeGenerationTimeoutMs,
+} from '../../lib/infrastructure/ai/OllamaResumeProvider';
 
 function source(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
 }
 
-test('final resume generation uses a bounded 120 second timeout policy', () => {
-  assert.equal(resolveResumeGenerationTimeoutMs(undefined), 120_000);
+test('final resume generation uses a bounded local CPU execution budget', () => {
+  assert.equal(resolveResumeGenerationTimeoutMs(undefined), 240_000);
   assert.equal(resolveResumeGenerationTimeoutMs('180000'), 180_000);
+  assert.equal(RESUME_MAX_OUTPUT_TOKENS, 4_096);
 });
 
 test('final resume generation rejects unsafe timeout configuration', () => {
-  assert.throws(() => resolveResumeGenerationTimeoutMs('1000'), /between 30000 and 240000/);
-  assert.throws(() => resolveResumeGenerationTimeoutMs('300000'), /between 30000 and 240000/);
-  assert.throws(() => resolveResumeGenerationTimeoutMs('invalid'), /between 30000 and 240000/);
+  assert.throws(() => resolveResumeGenerationTimeoutMs('1000'), /between 30000 and 360000/);
+  assert.throws(() => resolveResumeGenerationTimeoutMs('400000'), /between 30000 and 360000/);
+  assert.throws(() => resolveResumeGenerationTimeoutMs('invalid'), /between 30000 and 360000/);
 });
 
 test('legacy presentation cleanup remains deterministic and never invents candidate facts', () => {
