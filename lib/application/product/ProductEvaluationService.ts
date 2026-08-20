@@ -1,6 +1,6 @@
 import type { ResumeRequest } from '../../schemas';
 
-export const PRODUCT_EVALUATION_VERSION = 'ats2-product-evaluation-v1' as const;
+export const PRODUCT_EVALUATION_VERSION = 'ats2-product-evaluation-v2' as const;
 
 export type ProductCheckStatus = 'PASS' | 'WARN' | 'INFO';
 
@@ -66,101 +66,125 @@ function normalize(value: string): string {
     .trim();
 }
 
-const ACTION_VERBS = [
-  'built', 'developed', 'implemented', 'designed', 'architected', 'created', 'delivered',
-  'led', 'managed', 'improved', 'reduced', 'increased', 'automated', 'maintained', 'supported',
-  'construi', 'desarrolle', 'implemente', 'disene', 'arquitecte', 'cree', 'entregue', 'lidere',
-  'gestione', 'mejore', 'reduje', 'aumente', 'automatice', 'mantuv', 'apoye',
-];
-
-function beginsWithActionVerb(value: string): boolean {
-  const firstToken = normalize(value).split(/[^a-z0-9]+/)[0] ?? '';
-  return ACTION_VERBS.some((verb) => firstToken.startsWith(verb));
+function words(value: string): string[] {
+  return value
+    .normalize('NFKC')
+    .split(/[^\p{L}\p{N}+#./-]+/u)
+    .map((token) => token.trim())
+    .filter(Boolean);
 }
 
-function evaluateResumeQuality(data: ResumeRequest, formattedResume: string): ProductMetricEvaluation {
-  const experienceDescriptions = data.experience.map((item) => item.description.trim()).filter(Boolean);
-  const actionCount = experienceDescriptions.filter(beginsWithActionVerb).length;
-  const actionRatio = experienceDescriptions.length === 0 ? 0 : actionCount / experienceDescriptions.length;
+function semanticUnits(value: string): string[] {
+  return value
+    .replace(/\r\n/g, '\n')
+    .split(/\n+|[.!?]+\s+/u)
+    .map((unit) => unit.replace(/^[•*\-–—]\s*/, '').trim())
+    .filter(Boolean);
+}
+
+function candidateSemanticUnits(data: ResumeRequest): string[] {
+  return [
+    ...semanticUnits(data.summary),
+    ...data.experience.flatMap((item) => semanticUnits(item.description)),
+    ...(data.projects ?? []).flatMap((item) => semanticUnits(item.description)),
+  ];
+}
+
+function hasSubstantiveEvidence(data: ResumeRequest): boolean {
+  const descriptions = [
+    ...data.experience.map((item) => item.description),
+    ...(data.projects ?? []).map((item) => item.description),
+  ].filter((value) => value.trim().length > 0);
+
+  if (descriptions.length === 0) return false;
+  return descriptions.some((description) => words(description).length >= 6);
+}
+
+function evaluateResumeQuality(data: ResumeRequest): ProductMetricEvaluation {
   const allSkills = [...data.skills.hardSkills, ...data.skills.softSkills]
     .map(normalize)
     .filter(Boolean);
   const uniqueSkills = new Set(allSkills);
-  const materialLines = formattedResume
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const overlongLines = materialLines.filter((line) => line.length > 180).length;
+  const units = candidateSemanticUnits(data);
+  const denseUnits = units.filter((unit) => words(unit).length > 60);
+  const summaryWords = words(data.summary).length;
+  const hasSummary = summaryWords >= 8 && summaryWords <= 180;
+  const representedDomains = [
+    data.experience.length > 0,
+    (data.projects?.length ?? 0) > 0,
+    data.education.length > 0,
+    (data.certifications?.length ?? 0) > 0,
+    (data.languages?.length ?? 0) > 0,
+  ].filter(Boolean).length;
 
   const checks: ProductEvaluationCheck[] = [
     weightedCheck({
       id: 'quality-summary',
       label: 'Professional summary',
-      passed: data.summary.trim().length >= 40 && data.summary.trim().length <= 700,
-      detailPass: 'Summary is present and concise enough for a resume overview.',
-      detailWarn: 'Summary is unusually short or long; review clarity before submitting.',
+      passed: hasSummary,
+      detailPass: 'The summary contains enough grounded context to orient a reviewer without becoming a long-form biography.',
+      detailWarn: data.summary.trim()
+        ? 'The summary is unusually brief or long. Review it for concise, evidence-backed positioning.'
+        : 'No professional summary is present. Add one only from facts already represented in Career Evidence.',
       weight: 15,
     }),
     weightedCheck({
-      id: 'quality-experience-detail',
-      label: 'Experience detail',
-      passed: experienceDescriptions.every((description) => description.length >= 30),
-      detailPass: 'Each experience entry contains substantive responsibility or achievement detail.',
-      detailWarn: 'At least one experience entry is too thin to communicate meaningful responsibility.',
-      weight: 20,
-    }),
-    weightedCheck({
-      id: 'quality-action-language',
-      label: 'Action-oriented experience language',
-      passed: actionRatio >= 0.5,
-      detailPass: 'Most experience descriptions begin with concrete action-oriented language.',
-      detailWarn: 'Several experience descriptions could be clearer if they begin with the work actually performed.',
-      weight: 20,
+      id: 'quality-substantive-evidence',
+      label: 'Substantive evidence statements',
+      passed: hasSubstantiveEvidence(data),
+      detailPass: 'At least one experience or project statement communicates substantive work rather than only a title or technology list.',
+      detailWarn: 'Experience and project evidence is too thin to communicate what work was actually performed.',
+      weight: 30,
     }),
     weightedCheck({
       id: 'quality-skills',
       label: 'Focused skills inventory',
       passed: data.skills.hardSkills.length >= 2 && uniqueSkills.size === allSkills.length,
       detailPass: 'Technical skills are explicit and do not contain normalized duplicates.',
-      detailWarn: 'Add at least two real technical skills and remove duplicate skill labels if present.',
+      detailWarn: 'Add at least two real technical skills and remove normalized duplicate labels if present.',
       weight: 15,
     }),
     weightedCheck({
-      id: 'quality-education',
-      label: 'Education context',
-      passed: data.education.length > 0,
-      detailPass: 'Education context is represented.',
-      detailWarn: 'No education entry is present in the current candidate data.',
-      weight: 10,
+      id: 'quality-evidence-coverage',
+      label: 'Career evidence coverage',
+      passed: representedDomains >= 2,
+      detailPass: 'The resume is supported by more than one career-evidence domain such as experience, projects, education, certifications, or languages.',
+      detailWarn: 'The current resume has a narrow evidence surface. Add another career-evidence domain only when it is true and relevant.',
+      weight: 15,
     }),
     weightedCheck({
-      id: 'quality-readable-lines',
-      label: 'Readable statement length',
-      passed: overlongLines === 0,
-      detailPass: 'Rendered resume lines avoid unusually dense long-form statements.',
-      detailWarn: `${overlongLines} rendered line(s) exceed 180 characters and may be difficult to scan.`,
-      weight: 20,
+      id: 'quality-semantic-density',
+      label: 'Scannable semantic units',
+      passed: denseUnits.length === 0,
+      detailPass: 'Summary, experience, and project statements are broken into reasonably scannable semantic units.',
+      detailWarn: `${denseUnits.length} statement(s) exceed 60 words. Review the statement boundaries rather than relying on visual line wrapping.`,
+      weight: 25,
     }),
+    infoCheck(
+      'quality-action-language-boundary',
+      'Language-neutral evaluation',
+      'CV Engine does not score a resume by matching the first word of a sentence against a hardcoded language-specific action-verb list.',
+    ),
     infoCheck(
       'quality-metrics-truth-boundary',
       'Verified outcomes only',
-      'Numeric achievements are not required for a good score. Add metrics only when they are true and supportable; ATS v2 never recommends inventing them.',
+      'Numeric achievements are not required for a good score. Add metrics only when they are true and supportable; CV Engine never recommends inventing them.',
     ),
   ];
 
   return {
     score: score(checks),
     version: PRODUCT_EVALUATION_VERSION,
-    scope: 'Deterministic resume-content quality checks. This is not a recruiter acceptance probability.',
+    scope: 'Deterministic resume-content quality checks over semantic evidence units. This is not a recruiter acceptance probability.',
     checks,
   };
 }
 
 const STANDARD_HEADING_GROUPS: readonly (readonly string[])[] = [
-  ['professional summary', 'summary', 'resumen profesional', 'resumen'],
-  ['experience', 'work experience', 'experiencia', 'experiencia laboral'],
-  ['education', 'educacion', 'formacion'],
-  ['skills', 'technical skills', 'habilidades', 'habilidades tecnicas'],
+  ['professional summary', 'summary', 'resumen profesional', 'resumen', 'profil professionnel', 'profil', 'resumo profissional', 'resumo'],
+  ['experience', 'work experience', 'experiencia', 'experiencia laboral', 'experience professionnelle', 'experiencia profissional'],
+  ['education', 'educacion', 'formacion', 'formation', 'educacao', 'formacao'],
+  ['skills', 'technical skills', 'habilidades', 'habilidades tecnicas', 'competences', 'competences techniques'],
 ];
 
 function hasHeading(lines: readonly string[], aliases: readonly string[]): boolean {
@@ -168,13 +192,21 @@ function hasHeading(lines: readonly string[], aliases: readonly string[]): boole
   return aliases.some((alias) => normalizedLines.includes(normalize(alias)));
 }
 
+function hasAmbiguousClaimSerialization(formattedResume: string): boolean {
+  if (formattedResume.includes('\\n')) return true;
+
+  return formattedResume
+    .split(/\r?\n/)
+    .some((line) => (line.match(/[•]/g) ?? []).length > 1);
+}
+
 function evaluateAtsParseability(data: ResumeRequest, formattedResume: string): ProductMetricEvaluation {
   const lines = formattedResume.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const unusualTableSyntax = /\t|[┌┐└┘├┤┬┴┼]|\|.*\|/.test(formattedResume);
-  const veryLongLines = lines.filter((line) => line.length > 200).length;
   const headingMatches = STANDARD_HEADING_GROUPS.filter((group) => hasHeading(lines, group)).length;
   const emailVisible = normalize(formattedResume).includes(normalize(data.personalInfo.email));
   const identityVisible = normalize(formattedResume).includes(normalize(data.personalInfo.fullName));
+  const ambiguousSerialization = hasAmbiguousClaimSerialization(formattedResume);
 
   const checks: ProductEvaluationCheck[] = [
     weightedCheck({
@@ -210,13 +242,18 @@ function evaluateAtsParseability(data: ResumeRequest, formattedResume: string): 
       weight: 20,
     }),
     weightedCheck({
-      id: 'parse-line-density',
-      label: 'Line density',
-      passed: veryLongLines === 0,
-      detailPass: 'No extremely long rendered lines were detected.',
-      detailWarn: `${veryLongLines} line(s) exceed 200 characters and may reduce structural readability.`,
+      id: 'parse-claim-separation',
+      label: 'Claim separation',
+      passed: !ambiguousSerialization,
+      detailPass: 'Material claims use actual section/claim boundaries rather than escaped newlines or multiple bullets compressed into one serialized line.',
+      detailWarn: 'Some material claims are serialized ambiguously. Use real line/claim boundaries instead of escaped newlines or compressed bullets.',
       weight: 10,
     }),
+    infoCheck(
+      'parse-wrap-boundary',
+      'Visual wrapping boundary',
+      'CV Engine does not penalize a paragraph merely because its plain-text serialization is long; visual wrapping and semantic structure are different concerns.',
+    ),
     infoCheck(
       'parse-scope-boundary',
       'Scope boundary',
@@ -227,14 +264,14 @@ function evaluateAtsParseability(data: ResumeRequest, formattedResume: string): 
   return {
     score: score(checks),
     version: PRODUCT_EVALUATION_VERSION,
-    scope: 'Deterministic structural parseability checks over the generated plain-text resume.',
+    scope: 'Deterministic structural parseability checks over headings, identity, linear flow, and claim serialization.',
     checks,
   };
 }
 
 export function evaluateProductResume(data: ResumeRequest, formattedResume: string): ProductEvaluation {
   return {
-    resumeQuality: evaluateResumeQuality(data, formattedResume),
+    resumeQuality: evaluateResumeQuality(data),
     atsParseability: evaluateAtsParseability(data, formattedResume),
   };
 }
