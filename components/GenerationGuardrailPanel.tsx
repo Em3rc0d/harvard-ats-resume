@@ -19,7 +19,12 @@ export interface GenerationFailurePayload {
     readonly status?: string;
     readonly issues?: readonly { readonly generatedClaim?: string }[];
   };
-  readonly persistence?: { readonly status?: string };
+  readonly persistence?: {
+    readonly status?: string;
+    readonly stage?: string;
+    readonly reason?: string;
+    readonly retryable?: boolean;
+  };
   readonly composition?: { readonly status?: string };
 }
 
@@ -30,81 +35,109 @@ interface GenerationGuardrailPanelProps {
 
 const COPY = {
   en: {
-    eyebrow: 'Truth guardrail',
+    truthEyebrow: 'Truth guardrail',
+    traceabilityEyebrow: 'Traceability guardrail',
+    durabilityEyebrow: 'Durability guardrail',
+    pipelineEyebrow: 'Trusted pipeline',
     groundingTitle: 'Some draft facts still need your evidence.',
     groundingBody: 'They may be true, but they are not yet represented in your current Career Evidence. We paused instead of assuming. Nothing was published as a trusted resume version.',
     semanticTitle: 'We paused because the wording may overstate your evidence.',
     semanticBody: 'The draft became stronger than the responsibility or scope currently documented in your career evidence.',
     compositionTitle: 'We could not build a fully traceable resume version.',
     compositionBody: 'The wording passed the truth checks, but the system could not safely bind every material resume claim to its supporting career assertions. No ResumeVersion was emitted and no storage attempt is implied.',
+    persistencePreflightTitle: 'Durable storage is unavailable right now.',
+    persistencePreflightBody: 'CV Engine stopped before generation or durable decision work because the shared persistence backend was not ready. No model output or target state is being presented as saved.',
     persistenceTitle: 'We could not safely save this version.',
-    persistenceBody: 'The resume was not presented as durably saved because Career Vault could not complete its integrity or storage contract.',
+    persistenceBody: 'The operation reached its durable commit boundary but the storage or integrity contract could not be completed. Nothing is presented as durably saved.',
     genericTitle: 'Generation stopped safely.',
     genericBody: 'The trusted pipeline stopped instead of returning a result that failed one of its contracts.',
     proposed: 'Needs evidence',
     action: 'Review / add career evidence',
-    note: 'If an item is true, add or confirm it in the matching Career Evidence field. That makes it candidate-asserted evidence; it does not make it externally verified. If it is false or uncertain, leave it out.',
+    evidenceNote: 'If an item is true, add or confirm it in the matching Career Evidence field. That makes it candidate-asserted evidence; it does not make it externally verified. If it is false or uncertain, leave it out.',
     compositionNote: 'Your career evidence was not changed. This is a claim-traceability/materialization failure, not a Career Vault storage failure.',
+    persistenceNote: 'Your Career Evidence is not the problem here. Retry only after durable storage is available; changing career facts cannot repair an infrastructure failure.',
+    genericNote: 'No trusted state was emitted from the failed pipeline stage.',
     more: 'Show every item',
     technical: 'Technical detail',
     count: (visible: number, total: number) => `${visible} of ${total} items shown`,
   },
   es: {
-    eyebrow: 'Guardrail de verdad',
+    truthEyebrow: 'Guardrail de verdad',
+    traceabilityEyebrow: 'Guardrail de trazabilidad',
+    durabilityEyebrow: 'Guardrail de durabilidad',
+    pipelineEyebrow: 'Pipeline confiable',
     groundingTitle: 'Algunos hechos del borrador aún necesitan tu evidencia.',
     groundingBody: 'Pueden ser verdaderos, pero todavía no están representados en tu Evidencia Profesional actual. Pausamos en lugar de asumir. No se publicó ninguna versión confiable del CV.',
     semanticTitle: 'Pausamos porque la redacción podría exagerar tu evidencia.',
     semanticBody: 'El borrador se volvió más fuerte que la responsabilidad o el alcance documentados actualmente en tu evidencia profesional.',
     compositionTitle: 'No pudimos construir una versión del CV completamente trazable.',
     compositionBody: 'La redacción pasó los controles de verdad, pero el sistema no pudo vincular de forma segura cada claim material del CV con las afirmaciones profesionales que lo respaldan. No se emitió ninguna ResumeVersion y esto no implica un intento fallido de almacenamiento.',
+    persistencePreflightTitle: 'El almacenamiento durable no está disponible en este momento.',
+    persistencePreflightBody: 'CV Engine se detuvo antes de generar o crear decisiones durables porque el backend compartido de persistencia no estaba listo. Ninguna salida del modelo ni estado de target se presenta como guardado.',
     persistenceTitle: 'No pudimos guardar esta versión de forma segura.',
-    persistenceBody: 'El CV no se presentó como guardado porque Career Vault no pudo completar su contrato de integridad o almacenamiento.',
+    persistenceBody: 'La operación llegó a su frontera de commit durable, pero no pudo completar el contrato de almacenamiento o integridad. Nada se presenta como guardado de forma durable.',
     genericTitle: 'La generación se detuvo de forma segura.',
     genericBody: 'El pipeline confiable se detuvo en lugar de devolver un resultado que incumplía uno de sus contratos.',
     proposed: 'Necesita evidencia',
     action: 'Revisar / agregar evidencia profesional',
-    note: 'Si un elemento es verdadero, agrégalo o confírmalo en el campo correspondiente de Evidencia Profesional. Eso lo convierte en evidencia declarada por el candidato; no en un hecho verificado externamente. Si es falso o incierto, déjalo fuera.',
+    evidenceNote: 'Si un elemento es verdadero, agrégalo o confírmalo en el campo correspondiente de Evidencia Profesional. Eso lo convierte en evidencia declarada por el candidato; no en un hecho verificado externamente. Si es falso o incierto, déjalo fuera.',
     compositionNote: 'Tu evidencia profesional no fue modificada. Este es un fallo de trazabilidad/materialización de claims, no un fallo de almacenamiento de Career Vault.',
+    persistenceNote: 'Tu Evidencia Profesional no es el problema. Reintenta sólo cuando el almacenamiento durable esté disponible; cambiar hechos profesionales no puede reparar una falla de infraestructura.',
+    genericNote: 'No se emitió estado confiable desde la etapa del pipeline que falló.',
     more: 'Ver todos los elementos',
     technical: 'Detalle técnico',
     count: (visible: number, total: number) => `Mostrando ${visible} de ${total} elementos`,
   },
   fr: {
-    eyebrow: 'Garde-fou de vérité',
+    truthEyebrow: 'Garde-fou de vérité',
+    traceabilityEyebrow: 'Garde-fou de traçabilité',
+    durabilityEyebrow: 'Garde-fou de durabilité',
+    pipelineEyebrow: 'Pipeline fiable',
     groundingTitle: 'Certains faits du brouillon nécessitent encore vos preuves.',
     groundingBody: "Ils peuvent être vrais, mais ne sont pas encore représentés dans vos preuves de carrière actuelles. Nous avons interrompu plutôt que de supposer. Aucune version fiable du CV n'a été publiée.",
     semanticTitle: 'Nous avons interrompu car la formulation peut exagérer vos preuves.',
     semanticBody: 'Le brouillon dépasse la responsabilité ou la portée actuellement documentée.',
     compositionTitle: "Nous n'avons pas pu construire une version du CV entièrement traçable.",
     compositionBody: "La formulation a passé les contrôles de vérité, mais le système n'a pas pu relier en toute sécurité chaque claim matériel aux assertions de carrière qui le soutiennent. Aucune ResumeVersion n'a été émise et cela n'indique pas un échec de stockage.",
+    persistencePreflightTitle: 'Le stockage durable est indisponible pour le moment.',
+    persistencePreflightBody: "CV Engine s'est arrêté avant la génération ou les décisions durables car le backend de persistance partagé n'était pas prêt. Aucun résultat de modèle ni état de cible n'est présenté comme enregistré.",
     persistenceTitle: "Cette version n'a pas pu être enregistrée en toute sécurité.",
-    persistenceBody: "Le CV n'est pas présenté comme sauvegardé car Career Vault n'a pas pu satisfaire son contrat d'intégrité ou de stockage.",
+    persistenceBody: "L'opération a atteint sa frontière de commit durable, mais le contrat de stockage ou d'intégrité n'a pas pu être terminé. Rien n'est présenté comme enregistré durablement.",
     genericTitle: 'La génération a été arrêtée en toute sécurité.',
     genericBody: "Le pipeline fiable s'est arrêté plutôt que de retourner un résultat invalide.",
     proposed: 'Preuve nécessaire',
     action: 'Vérifier / ajouter des preuves',
-    note: "Si un élément est vrai, ajoutez-le ou confirmez-le dans le champ de preuve correspondant. Il devient alors une preuve déclarée par le candidat, et non un fait vérifié par une source externe. S'il est faux ou incertain, laissez-le de côté.",
+    evidenceNote: "Si un élément est vrai, ajoutez-le ou confirmez-le dans le champ de preuve correspondant. Il devient alors une preuve déclarée par le candidat, et non un fait vérifié par une source externe. S'il est faux ou incertain, laissez-le de côté.",
     compositionNote: "Vos preuves de carrière n'ont pas été modifiées. Il s'agit d'un échec de traçabilité/matérialisation, pas d'un échec de stockage Career Vault.",
+    persistenceNote: "Vos preuves de carrière ne sont pas en cause. Réessayez seulement lorsque le stockage durable est disponible; modifier vos faits de carrière ne peut pas réparer une panne d'infrastructure.",
+    genericNote: "Aucun état fiable n'a été émis depuis l'étape du pipeline en échec.",
     more: 'Voir tous les éléments',
     technical: 'Détail technique',
     count: (visible: number, total: number) => `${visible} éléments affichés sur ${total}`,
   },
   pt: {
-    eyebrow: 'Guardrail de verdade',
+    truthEyebrow: 'Guardrail de verdade',
+    traceabilityEyebrow: 'Guardrail de rastreabilidade',
+    durabilityEyebrow: 'Guardrail de durabilidade',
+    pipelineEyebrow: 'Pipeline confiável',
     groundingTitle: 'Alguns fatos do rascunho ainda precisam da sua evidência.',
     groundingBody: 'Eles podem ser verdadeiros, mas ainda não estão representados na sua Evidência Profissional atual. Pausamos em vez de assumir. Nenhuma versão confiável do currículo foi publicada.',
     semanticTitle: 'Pausamos porque a redação pode exagerar sua evidência.',
     semanticBody: 'O rascunho ficou mais forte que a responsabilidade ou o escopo atualmente documentados.',
     compositionTitle: 'Não foi possível construir uma versão do currículo totalmente rastreável.',
     compositionBody: 'A redação passou pelos controles de verdade, mas o sistema não conseguiu vincular com segurança cada claim material às afirmações profissionais que o sustentam. Nenhuma ResumeVersion foi emitida e isso não indica uma falha de armazenamento.',
+    persistencePreflightTitle: 'O armazenamento durável está indisponível no momento.',
+    persistencePreflightBody: 'O CV Engine parou antes da geração ou de decisões duráveis porque o backend compartilhado de persistência não estava pronto. Nenhuma saída do modelo nem estado de target é apresentado como salvo.',
     persistenceTitle: 'Não foi possível salvar esta versão com segurança.',
-    persistenceBody: 'O currículo não foi apresentado como salvo porque o Career Vault não concluiu seu contrato de integridade ou armazenamento.',
+    persistenceBody: 'A operação chegou à fronteira de commit durável, mas o contrato de armazenamento ou integridade não pôde ser concluído. Nada é apresentado como salvo de forma durável.',
     genericTitle: 'A geração parou com segurança.',
     genericBody: 'O pipeline confiável parou em vez de retornar um resultado que violava seus contratos.',
     proposed: 'Precisa de evidência',
     action: 'Revisar / adicionar evidência profissional',
-    note: 'Se um item for verdadeiro, adicione-o ou confirme-o no campo correspondente de Evidência Profissional. Isso o torna evidência declarada pelo candidato; não um fato verificado externamente. Se for falso ou incerto, deixe-o de fora.',
+    evidenceNote: 'Se um item for verdadeiro, adicione-o ou confirme-o no campo correspondente de Evidência Profissional. Isso o torna evidência declarada pelo candidato; não um fato verificado externamente. Se for falso ou incerto, deixe-o de fora.',
     compositionNote: 'Sua evidência profissional não foi alterada. Esta é uma falha de rastreabilidade/materialização de claims, não uma falha de armazenamento do Career Vault.',
+    persistenceNote: 'Sua Evidência Profissional não é o problema aqui. Tente novamente apenas quando o armazenamento durável estiver disponível; alterar fatos profissionais não pode reparar uma falha de infraestrutura.',
+    genericNote: 'Nenhum estado confiável foi emitido pela etapa do pipeline que falhou.',
     more: 'Ver todos os itens',
     technical: 'Detalhe técnico',
     count: (visible: number, total: number) => `Mostrando ${visible} de ${total} itens`,
@@ -125,10 +158,40 @@ export default function GenerationGuardrailPanel({ failure, onEditDetails }: Rea
   const isSemantic = Boolean(failure.semanticGrounding);
   const isComposition = Boolean(failure.composition);
   const isPersistence = Boolean(failure.persistence);
+  const isPreflight = failure.persistence?.stage === 'PREFLIGHT';
 
-  const title = isGrounding ? copy.groundingTitle : isSemantic ? copy.semanticTitle : isComposition ? copy.compositionTitle : isPersistence ? copy.persistenceTitle : copy.genericTitle;
-  const body = isGrounding ? copy.groundingBody : isSemantic ? copy.semanticBody : isComposition ? copy.compositionBody : isPersistence ? copy.persistenceBody : copy.genericBody;
-  const note = isComposition ? copy.compositionNote : copy.note;
+  const eyebrow = isGrounding || isSemantic
+    ? copy.truthEyebrow
+    : isComposition
+      ? copy.traceabilityEyebrow
+      : isPersistence
+        ? copy.durabilityEyebrow
+        : copy.pipelineEyebrow;
+  const title = isGrounding
+    ? copy.groundingTitle
+    : isSemantic
+      ? copy.semanticTitle
+      : isComposition
+        ? copy.compositionTitle
+        : isPersistence
+          ? (isPreflight ? copy.persistencePreflightTitle : copy.persistenceTitle)
+          : copy.genericTitle;
+  const body = isGrounding
+    ? copy.groundingBody
+    : isSemantic
+      ? copy.semanticBody
+      : isComposition
+        ? copy.compositionBody
+        : isPersistence
+          ? (isPreflight ? copy.persistencePreflightBody : copy.persistenceBody)
+          : copy.genericBody;
+  const note = isGrounding || isSemantic
+    ? copy.evidenceNote
+    : isComposition
+      ? copy.compositionNote
+      : isPersistence
+        ? copy.persistenceNote
+        : copy.genericNote;
 
   return (
     <section className="overflow-hidden rounded-[28px] border border-amber-200/80 bg-white shadow-[0_24px_70px_rgba(120,53,15,0.10)]" role="alert">
@@ -137,7 +200,7 @@ export default function GenerationGuardrailPanel({ failure, onEditDetails }: Rea
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-950 text-amber-50 shadow-lg shadow-amber-950/15"><ShieldCheck className="h-5 w-5" /></div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">{copy.eyebrow}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">{eyebrow}</p>
             <h3 className="mt-2 font-serif text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{title}</h3>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">{body}</p>
           </div>
