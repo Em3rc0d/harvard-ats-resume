@@ -163,6 +163,15 @@ test('provider auth, timeout, outage and invalid responses use one failure contr
   assert.equal(timeout.toView().contractVersion, 'ats2-ai-provider-failure-v1');
 });
 
+test('native resume import uses the bounded low-latency Gemini extraction profile', () => {
+  const importer = readFileSync(join(process.cwd(), 'lib/infrastructure/import/NativeResumeImportProvider.ts'), 'utf8');
+
+  assert.match(importer, /GEMINI_IMPORT_MODEL = 'gemini-2\.5-flash-lite'/);
+  assert.match(importer, /thinkingConfig:\s*\{\s*thinkingBudget:\s*0\s*\}/);
+  assert.match(importer, /reconcileCandidateToSource\(candidate, document\)/);
+  assert.match(importer, /abortSignal:\s*controller\.signal/);
+});
+
 test('trusted advice owns the visible suggestion channel and Gemini no longer emits suggestions', () => {
   const route = readFileSync(join(process.cwd(), 'app/api/generate-resume/route.ts'), 'utf8');
   const provider = readFileSync(join(process.cwd(), 'lib/infrastructure/ai/GeminiResumeProvider.ts'), 'utf8');
