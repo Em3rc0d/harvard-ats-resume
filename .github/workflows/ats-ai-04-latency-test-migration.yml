@@ -1,0 +1,52 @@
+name: ATS-AI-04 latency regression migration
+
+on:
+  push:
+    branches:
+      - agent/ats-ai-04-local-intelligence-runtime
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/ats-ai-04-local-intelligence-runtime
+
+      - name: Update native importer execution-budget regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/ats2/native-resume-import.test.ts')
+          text = path.read_text()
+          replacements = [
+              (
+                  "  deriveCandidateEvidence,\n  extractResumeText,",
+                  "  DEFAULT_OLLAMA_IMPORT_MODEL,\n  IMPORT_MAX_OUTPUT_TOKENS,\n  deriveCandidateEvidence,\n  extractResumeText,",
+              ),
+              (
+                  "test('native resume import timeout defaults to 90 seconds and supports bounded override', () => {\n  assert.equal(resolveResumeImportTimeoutMs(undefined), 90_000);\n  assert.equal(resolveResumeImportTimeoutMs('120000'), 120_000);\n});",
+                  "test('native resume import uses a bounded local extraction budget', () => {\n  assert.equal(DEFAULT_OLLAMA_IMPORT_MODEL, 'qwen3:4b-instruct');\n  assert.equal(IMPORT_MAX_OUTPUT_TOKENS, 3_072);\n  assert.equal(resolveResumeImportTimeoutMs(undefined), 180_000);\n  assert.equal(resolveResumeImportTimeoutMs('240000'), 240_000);\n});",
+              ),
+              (
+                  "assert.throws(() => resolveResumeImportTimeoutMs('1000'), /between 30000 and 180000/);\n  assert.throws(() => resolveResumeImportTimeoutMs('not-a-number'), /between 30000 and 180000/);",
+                  "assert.throws(() => resolveResumeImportTimeoutMs('1000'), /between 30000 and 300000/);\n  assert.throws(() => resolveResumeImportTimeoutMs('not-a-number'), /between 30000 and 300000/);\n  assert.throws(() => resolveResumeImportTimeoutMs('400000'), /between 30000 and 300000/);",
+              ),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'Expected native-import test fragment not found: {old!r}')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+
+      - name: Commit migrated regression
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- tests/ats2/native-resume-import.test.ts
+          git commit -m "ATS-AI-04: cover bounded local import latency policy"
+          git push origin HEAD:agent/ats-ai-04-local-intelligence-runtime
