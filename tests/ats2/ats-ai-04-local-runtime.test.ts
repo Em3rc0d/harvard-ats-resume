@@ -13,12 +13,13 @@ import {
   resolveOllamaModel,
 } from '../../lib/infrastructure/ai/OllamaStructuredClient';
 import {
-  DEFAULT_OLLAMA_IMPORT_V2_MODEL,
-  IMPORT_V2_MAX_OUTPUT_TOKENS,
+  DEFAULT_OLLAMA_IMPORT_V3_MODEL,
+  IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS,
   ResumeExtractionIncompleteError,
   assertResumeExtractionCompleteness,
   detectResumeSectionSignals,
-} from '../../lib/infrastructure/import/OllamaResumeImportV2Provider';
+  splitResumeIntoSections,
+} from '../../lib/infrastructure/import/OllamaResumeImportV3Provider';
 import {
   DEFAULT_OLLAMA_RESUME_MODEL,
   RESUME_MAX_OUTPUT_TOKENS,
@@ -37,7 +38,7 @@ test('CV Engine source runtime no longer depends on the removed remote model SDK
   const env = source('.env.example');
   const generation = source('app/api/generate-resume/route.ts');
   const importerRoute = source('app/api/import-resume/route.ts');
-  const importer = source('lib/infrastructure/import/OllamaResumeImportV2Provider.ts');
+  const importer = source('lib/infrastructure/import/OllamaResumeImportV3Provider.ts');
   const optimizer = source('app/api/optimize-content/route.ts');
 
   assert.equal(packageJson.dependencies?.['@google/genai'], undefined);
@@ -47,7 +48,7 @@ test('CV Engine source runtime no longer depends on the removed remote model SDK
   assert.doesNotMatch(env, /GEMINI_API_KEY/);
   assert.match(generation, /generateResumeWithAI/);
   assert.match(generation, /OLLAMA_RESUME_PROVIDER/);
-  assert.match(importerRoute, /OllamaResumeImportV2Provider/);
+  assert.match(importerRoute, /OllamaResumeImportV3Provider/);
   assert.match(importer, /OllamaStructuredClient/);
   assert.match(importer, /reconcileCandidateToSource/);
   assert.match(optimizer, /OllamaCandidateTextOptimizer/);
@@ -56,10 +57,10 @@ test('CV Engine source runtime no longer depends on the removed remote model SDK
 test('local runtime defaults to bounded workload-specific Qwen3 contracts', () => {
   assert.equal(OLLAMA_PROVIDER, 'ollama-local');
   assert.equal(DEFAULT_OLLAMA_MODEL, 'qwen3:8b');
-  assert.equal(DEFAULT_OLLAMA_IMPORT_V2_MODEL, 'qwen3:8b');
+  assert.equal(DEFAULT_OLLAMA_IMPORT_V3_MODEL, 'qwen3:1.7b');
   assert.equal(DEFAULT_OLLAMA_RESUME_MODEL, 'qwen3:8b');
   assert.equal(DEFAULT_OLLAMA_OPTIMIZE_MODEL, 'qwen3:4b-instruct');
-  assert.equal(IMPORT_V2_MAX_OUTPUT_TOKENS, 6_144);
+  assert.equal(IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS, 1_024);
   assert.equal(RESUME_MAX_OUTPUT_TOKENS, 4_096);
   assert.equal(INLINE_OPTIMIZER_MAX_OUTPUT_TOKENS, 768);
   assert.equal(resolveOllamaModel(undefined), 'qwen3:8b');
@@ -68,6 +69,43 @@ test('local runtime defaults to bounded workload-specific Qwen3 contracts', () =
   assert.equal(resolveOllamaContextWindow('32768'), 32_768);
   assert.throws(() => resolveOllamaContextWindow('1024'), /between 4096 and 65536/);
   assert.throws(() => resolveOllamaBaseUrl('file:///tmp/ollama'), /http or https/);
+});
+
+test('sectioned resume import isolates preamble and explicit career sections', () => {
+  const document = {
+    format: 'DOCX' as const,
+    text: [
+      'Candidate Name',
+      'candidate@example.com',
+      'Lima, Peru',
+      'PROFESSIONAL SUMMARY',
+      'Source-backed summary.',
+      'EXPERIENCE',
+      'Source Company',
+      'EDUCATION',
+      'Source University',
+      'TECHNICAL SKILLS',
+      'TypeScript',
+      'PROJECTS',
+      'Source Project',
+      'CERTIFICATIONS',
+      'Source Certificate',
+      'LANGUAGES',
+      'Spanish',
+    ].join('\n'),
+    pages: [{ text: 'fixture' }],
+  };
+
+  const sectioned = splitResumeIntoSections(document);
+  assert.match(sectioned.preamble, /Candidate Name/);
+  assert.match(sectioned.preamble, /candidate@example\.com/);
+  assert.match(sectioned.sections.get('summary') ?? '', /Source-backed summary/);
+  assert.match(sectioned.sections.get('experience') ?? '', /Source Company/);
+  assert.match(sectioned.sections.get('education') ?? '', /Source University/);
+  assert.match(sectioned.sections.get('skills') ?? '', /TypeScript/);
+  assert.match(sectioned.sections.get('projects') ?? '', /Source Project/);
+  assert.match(sectioned.sections.get('certifications') ?? '', /Source Certificate/);
+  assert.match(sectioned.sections.get('languages') ?? '', /Spanish/);
 });
 
 test('Ollama resume import refuses silent omission of explicit DOCX sections', () => {
@@ -189,7 +227,7 @@ test('Ollama structured generation sends schema-constrained non-thinking determi
 test('Ollama readiness fails closed when the configured model is not installed', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(JSON.stringify({
-    models: [{ name: 'qwen3:4b-instruct' }],
+    models: [{ name: 'qwen3:1.7b' }],
   }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch;
 
   try {
@@ -215,7 +253,7 @@ test('Docker stack owns app, workload models and durable Redis dependencies', ()
   const health = source('app/api/health/route.ts');
 
   assert.match(compose, /ollama\/ollama:0\.32\.6/);
-  assert.match(compose, /OLLAMA_IMPORT_MODEL: \$\{OLLAMA_IMPORT_MODEL:-qwen3:8b\}/);
+  assert.match(compose, /OLLAMA_IMPORT_MODEL: \$\{OLLAMA_IMPORT_MODEL:-qwen3:1\.7b\}/);
   assert.match(compose, /OLLAMA_RESUME_MODEL: \$\{OLLAMA_RESUME_MODEL:-qwen3:8b\}/);
   assert.match(compose, /OLLAMA_OPTIMIZE_MODEL: \$\{OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct\}/);
   assert.match(compose, /ollama pull "\$\$\{model\}"/);
