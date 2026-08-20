@@ -1,8 +1,10 @@
 import type { CandidateTextOptimizationProvider } from '../../application/presentation/CandidateTextOptimizer';
 import { AIProviderFailure } from '../../application/ai/AIProviderFailure';
-import { OllamaStructuredClient, OLLAMA_PROVIDER } from './OllamaStructuredClient';
+import { OllamaStructuredClient, OLLAMA_PROVIDER, resolveOllamaModel } from './OllamaStructuredClient';
 
-const INLINE_OPTIMIZER_TIMEOUT_MS = 30_000;
+const INLINE_OPTIMIZER_TIMEOUT_MS = 45_000;
+export const DEFAULT_OLLAMA_OPTIMIZE_MODEL = 'qwen3:4b-instruct' as const;
+export const INLINE_OPTIMIZER_MAX_OUTPUT_TOKENS = 768;
 
 const SYSTEM_INSTRUCTION = `You rewrite candidate-authored resume text inside CV Engine without changing its factual meaning.
 
@@ -43,9 +45,11 @@ export class OllamaCandidateTextOptimizer implements CandidateTextOptimizationPr
       prompt: `Rewrite only this candidate-authored text:\n\n${sourceText}`,
       schema: RESPONSE_SCHEMA,
       timeoutMs: INLINE_OPTIMIZER_TIMEOUT_MS,
-      model: process.env.OLLAMA_OPTIMIZE_MODEL?.trim() || this.client.model,
+      model: resolveOllamaModel(
+        process.env.OLLAMA_OPTIMIZE_MODEL?.trim() || DEFAULT_OLLAMA_OPTIMIZE_MODEL,
+      ),
       temperature: 0,
-      maxOutputTokens: 2_048,
+      maxOutputTokens: INLINE_OPTIMIZER_MAX_OUTPUT_TOKENS,
     });
 
     if (
