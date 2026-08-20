@@ -14,6 +14,9 @@ import {
 
 export const OLLAMA_RESUME_PROVIDER = OLLAMA_PROVIDER;
 export const DEFAULT_OLLAMA_RESUME_MODEL = 'qwen3:8b' as const;
+export const OLLAMA_RESUME_MODEL = resolveOllamaModel(
+  process.env.OLLAMA_RESUME_MODEL?.trim() || DEFAULT_OLLAMA_RESUME_MODEL,
+);
 export const OLLAMA_RESUME_CONTRACT_VERSION = 'ats2-local-structured-resume-v1';
 export const RESUME_MAX_OUTPUT_TOKENS = 4_096;
 const DEFAULT_REQUEST_TIMEOUT_MS = 240_000;
