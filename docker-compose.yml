@@ -1,0 +1,89 @@
+name: cv-engine
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-http:
+    image: hiett/serverless-redis-http:latest
+    restart: unless-stopped
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: ${LOCAL_REDIS_TOKEN:-cv-engine-local-change-me}
+      SRH_CONNECTION_STRING: redis://redis:6379
+    ports:
+      - "8079:80"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+
+  ollama-init:
+    image: ollama/ollama:latest
+    restart: "no"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Ensuring local model $${OLLAMA_MODEL} is installed..."
+        ollama pull "$${OLLAMA_MODEL}"
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      OLLAMA_IMPORT_MODEL: ${OLLAMA_IMPORT_MODEL:-}
+      OLLAMA_RESUME_MODEL: ${OLLAMA_RESUME_MODEL:-}
+      OLLAMA_OPTIMIZE_MODEL: ${OLLAMA_OPTIMIZE_MODEL:-}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-16384}
+      RESUME_IMPORT_TIMEOUT_MS: ${RESUME_IMPORT_TIMEOUT_MS:-180000}
+      RESUME_GENERATION_TIMEOUT_MS: ${RESUME_GENERATION_TIMEOUT_MS:-240000}
+      RATE_LIMIT_BACKEND: redis
+      UPSTASH_REDIS_REST_URL: http://redis-http:80
+      UPSTASH_REDIS_REST_TOKEN: ${LOCAL_REDIS_TOKEN:-cv-engine-local-change-me}
+    depends_on:
+      ollama-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      redis-http:
+        condition: service_started
+
+volumes:
+  ollama-data:
+  redis-data:
