@@ -116,6 +116,11 @@ function providerFailureForHttpStatus(status: number, body: string): AIProviderF
   );
 }
 
+function installedModelMatches(configured: string, installed: string): boolean {
+  if (configured.includes(':')) return installed === configured;
+  return installed === configured || installed === `${configured}:latest`;
+}
+
 export class OllamaStructuredClient {
   readonly baseUrl: string;
   readonly model: string;
@@ -151,7 +156,7 @@ export class OllamaStructuredClient {
       const payload = await response.json() as { models?: readonly { name?: string; model?: string }[] };
       const available = payload.models?.some((item) => {
         const names = [item.name, item.model].filter(Boolean) as string[];
-        return names.some((name) => name === this.model || name.split(':')[0] === this.model.split(':')[0]);
+        return names.some((name) => installedModelMatches(this.model, name));
       });
       if (!available) {
         throw new AIProviderFailure({
