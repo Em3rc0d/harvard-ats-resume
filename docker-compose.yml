@@ -25,9 +25,14 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:80 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.32.6
     restart: unless-stopped
     ports:
       - "11434:11434"
@@ -41,7 +46,7 @@ services:
       start_period: 10s
 
   ollama-init:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.32.6
     restart: "no"
     environment:
       OLLAMA_HOST: http://ollama:11434
@@ -79,10 +84,8 @@ services:
     depends_on:
       ollama-init:
         condition: service_completed_successfully
-      redis:
-        condition: service_healthy
       redis-http:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   ollama-data:
