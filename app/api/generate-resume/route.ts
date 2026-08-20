@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { resumeRequestSchema } from '@/lib/schemas';
 import { resumeImportContextSchema } from '@/lib/application/import/ResumeImportProvider';
 import { generationValidationIssues } from '@/lib/application/product/GenerationReadiness';
-import { generateResumeWithGemini, sanitizeResumeData } from '@/lib/gemini';
+import { generateResumeWithAI, sanitizeResumeData } from '@/lib/local-ai';
 import { extractKeywords, calculateATSScore } from '@/lib/ats-scoring';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { buildLegacyTruthContext } from '@/lib/application/legacy/LegacyResumeAdapter';
@@ -29,10 +29,10 @@ import {
   aiProviderFailureMessage,
 } from '@/lib/application/ai/AIProviderFailure';
 import {
-  GEMINI_RESUME_CONTRACT_VERSION,
-  GEMINI_RESUME_MODEL,
-  GEMINI_RESUME_PROVIDER,
-} from '@/lib/infrastructure/ai/GeminiResumeProvider';
+  OLLAMA_RESUME_CONTRACT_VERSION,
+  OLLAMA_RESUME_MODEL,
+  OLLAMA_RESUME_PROVIDER,
+} from '@/lib/infrastructure/ai/OllamaResumeProvider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -45,11 +45,10 @@ const resumeGenerationInputSchema = resumeRequestSchema.extend({
 /**
  * POST /api/generate-resume
  *
- * Main endpoint for generating evidence-bound resumes. Import provenance is
- * accepted separately from candidate facts and is never forwarded as Job
- * Description content. Provider-authored suggestions are intentionally not
- * accepted as product advice; advice is derived after truth validation from
- * deterministic candidate/job context.
+ * Main endpoint for generating evidence-bound resumes. Local model output is
+ * always an untrusted proposal: grounding, semantic grounding, claim
+ * traceability, and Career Vault integrity remain the authorities that decide
+ * whether a trusted ResumeVersion can be emitted.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -173,17 +172,15 @@ export async function POST(request: NextRequest) {
         })
       : undefined;
 
-    // Legacy keyword analysis remains compatibility-only and cannot generate
-    // visible advice. With no target job, it is deliberately empty.
     const jobKeywords = sanitizedData.jobDescription?.trim()
       ? extractKeywords(sanitizedData.jobDescription)
       : [];
 
-    const geminiResult = await generateResumeWithGemini(sanitizedData);
+    const localAIResult = await generateResumeWithAI(sanitizedData);
 
-    if (!geminiResult.success || !geminiResult.formattedResume) {
-      if (geminiResult.providerFailure) {
-        const providerFailure = geminiResult.providerFailure;
+    if (!localAIResult.success || !localAIResult.formattedResume) {
+      if (localAIResult.providerFailure) {
+        const providerFailure = localAIResult.providerFailure;
         return NextResponse.json(
           {
             success: false,
@@ -203,7 +200,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: geminiResult.error || 'Failed to generate resume',
+          error: localAIResult.error || 'Failed to generate resume',
         },
         { status: 500, headers: rateLimitHeaders },
       );
@@ -211,7 +208,7 @@ export async function POST(request: NextRequest) {
 
     const groundingReport = validateGeneratedResumeGrounding(
       sanitizedData,
-      geminiResult.formattedResume,
+      localAIResult.formattedResume,
     );
 
     if (groundingReport.status !== 'APPROVED') {
@@ -239,7 +236,7 @@ export async function POST(request: NextRequest) {
     }
 
     const semanticGroundingReport = evaluateGeneratedResumeSemanticGrounding(
-      geminiResult.formattedResume,
+      localAIResult.formattedResume,
       truthContext.assertions,
     );
 
@@ -271,16 +268,16 @@ export async function POST(request: NextRequest) {
     let resumeComposition;
     try {
       resumeComposition = composeApprovedResumeVersion({
-        formattedResume: geminiResult.formattedResume,
+        formattedResume: localAIResult.formattedResume,
         candidateProfileId: truthContext.candidateProfile.id,
         assertions: truthContext.assertions,
         targetedJobDescriptionId: jobIntelligence?.jobDescription.id,
         targetJobDescription: jobIntelligence?.jobDescription.sourceText,
         matchReportId: jobMatch?.report.id,
         generation: {
-          provider: GEMINI_RESUME_PROVIDER,
-          model: GEMINI_RESUME_MODEL,
-          contractVersion: GEMINI_RESUME_CONTRACT_VERSION,
+          provider: OLLAMA_RESUME_PROVIDER,
+          model: OLLAMA_RESUME_MODEL,
+          contractVersion: OLLAMA_RESUME_CONTRACT_VERSION,
         },
         createdAt: capturedAt,
       });
@@ -309,12 +306,12 @@ export async function POST(request: NextRequest) {
 
     const atsScoreResult = calculateATSScore(
       jobKeywords,
-      geminiResult.formattedResume,
+      localAIResult.formattedResume,
       allSkills,
     );
 
     const assertionsById = new Map(truthContext.assertions.map((assertion) => [assertion.id, assertion]));
-    const productEvaluation = evaluateProductResume(sanitizedData, geminiResult.formattedResume);
+    const productEvaluation = evaluateProductResume(sanitizedData, localAIResult.formattedResume);
 
     const adviceJobMatch = jobMatch
       ? {
@@ -422,7 +419,7 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         data: {
-          formattedResume: geminiResult.formattedResume,
+          formattedResume: localAIResult.formattedResume,
           productEvaluation,
           jobMatch: explainableJobMatch,
           claimTraceability,
@@ -438,11 +435,7 @@ export async function POST(request: NextRequest) {
             updatedAt: careerVault.updatedAt,
           },
           trustedAdvice,
-          // Compatibility projection for the existing results surface. Every
-          // visible suggestion is product-owned trusted advice; provider model
-          // suggestions are not consumed by CV Engine.
           suggestions: trustedAdvice.slice(0, 10).map((advice) => advice.message),
-          // Compatibility payload: intentionally not used as ATS v2 primary UX.
           atsScore: atsScoreResult.atsScore,
           matchedKeywords: atsScoreResult.matchedKeywords,
           missingKeywords: atsScoreResult.missingKeywords,
