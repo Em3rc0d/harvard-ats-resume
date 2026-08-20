@@ -253,7 +253,7 @@ test('Docker stack owns app, workload models and durable Redis dependencies', ()
   const health = source('app/api/health/route.ts');
 
   assert.match(compose, /ollama\/ollama:0\.32\.6/);
-  assert.match(compose, /OLLAMA_IMPORT_MODEL: \$\{OLLAMA_IMPORT_MODEL:-qwen3:1\.7b\}/);
+  assert.match(compose, /OLLAMA_IMPORT_MODEL: \$\{DOCKER_OLLAMA_IMPORT_MODEL:-qwen3:1\.7b\}/);
   assert.match(compose, /OLLAMA_RESUME_MODEL: \$\{OLLAMA_RESUME_MODEL:-qwen3:8b\}/);
   assert.match(compose, /OLLAMA_OPTIMIZE_MODEL: \$\{OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct\}/);
   assert.match(compose, /ollama pull "\$\$\{model\}"/);
