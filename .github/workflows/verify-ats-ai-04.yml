@@ -5,6 +5,10 @@ on:
     branches:
       - agent/ats-ai-04-local-intelligence-runtime
 
+concurrency:
+  group: ats-ai-04-local-runtime
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -32,6 +36,15 @@ jobs:
       - id: audit
         name: Dependency audit
         run: npm audit --audit-level=moderate
+
+      - id: local_only
+        name: Enforce local-only AI runtime
+        run: |
+          if grep -R -n -E 'Gemini|GoogleGenAI|@google/genai|GEMINI_API_KEY' \
+            app lib components package.json package-lock.json .env.example; then
+            echo 'Remote Gemini runtime residue detected.' >&2
+            exit 1
+          fi
 
       - id: lint
         name: Lint
@@ -108,6 +121,7 @@ jobs:
         env:
           NPM_CI: ${{ steps.npm_ci.outcome }}
           AUDIT: ${{ steps.audit.outcome }}
+          LOCAL_ONLY: ${{ steps.local_only.outcome }}
           LINT: ${{ steps.lint.outcome }}
           TYPECHECK: ${{ steps.typecheck.outcome }}
           BEHAVIOR: ${{ steps.behavior.outcome }}
@@ -120,7 +134,7 @@ jobs:
           BROWSER: ${{ steps.browser.outcome }}
         run: |
           RESULT=PASS
-          for value in "$NPM_CI" "$AUDIT" "$LINT" "$TYPECHECK" "$BEHAVIOR" "$BUILD" "$PDFJS" "$COMPOSE" "$DOCKER_BUILD" "$PLAYWRIGHT_INSTALL" "$BROWSER_SERVER" "$BROWSER"; do
+          for value in "$NPM_CI" "$AUDIT" "$LOCAL_ONLY" "$LINT" "$TYPECHECK" "$BEHAVIOR" "$BUILD" "$PDFJS" "$COMPOSE" "$DOCKER_BUILD" "$PLAYWRIGHT_INSTALL" "$BROWSER_SERVER" "$BROWSER"; do
             if [ "$value" != "success" ]; then RESULT=FAIL; fi
           done
 
@@ -133,6 +147,7 @@ jobs:
           - Result: ${RESULT}
           - npm ci: ${NPM_CI}
           - dependency audit: ${AUDIT}
+          - local-only AI invariant: ${LOCAL_ONLY}
           - lint: ${LINT}
           - typecheck: ${TYPECHECK}
           - behavior tests: ${BEHAVIOR}
