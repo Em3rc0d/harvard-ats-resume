@@ -6,6 +6,8 @@ import { PDFDocument, StandardFonts } from 'pdf-lib';
 import type { ImportedCandidateDraft } from '../../lib/application/import/ResumeImportProvider';
 import { resolveResumeMimeType } from '../../lib/application/import/ResumeImportService';
 import {
+  DEFAULT_OLLAMA_IMPORT_MODEL,
+  IMPORT_MAX_OUTPUT_TOKENS,
   deriveCandidateEvidence,
   extractResumeText,
   materialCandidateFieldPaths,
@@ -151,14 +153,17 @@ test('legacy binary DOC is rejected rather than routed through an opaque convert
   assert.throws(() => resolveResumeMimeType('candidate.doc', 'application/msword'), /Use PDF or DOCX/);
 });
 
-test('native resume import timeout defaults to 90 seconds and supports bounded override', () => {
-  assert.equal(resolveResumeImportTimeoutMs(undefined), 90_000);
-  assert.equal(resolveResumeImportTimeoutMs('120000'), 120_000);
+test('native resume import uses a bounded local extraction budget', () => {
+  assert.equal(DEFAULT_OLLAMA_IMPORT_MODEL, 'qwen3:4b-instruct');
+  assert.equal(IMPORT_MAX_OUTPUT_TOKENS, 3_072);
+  assert.equal(resolveResumeImportTimeoutMs(undefined), 180_000);
+  assert.equal(resolveResumeImportTimeoutMs('240000'), 240_000);
 });
 
 test('native resume import rejects unsafe timeout configuration', () => {
-  assert.throws(() => resolveResumeImportTimeoutMs('1000'), /between 30000 and 180000/);
-  assert.throws(() => resolveResumeImportTimeoutMs('not-a-number'), /between 30000 and 180000/);
+  assert.throws(() => resolveResumeImportTimeoutMs('1000'), /between 30000 and 300000/);
+  assert.throws(() => resolveResumeImportTimeoutMs('not-a-number'), /between 30000 and 300000/);
+  assert.throws(() => resolveResumeImportTimeoutMs('400000'), /between 30000 and 300000/);
 });
 
 test('runtime resume import derives source evidence in ATS and classifies each safe failure boundary', () => {
