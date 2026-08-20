@@ -34,6 +34,11 @@ services:
   ollama:
     image: ollama/ollama:0.32.6
     restart: unless-stopped
+    environment:
+      # Keep memory behavior predictable on developer machines. CV Engine swaps
+      # workload models instead of trying to retain several local LLMs at once.
+      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
     ports:
       - "11434:11434"
     volumes:
@@ -51,11 +56,23 @@ services:
     environment:
       OLLAMA_HOST: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      OLLAMA_IMPORT_MODEL: ${OLLAMA_IMPORT_MODEL:-qwen3:4b-instruct}
+      OLLAMA_RESUME_MODEL: ${OLLAMA_RESUME_MODEL:-qwen3:8b}
+      OLLAMA_OPTIMIZE_MODEL: ${OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo "Ensuring local model $${OLLAMA_MODEL} is installed..."
-        ollama pull "$${OLLAMA_MODEL}"
+        seen=""
+        for model in "$${OLLAMA_MODEL}" "$${OLLAMA_IMPORT_MODEL}" "$${OLLAMA_RESUME_MODEL}" "$${OLLAMA_OPTIMIZE_MODEL}"; do
+          case "|$${seen}|" in
+            *"|$${model}|"*) continue ;;
+          esac
+          echo "Ensuring local model $${model} is installed..."
+          ollama pull "$${model}"
+          seen="$${seen}|$${model}"
+        done
+        echo "Preloading import model $${OLLAMA_IMPORT_MODEL}..."
+        ollama run "$${OLLAMA_IMPORT_MODEL}" ""
     depends_on:
       ollama:
         condition: service_healthy
@@ -72,12 +89,14 @@ services:
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
-      OLLAMA_IMPORT_MODEL: ${OLLAMA_IMPORT_MODEL:-}
-      OLLAMA_RESUME_MODEL: ${OLLAMA_RESUME_MODEL:-}
-      OLLAMA_OPTIMIZE_MODEL: ${OLLAMA_OPTIMIZE_MODEL:-}
+      OLLAMA_IMPORT_MODEL: ${OLLAMA_IMPORT_MODEL:-qwen3:4b-instruct}
+      OLLAMA_RESUME_MODEL: ${OLLAMA_RESUME_MODEL:-qwen3:8b}
+      OLLAMA_OPTIMIZE_MODEL: ${OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct}
       OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-16384}
-      RESUME_IMPORT_TIMEOUT_MS: ${RESUME_IMPORT_TIMEOUT_MS:-180000}
-      RESUME_GENERATION_TIMEOUT_MS: ${RESUME_GENERATION_TIMEOUT_MS:-240000}
+      # Docker local inference has its own bounded budgets so stale host .env
+      # values from the former remote-provider runtime cannot reintroduce 90s/120s limits.
+      RESUME_IMPORT_TIMEOUT_MS: ${DOCKER_RESUME_IMPORT_TIMEOUT_MS:-180000}
+      RESUME_GENERATION_TIMEOUT_MS: ${DOCKER_RESUME_GENERATION_TIMEOUT_MS:-240000}
       RATE_LIMIT_BACKEND: redis
       UPSTASH_REDIS_REST_URL: http://redis-http:80
       UPSTASH_REDIS_REST_TOKEN: ${LOCAL_REDIS_TOKEN:-cv-engine-local-change-me}
