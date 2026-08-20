@@ -132,9 +132,9 @@ test('targeting advice requires target context and never converts requirements i
   assert.match(targeting!.rationale, /only if.*genuinely yours/i);
 });
 
-test('Gemini free-tier quota exhaustion is normalized separately from transient rate limiting', () => {
-  const error = Object.assign(new Error('{"error":{"code":429,"message":"You exceeded your current quota. Quota exceeded for metric generate_content_free_tier_requests. RESOURCE_EXHAUSTED. quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier. Please retry in 8.5s."}}'), { status: 429 });
-  const failure = classifyAIProviderError(error, 'google-gemini');
+test('daily free-tier quota exhaustion is normalized separately from transient rate limiting', () => {
+  const error = Object.assign(new Error('{"error":{"code":429,"message":"You exceeded your current quota. Quota exceeded for metric free_tier_requests. RESOURCE_EXHAUSTED. quotaId: RequestsPerDayPerProjectPerModel-FreeTier. Please retry in 8.5s."}}'), { status: 429 });
+  const failure = classifyAIProviderError(error, 'remote-provider-fixture');
 
   assert.equal(failure.kind, 'QUOTA_EXHAUSTED');
   assert.equal(failure.retryable, false);
@@ -163,15 +163,15 @@ test('provider auth, timeout, outage and invalid responses use one failure contr
   assert.equal(timeout.toView().contractVersion, 'ats2-ai-provider-failure-v1');
 });
 
-test('trusted advice owns the visible suggestion channel and Gemini no longer emits suggestions', () => {
+test('trusted advice owns the visible suggestion channel and the local model emits no suggestions', () => {
   const route = readFileSync(join(process.cwd(), 'app/api/generate-resume/route.ts'), 'utf8');
-  const provider = readFileSync(join(process.cwd(), 'lib/infrastructure/ai/GeminiResumeProvider.ts'), 'utf8');
+  const provider = readFileSync(join(process.cwd(), 'lib/infrastructure/ai/OllamaResumeProvider.ts'), 'utf8');
   const providerContract = readFileSync(join(process.cwd(), 'lib/application/ai/AIResumeProvider.ts'), 'utf8');
 
   assert.match(route, /deriveTrustedAdvice/);
   assert.match(route, /suggestions:\s*trustedAdvice\.slice/);
   assert.doesNotMatch(route, /generateSuggestions\(/);
-  assert.doesNotMatch(route, /geminiResult\.suggestions/);
+  assert.doesNotMatch(route, /localAIResult\.suggestions/);
   assert.doesNotMatch(provider, /suggestions:\s*\{/);
   assert.doesNotMatch(providerContract, /suggestions:/);
   assert.match(provider, /Do not return suggestions or career advice/);
