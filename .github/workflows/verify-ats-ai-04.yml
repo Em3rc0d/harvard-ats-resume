@@ -12,51 +12,64 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout feature branch
+      - id: checkout
+        name: Checkout feature branch
         uses: actions/checkout@v6
         with:
           ref: agent/ats-ai-04-local-intelligence-runtime
 
-      - name: Setup Node.js
+      - id: node
+        name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
 
-      - name: Install exact dependency graph
+      - id: npm_ci
+        name: Install exact dependency graph
         run: npm ci
 
-      - name: Dependency audit
+      - id: audit
+        name: Dependency audit
         run: npm audit --audit-level=moderate
 
-      - name: Lint
+      - id: lint
+        name: Lint
         run: npm run lint
 
-      - name: Typecheck
+      - id: typecheck
+        name: Typecheck
         run: npm run typecheck
 
-      - name: Behavior tests
+      - id: behavior
+        name: Behavior tests
         run: npm test
 
-      - name: Production build
+      - id: build
+        name: Production build
         run: npm run build
 
-      - name: Verify PDF.js server bundle
+      - id: pdfjs
+        name: Verify PDF.js server bundle
         run: node scripts/verify-pdfjs-server-bundle.mjs
 
-      - name: Validate Docker Compose topology
+      - id: compose
+        name: Validate Docker Compose topology
         run: docker compose config --quiet
 
-      - name: Build CV Engine application image
+      - id: docker_build
+        name: Build CV Engine application image
         run: docker build --tag cv-engine-ats-ai-04 .
 
-      - name: Install browser acceptance runtime
+      - id: playwright_install
+        name: Install browser acceptance runtime
         run: |
           mkdir -p /tmp/cv-engine-playwright
           npm install --prefix /tmp/cv-engine-playwright --package-lock=false --ignore-scripts playwright@1.62.0
           /tmp/cv-engine-playwright/node_modules/.bin/playwright install chromium --with-deps
 
-      - name: Start browser acceptance server
+      - id: browser_server
+        name: Start browser acceptance server
         run: |
           npm run dev > /tmp/cv-engine-e2e.log 2>&1 &
           echo $! > /tmp/cv-engine-e2e.pid
@@ -69,7 +82,8 @@ jobs:
           cat /tmp/cv-engine-e2e.log
           exit 1
 
-      - name: Browser acceptance
+      - id: browser
+        name: Browser acceptance
         env:
           CV_ENGINE_E2E_BASE_URL: http://localhost:3000
           CV_ENGINE_PLAYWRIGHT_MODULE: file:///tmp/cv-engine-playwright/node_modules/playwright/index.mjs
@@ -89,31 +103,54 @@ jobs:
             tail -n 120 /tmp/cv-engine-e2e.log
           fi
 
-      - name: Record successful verification
-        if: success()
+      - name: Record verification receipt
+        if: always() && steps.checkout.outcome == 'success'
+        env:
+          NPM_CI: ${{ steps.npm_ci.outcome }}
+          AUDIT: ${{ steps.audit.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          BEHAVIOR: ${{ steps.behavior.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          PDFJS: ${{ steps.pdfjs.outcome }}
+          COMPOSE: ${{ steps.compose.outcome }}
+          DOCKER_BUILD: ${{ steps.docker_build.outcome }}
+          PLAYWRIGHT_INSTALL: ${{ steps.playwright_install.outcome }}
+          BROWSER_SERVER: ${{ steps.browser_server.outcome }}
+          BROWSER: ${{ steps.browser.outcome }}
         run: |
+          RESULT=PASS
+          for value in "$NPM_CI" "$AUDIT" "$LINT" "$TYPECHECK" "$BEHAVIOR" "$BUILD" "$PDFJS" "$COMPOSE" "$DOCKER_BUILD" "$PLAYWRIGHT_INSTALL" "$BROWSER_SERVER" "$BROWSER"; do
+            if [ "$value" != "success" ]; then RESULT=FAIL; fi
+          done
+
           mkdir -p evidence
           cat > evidence/ATS-AI-04-VERIFICATION.md <<EOF
           # ATS-AI-04 Verification
 
           - Source commit: ${GITHUB_SHA}
           - Workflow run: ${GITHUB_RUN_ID}
-          - Result: PASS
-          - npm ci: PASS
-          - dependency audit: PASS
-          - lint: PASS
-          - typecheck: PASS
-          - behavior tests: PASS
-          - production build: PASS
-          - PDF.js bundle verification: PASS
-          - docker compose config: PASS
-          - Docker application image build: PASS
-          - Chromium acceptance: PASS
+          - Result: ${RESULT}
+          - npm ci: ${NPM_CI}
+          - dependency audit: ${AUDIT}
+          - lint: ${LINT}
+          - typecheck: ${TYPECHECK}
+          - behavior tests: ${BEHAVIOR}
+          - production build: ${BUILD}
+          - PDF.js bundle verification: ${PDFJS}
+          - docker compose config: ${COMPOSE}
+          - Docker application image build: ${DOCKER_BUILD}
+          - Playwright install: ${PLAYWRIGHT_INSTALL}
+          - browser server: ${BROWSER_SERVER}
+          - Chromium acceptance: ${BROWSER}
 
-          This receipt proves the application/runtime topology and release gates for the source commit above. It intentionally does not download the multi-gigabyte qwen3:8b model in CI; real-model quality remains a local dogfood gate.
+          This receipt verifies the application/runtime topology for the source commit above. CI intentionally does not download qwen3:8b; real-model quality remains a local dogfood gate.
           EOF
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- evidence/ATS-AI-04-VERIFICATION.md
-          git commit -m "ATS-AI-04: record clean-room verification"
+          git commit -m "ATS-AI-04: record clean-room verification (${RESULT})"
           git push origin HEAD:agent/ats-ai-04-local-intelligence-runtime
+
+          if [ "$RESULT" != "PASS" ]; then exit 1; fi
