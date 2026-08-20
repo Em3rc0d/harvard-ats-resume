@@ -21,9 +21,9 @@ export class DurablePersistenceUnavailableError extends Error {
   constructor(
     readonly reason: DurablePersistenceUnavailableReason,
     message: string,
-    options?: { readonly cause?: unknown },
+    readonly underlying?: unknown,
   ) {
-    super(message, options);
+    super(message);
     this.name = 'DurablePersistenceUnavailableError';
   }
 }
@@ -72,7 +72,7 @@ function validatedConfiguration(env: DurableRedisEnvironment): {
     throw new DurablePersistenceUnavailableError(
       'CONFIGURATION_INVALID',
       'Durable Redis persistence URL is not a valid HTTP(S) endpoint.',
-      { cause },
+      cause,
     );
   }
 
@@ -97,7 +97,7 @@ export async function assertDurableRedisReady(redis: DurableRedisHealthClient): 
     throw new DurablePersistenceUnavailableError(
       'BACKEND_UNAVAILABLE',
       'Durable Redis persistence is configured but is not currently reachable or usable.',
-      { cause },
+      cause,
     );
   }
 }
