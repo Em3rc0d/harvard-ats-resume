@@ -16,6 +16,12 @@ import {
   readPartitionedMarketCollection,
   type PartitionedMarketPersistenceBackend,
 } from './PartitionedMarketPersistence';
+import {
+  createDurableRedisFromEnv,
+  DurablePersistenceUnavailableError,
+  processDurableRedisEnvironment,
+  type DurableRedisEnvironment,
+} from './DurableRedisRuntime';
 
 const LEGACY_KEY = 'ats2:market-observation-history:v1';
 const NAMESPACE = 'ats2:market-observation-history:v2';
@@ -146,29 +152,23 @@ extends PartitionedMarketObservationHistoryRepository {
   }
 }
 
-export interface MarketObservationHistoryEnvironment {
-  readonly UPSTASH_REDIS_REST_URL?: string;
-  readonly UPSTASH_REDIS_REST_TOKEN?: string;
-}
+export type MarketObservationHistoryEnvironment = DurableRedisEnvironment;
 
-function processMarketObservationHistoryEnvironment(): MarketObservationHistoryEnvironment {
-  return {
-    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-  };
+export function createMarketObservationHistoryRepository(redis: Redis): MarketObservationHistoryRepository {
+  return new UpstashMarketObservationHistoryRepository(redis);
 }
 
 export function createMarketObservationHistoryRepositoryFromEnv(
-  env: MarketObservationHistoryEnvironment = processMarketObservationHistoryEnvironment(),
+  env: MarketObservationHistoryEnvironment = processDurableRedisEnvironment(),
 ): MarketObservationHistoryRepository {
-  const url = env.UPSTASH_REDIS_REST_URL;
-  const token = env.UPSTASH_REDIS_REST_TOKEN;
-
-  if (!url || !token) {
-    throw new MarketObservationHistoryUnavailableError(
-      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required for durable market observation history.',
-    );
+  try {
+    return createMarketObservationHistoryRepository(createDurableRedisFromEnv(env));
+  } catch (error) {
+    if (error instanceof DurablePersistenceUnavailableError) {
+      throw new MarketObservationHistoryUnavailableError(
+        'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required for durable market observation history.',
+      );
+    }
+    throw error;
   }
-
-  return new UpstashMarketObservationHistoryRepository(new Redis({ url, token }));
 }
