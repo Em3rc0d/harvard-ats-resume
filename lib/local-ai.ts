@@ -5,6 +5,8 @@ import {
   OllamaResumeProvider,
 } from './infrastructure/ai/OllamaResumeProvider';
 
+export { sanitizeResumeData } from './application/resume/ResumeInputSanitizer';
+
 export async function generateResumeWithAI(data: ResumeRequest): Promise<{
   success: boolean;
   formattedResume?: string;
