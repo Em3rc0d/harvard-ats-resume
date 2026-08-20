@@ -56,9 +56,10 @@ services:
     environment:
       OLLAMA_HOST: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
-      # Resume import v3 performs bounded section extraction; it intentionally
-      # uses a smaller model than final resume generation on CPU-only hosts.
-      OLLAMA_IMPORT_MODEL: ${OLLAMA_IMPORT_MODEL:-qwen3:1.7b}
+      # Docker import v3 deliberately ignores the legacy OLLAMA_IMPORT_MODEL
+      # variable so an old qwen3:8b setting cannot resurrect the monolithic
+      # importer. Override only with DOCKER_OLLAMA_IMPORT_MODEL when testing.
+      OLLAMA_IMPORT_MODEL: ${DOCKER_OLLAMA_IMPORT_MODEL:-qwen3:1.7b}
       OLLAMA_RESUME_MODEL: ${OLLAMA_RESUME_MODEL:-qwen3:8b}
       OLLAMA_OPTIMIZE_MODEL: ${OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct}
     entrypoint: ["/bin/sh", "-c"]
@@ -91,7 +92,7 @@ services:
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
-      OLLAMA_IMPORT_MODEL: ${OLLAMA_IMPORT_MODEL:-qwen3:1.7b}
+      OLLAMA_IMPORT_MODEL: ${DOCKER_OLLAMA_IMPORT_MODEL:-qwen3:1.7b}
       OLLAMA_RESUME_MODEL: ${OLLAMA_RESUME_MODEL:-qwen3:8b}
       OLLAMA_OPTIMIZE_MODEL: ${OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct}
       OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-16384}
