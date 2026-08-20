@@ -1,7 +1,4 @@
-import {
-  hasMaterialCareerEvidence,
-  type ResumeRequest,
-} from './schemas';
+import type { ResumeRequest } from './schemas';
 import { AIProviderFailure, classifyAIProviderError } from './application/ai/AIProviderFailure';
 import {
   OLLAMA_RESUME_PROVIDER,
@@ -43,30 +40,6 @@ export async function generateResumeWithAI(data: ResumeRequest): Promise<{
       error: failure.message,
     };
   }
-}
-
-/**
- * Sanitize user input before trusted downstream work. This is transport hygiene,
- * not evidence creation. A structurally valid but identity-only candidate is
- * stopped here as a second server-side defense behind GenerationReadiness.
- */
-export function sanitizeResumeData(data: ResumeRequest): ResumeRequest {
-  const sanitizeString = (str: string): string => str
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-    .replace(/javascript:/gi, '')
-    .trim()
-    .slice(0, 50000);
-
-  const sanitized = JSON.parse(
-    JSON.stringify(data, (_key, value) => typeof value === 'string' ? sanitizeString(value) : value),
-  ) as ResumeRequest;
-
-  if (!hasMaterialCareerEvidence(sanitized)) {
-    throw new Error('Candidate data contains no material career evidence.');
-  }
-
-  return sanitized;
 }
 
 function formatExperiences(experience: ResumeRequest['experience']): string {
