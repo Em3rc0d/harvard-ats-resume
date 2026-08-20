@@ -8,12 +8,14 @@ import type {
   ResumeImportProvider,
 } from '../../application/import/ResumeImportProvider';
 import { AIProviderFailure } from '../../application/ai/AIProviderFailure';
-import { OllamaStructuredClient } from '../ai/OllamaStructuredClient';
+import { OllamaStructuredClient, resolveOllamaModel } from '../ai/OllamaStructuredClient';
 
 const IMPORTER_VERSION = 'native-text-ollama-v1-academic-honors';
-const DEFAULT_REQUEST_TIMEOUT_MS = 90_000;
+export const DEFAULT_OLLAMA_IMPORT_MODEL = 'qwen3:4b-instruct' as const;
+export const IMPORT_MAX_OUTPUT_TOKENS = 3_072;
+const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
 const MIN_REQUEST_TIMEOUT_MS = 30_000;
-const MAX_REQUEST_TIMEOUT_MS = 180_000;
+const MAX_REQUEST_TIMEOUT_MS = 300_000;
 const MIN_MACHINE_READABLE_TEXT = 80;
 
 interface ExtractedTextPage {
@@ -701,9 +703,11 @@ async function extractStructuredCandidate(document: ExtractedResumeTextDocument)
       prompt: buildUserContent(document),
       schema: RESPONSE_JSON_SCHEMA,
       timeoutMs: requestTimeoutMs,
-      model: process.env.OLLAMA_IMPORT_MODEL?.trim() || client.model,
+      model: resolveOllamaModel(
+        process.env.OLLAMA_IMPORT_MODEL?.trim() || DEFAULT_OLLAMA_IMPORT_MODEL,
+      ),
       temperature: 0,
-      maxOutputTokens: 8_192,
+      maxOutputTokens: IMPORT_MAX_OUTPUT_TOKENS,
     });
 
     let raw: RawCandidate;
