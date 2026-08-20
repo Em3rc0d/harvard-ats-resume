@@ -1,13 +1,13 @@
 # ATS-AI-04 Verification
 
-- Source commit: 2f0b0786c8d221ae20f75da963d908b05abfdb9b
-- Workflow run: 32334915321
+- Source commit: ef515df795eff3df2a7d9af1b5fb4bca2eb3b00f
+- Workflow run: 32334999887
 - Result: FAIL
 - npm ci: success
 - dependency audit: success
 - lint: success
-- typecheck: failure
-- behavior tests: skipped
+- typecheck: success
+- behavior tests: failure
 - production build: skipped
 - PDF.js bundle verification: skipped
 - docker compose config: skipped
