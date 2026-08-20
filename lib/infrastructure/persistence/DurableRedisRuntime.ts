@@ -28,6 +28,10 @@ export class DurablePersistenceUnavailableError extends Error {
   }
 }
 
+export interface DurableRedisHealthClient {
+  ping(): Promise<string>;
+}
+
 export interface DurableRedisRuntime {
   readonly redis: Redis;
   /**
@@ -82,27 +86,28 @@ export function createDurableRedisFromEnv(
   return new Redis({ url, token });
 }
 
+export async function assertDurableRedisReady(redis: DurableRedisHealthClient): Promise<void> {
+  try {
+    const response = await redis.ping();
+    if (response !== 'PONG') {
+      throw new Error('Durable Redis readiness probe returned an unexpected response.');
+    }
+  } catch (cause) {
+    if (cause instanceof DurablePersistenceUnavailableError) throw cause;
+    throw new DurablePersistenceUnavailableError(
+      'BACKEND_UNAVAILABLE',
+      'Durable Redis persistence is configured but is not currently reachable or usable.',
+      { cause },
+    );
+  }
+}
+
 export function createDurableRedisRuntimeFromEnv(
   env: DurableRedisEnvironment = processDurableRedisEnvironment(),
 ): DurableRedisRuntime {
   const redis = createDurableRedisFromEnv(env);
-
   return {
     redis,
-    async assertReady(): Promise<void> {
-      try {
-        const response = await redis.ping();
-        if (response !== 'PONG') {
-          throw new Error('Durable Redis readiness probe returned an unexpected response.');
-        }
-      } catch (cause) {
-        if (cause instanceof DurablePersistenceUnavailableError) throw cause;
-        throw new DurablePersistenceUnavailableError(
-          'BACKEND_UNAVAILABLE',
-          'Durable Redis persistence is configured but is not currently reachable or usable.',
-          { cause },
-        );
-      }
-    },
+    assertReady: () => assertDurableRedisReady(redis),
   };
 }
