@@ -14,6 +14,12 @@ import {
   readPartitionedMarketCollection,
   type PartitionedMarketPersistenceBackend,
 } from './PartitionedMarketPersistence';
+import {
+  createDurableRedisFromEnv,
+  DurablePersistenceUnavailableError,
+  processDurableRedisEnvironment,
+  type DurableRedisEnvironment,
+} from './DurableRedisRuntime';
 
 const LEGACY_KEY = 'ats2:market-opportunity-index:v1';
 const NAMESPACE = 'ats2:market-opportunity-index:v2';
@@ -103,27 +109,23 @@ extends PartitionedMarketOpportunityIndexRepository {
   }
 }
 
-export interface MarketOpportunityIndexEnvironment {
-  readonly UPSTASH_REDIS_REST_URL?: string;
-  readonly UPSTASH_REDIS_REST_TOKEN?: string;
-}
+export type MarketOpportunityIndexEnvironment = DurableRedisEnvironment;
 
-function processEnvironment(): MarketOpportunityIndexEnvironment {
-  return {
-    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-  };
+export function createMarketOpportunityIndexRepository(redis: Redis): MarketOpportunityIndexRepository {
+  return new UpstashMarketOpportunityIndexRepository(redis);
 }
 
 export function createMarketOpportunityIndexRepositoryFromEnv(
-  env: MarketOpportunityIndexEnvironment = processEnvironment(),
+  env: MarketOpportunityIndexEnvironment = processDurableRedisEnvironment(),
 ): MarketOpportunityIndexRepository {
-  const url = env.UPSTASH_REDIS_REST_URL;
-  const token = env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) {
-    throw new MarketOpportunityIndexUnavailableError(
-      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required for durable market opportunity identity.',
-    );
+  try {
+    return createMarketOpportunityIndexRepository(createDurableRedisFromEnv(env));
+  } catch (error) {
+    if (error instanceof DurablePersistenceUnavailableError) {
+      throw new MarketOpportunityIndexUnavailableError(
+        'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required for durable market opportunity identity.',
+      );
+    }
+    throw error;
   }
-  return new UpstashMarketOpportunityIndexRepository(new Redis({ url, token }));
 }

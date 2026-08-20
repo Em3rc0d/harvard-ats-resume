@@ -72,6 +72,32 @@ try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await acceptResponsibleUse();
 
+  // Infrastructure failure is a durability state, never an evidence-review state.
+  await reachGeneralTarget();
+  await page.route('**/api/generate-resume', async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: false,
+        error: 'Durable storage is temporarily unavailable.',
+        persistence: { status: 'UNAVAILABLE', stage: 'PREFLIGHT', reason: 'BACKEND_UNAVAILABLE', retryable: true },
+      }),
+    });
+  });
+  await click('Generate trusted resume');
+  await visible('Durability guardrail');
+  await visible('Durable storage is unavailable right now');
+  await visible('Your Career Evidence is not the problem here');
+  assert.equal(await page.getByRole('button', { name: 'Review / add career evidence' }).count(), 0);
+  await visible('Back to target');
+  await visible('Retry trusted generation');
+  assert.deepEqual(pageErrors, [], `Durability flow produced browser errors: ${pageErrors.join(' | ')}`);
+
+  await page.getByRole('button', { name: 'CV Engine home' }).click();
+  await page.unroute('**/api/generate-resume');
+
+  // Evidence-grounding failure retains the evidence-review recovery path.
   await reachGeneralTarget();
   await page.route('**/api/generate-resume', async (route) => {
     await route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ success: false, error: 'Unsupported candidate wording requires confirmation.', grounding: { status: 'NEEDS_USER_CONFIRMATION', factsToConfirm: ['Led an unsupported enterprise program.'], violations: [{ kind: 'UNSUPPORTED_NARRATIVE_CLAIM', value: 'Led an unsupported enterprise program.', message: 'Narrative claim requires confirmation.', source: 'GENERATED_ONLY' }] } }) });

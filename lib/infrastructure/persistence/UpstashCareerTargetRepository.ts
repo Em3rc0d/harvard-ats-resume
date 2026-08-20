@@ -4,6 +4,11 @@ import type {
   CareerTargetPortfolio,
   CareerTargetRepository,
 } from '../../application/target/CareerTargetPortfolio';
+import {
+  createDurableRedisFromEnv,
+  processDurableRedisEnvironment,
+  type DurableRedisEnvironment,
+} from './DurableRedisRuntime';
 
 const KEY_PREFIX = 'ats2:career-targets:v1';
 
@@ -23,11 +28,14 @@ export class UpstashCareerTargetRepository implements CareerTargetRepository {
   }
 }
 
-export function createCareerTargetRepositoryFromEnv(): CareerTargetRepository {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) {
-    throw new Error('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required for durable CareerTarget storage.');
-  }
-  return new UpstashCareerTargetRepository(new Redis({ url, token }));
+export type CareerTargetEnvironment = DurableRedisEnvironment;
+
+export function createCareerTargetRepository(redis: Redis): CareerTargetRepository {
+  return new UpstashCareerTargetRepository(redis);
+}
+
+export function createCareerTargetRepositoryFromEnv(
+  env: CareerTargetEnvironment = processDurableRedisEnvironment(),
+): CareerTargetRepository {
+  return createCareerTargetRepository(createDurableRedisFromEnv(env));
 }

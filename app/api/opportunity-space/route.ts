@@ -9,11 +9,15 @@ import {
 import { buildOpportunitySpace } from '@/lib/application/opportunity/OpportunitySpaceService';
 import { persistOpportunitySpace } from '@/lib/application/opportunity/OpportunitySpaceHistory';
 import { validateCareerTargetPortfolio } from '@/lib/application/target/CareerTargetPortfolio';
-import { createOpportunityHistoryRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashOpportunityHistoryRepository';
-import { createCareerTargetRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashCareerTargetRepository';
-import { createOpportunitySpaceRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashOpportunitySpaceRepository';
-import { createMarketObservationHistoryRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashMarketObservationHistoryRepository';
-import { createMarketOpportunityIndexRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashMarketOpportunityIndexRepository';
+import { createOpportunityHistoryRepository } from '@/lib/infrastructure/persistence/UpstashOpportunityHistoryRepository';
+import { createCareerTargetRepository } from '@/lib/infrastructure/persistence/UpstashCareerTargetRepository';
+import { createOpportunitySpaceRepository } from '@/lib/infrastructure/persistence/UpstashOpportunitySpaceRepository';
+import { createMarketObservationHistoryRepository } from '@/lib/infrastructure/persistence/UpstashMarketObservationHistoryRepository';
+import { createMarketOpportunityIndexRepository } from '@/lib/infrastructure/persistence/UpstashMarketOpportunityIndexRepository';
+import {
+  createDurableRedisRuntimeFromEnv,
+  DurablePersistenceUnavailableError,
+} from '@/lib/infrastructure/persistence/DurableRedisRuntime';
 import { getRateLimitHeaders, rateLimitPublicApiRequest } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -70,30 +74,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const candidateProfileId = candidateProfileIdFromCareerVaultCapability(careerVaultId);
-
-    let opportunityHistoryRepository;
-    let targetRepository;
-    let spaceRepository;
-    let marketObservationRepository;
-    let marketOpportunityIndexRepository;
+    // Opportunity Space composes several durable repositories over the same
+    // Redis backend. Probe once and share one runtime client across the request.
+    let durableRuntime;
     try {
-      opportunityHistoryRepository = createOpportunityHistoryRepositoryFromEnv();
-      targetRepository = createCareerTargetRepositoryFromEnv();
-      spaceRepository = createOpportunitySpaceRepositoryFromEnv();
-      marketObservationRepository = createMarketObservationHistoryRepositoryFromEnv();
-      marketOpportunityIndexRepository = createMarketOpportunityIndexRepositoryFromEnv();
+      durableRuntime = createDurableRedisRuntimeFromEnv();
+      await durableRuntime.assertReady();
     } catch (storageError) {
-      console.error('OpportunitySpace storage configuration error:', storageError);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Durable Opportunity Space and market lifecycle storage are not configured. CV Engine will not emit a non-durable current ranking.',
-          persistence: { status: 'UNAVAILABLE' },
-        },
-        { status: 503, headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' } },
-      );
+      if (storageError instanceof DurablePersistenceUnavailableError) {
+        console.error('Durable persistence preflight failed for Opportunity Space:', {
+          reason: storageError.reason,
+        });
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Durable storage is unavailable. Opportunity Space was not built because its history and current ranking could not be committed safely.',
+            persistence: {
+              status: 'UNAVAILABLE',
+              stage: 'PREFLIGHT',
+              reason: storageError.reason,
+              retryable: storageError.reason === 'BACKEND_UNAVAILABLE',
+            },
+          },
+          { status: 503, headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' } },
+        );
+      }
+      throw storageError;
     }
+
+    const candidateProfileId = candidateProfileIdFromCareerVaultCapability(careerVaultId);
+    const opportunityHistoryRepository = createOpportunityHistoryRepository(durableRuntime.redis);
+    const targetRepository = createCareerTargetRepository(durableRuntime.redis);
+    const spaceRepository = createOpportunitySpaceRepository(durableRuntime.redis);
+    const marketObservationRepository = createMarketObservationHistoryRepository(durableRuntime.redis);
+    const marketOpportunityIndexRepository = createMarketOpportunityIndexRepository(durableRuntime.redis);
 
     const [history, targetPortfolio] = await Promise.all([
       opportunityHistoryRepository.load(candidateProfileId),

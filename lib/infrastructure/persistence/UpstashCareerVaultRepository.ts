@@ -5,6 +5,12 @@ import {
   type CareerVaultRepository,
   type CareerVaultSnapshot,
 } from '../../application/career-vault/CareerVaultRepository';
+import {
+  createDurableRedisFromEnv,
+  DurablePersistenceUnavailableError,
+  processDurableRedisEnvironment,
+  type DurableRedisEnvironment,
+} from './DurableRedisRuntime';
 
 const KEY_PREFIX = 'ats2:career-vault:v1';
 
@@ -29,29 +35,23 @@ export class UpstashCareerVaultRepository implements CareerVaultRepository {
   }
 }
 
-export interface CareerVaultEnvironment {
-  readonly UPSTASH_REDIS_REST_URL?: string;
-  readonly UPSTASH_REDIS_REST_TOKEN?: string;
-}
+export type CareerVaultEnvironment = DurableRedisEnvironment;
 
-function processCareerVaultEnvironment(): CareerVaultEnvironment {
-  return {
-    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-  };
+export function createCareerVaultRepository(redis: Redis): CareerVaultRepository {
+  return new UpstashCareerVaultRepository(redis);
 }
 
 export function createCareerVaultRepositoryFromEnv(
-  env: CareerVaultEnvironment = processCareerVaultEnvironment(),
+  env: CareerVaultEnvironment = processDurableRedisEnvironment(),
 ): CareerVaultRepository {
-  const url = env.UPSTASH_REDIS_REST_URL;
-  const token = env.UPSTASH_REDIS_REST_TOKEN;
-
-  if (!url || !token) {
-    throw new CareerVaultUnavailableError(
-      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required for durable Career Vault persistence.',
-    );
+  try {
+    return createCareerVaultRepository(createDurableRedisFromEnv(env));
+  } catch (error) {
+    if (error instanceof DurablePersistenceUnavailableError) {
+      throw new CareerVaultUnavailableError(
+        'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required for durable Career Vault persistence.',
+      );
+    }
+    throw error;
   }
-
-  return new UpstashCareerVaultRepository(new Redis({ url, token }));
 }

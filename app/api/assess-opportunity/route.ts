@@ -11,7 +11,6 @@ import { deriveCareerVaultIdentity } from '@/lib/application/career-vault/Career
 import {
   buildOpportunityHistoryArtifacts,
   OpportunityHistoryIntegrityError,
-  OpportunityHistoryUnavailableError,
   persistOpportunityAssessmentHistory,
 } from '@/lib/application/opportunity/OpportunityHistory';
 import {
@@ -22,8 +21,12 @@ import {
   persistCareerTarget,
   recordTargetOpportunityEvaluation,
 } from '@/lib/application/target/CareerTargetPortfolio';
-import { createOpportunityHistoryRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashOpportunityHistoryRepository';
-import { createCareerTargetRepositoryFromEnv } from '@/lib/infrastructure/persistence/UpstashCareerTargetRepository';
+import { createOpportunityHistoryRepository } from '@/lib/infrastructure/persistence/UpstashOpportunityHistoryRepository';
+import { createCareerTargetRepository } from '@/lib/infrastructure/persistence/UpstashCareerTargetRepository';
+import {
+  createDurableRedisRuntimeFromEnv,
+  DurablePersistenceUnavailableError,
+} from '@/lib/infrastructure/persistence/DurableRedisRuntime';
 import { getRateLimitHeaders, rateLimitPublicApiRequest } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -114,14 +117,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Career Target and Opportunity History share one physical durable backend.
+    // Probe it once before deriving/committing any durable decision artifact.
+    let durableRuntime;
+    try {
+      durableRuntime = createDurableRedisRuntimeFromEnv();
+      await durableRuntime.assertReady();
+    } catch (storageError) {
+      if (storageError instanceof DurablePersistenceUnavailableError) {
+        console.error('Durable persistence preflight failed for opportunity assessment:', {
+          reason: storageError.reason,
+        });
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Durable storage is unavailable. Opportunity assessment was not started because its target and history could not be committed safely.',
+            persistence: {
+              status: 'UNAVAILABLE',
+              stage: 'PREFLIGHT',
+              reason: storageError.reason,
+              retryable: storageError.reason === 'BACKEND_UNAVAILABLE',
+            },
+          },
+          {
+            status: 503,
+            headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' },
+          },
+        );
+      }
+      throw storageError;
+    }
+
     const capturedAt = new Date().toISOString();
     const vaultIdentity = deriveCareerVaultIdentity(data, careerVaultId);
     const careerTarget = createCareerTarget(vaultIdentity.candidateProfileId, targetInput, capturedAt);
     const targetRelevance = assessCareerTargetRelevance(careerTarget, jobDescription);
+    const targetRepository = createCareerTargetRepository(durableRuntime.redis);
+    const historyRepository = createOpportunityHistoryRepository(durableRuntime.redis);
 
-    let targetRepository;
     try {
-      targetRepository = createCareerTargetRepositoryFromEnv();
       await persistCareerTarget(targetRepository, careerTarget, capturedAt);
     } catch (targetPersistenceError) {
       console.error('Career Target persistence error:', targetPersistenceError);
@@ -129,7 +163,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: 'Career Target could not be durably committed. CV Engine will not treat an unpersisted preference as the active target.',
-          targetPersistence: { status: 'FAILED' },
+          targetPersistence: { status: 'FAILED', stage: 'COMMIT_VERIFY' },
         },
         {
           status: 503,
@@ -188,26 +222,6 @@ export async function POST(request: NextRequest) {
     );
     const assessment = assessOpportunity(explainableJobMatch);
 
-    let historyRepository;
-    try {
-      historyRepository = createOpportunityHistoryRepositoryFromEnv();
-    } catch (storageError) {
-      if (storageError instanceof OpportunityHistoryUnavailableError) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'Opportunity history storage is not configured. CV Engine will not claim a durable assessment without durable storage.',
-            persistence: { status: 'UNAVAILABLE' },
-          },
-          {
-            status: 503,
-            headers: { ...rateLimitHeaders, 'Cache-Control': 'no-store, max-age=0' },
-          },
-        );
-      }
-      throw storageError;
-    }
-
     const historyInput = {
       repository: historyRepository,
       candidate: truthContext.candidateProfile,
@@ -235,6 +249,7 @@ export async function POST(request: NextRequest) {
             : 'Opportunity history could not be durably committed and verified. No durability claim was emitted.',
           persistence: {
             status: integrityFailure ? 'INTEGRITY_REJECTED' : 'FAILED',
+            stage: 'COMMIT_VERIFY',
           },
         },
         {
@@ -259,7 +274,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: 'The assessment was preserved, but its Career Target relevance could not be durably linked. Retry the assessment before using it to make a target-aware decision.',
-          targetPersistence: { status: 'LINK_FAILED' },
+          targetPersistence: { status: 'LINK_FAILED', stage: 'COMMIT_VERIFY' },
         },
         {
           status: 503,
