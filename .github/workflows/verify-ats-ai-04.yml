@@ -1,0 +1,119 @@
+name: Verify ATS-AI-04 local runtime
+
+on:
+  push:
+    branches:
+      - agent/ats-ai-04-local-intelligence-runtime
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v6
+        with:
+          ref: agent/ats-ai-04-local-intelligence-runtime
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install exact dependency graph
+        run: npm ci
+
+      - name: Dependency audit
+        run: npm audit --audit-level=moderate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Behavior tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Verify PDF.js server bundle
+        run: node scripts/verify-pdfjs-server-bundle.mjs
+
+      - name: Validate Docker Compose topology
+        run: docker compose config --quiet
+
+      - name: Build CV Engine application image
+        run: docker build --tag cv-engine-ats-ai-04 .
+
+      - name: Install browser acceptance runtime
+        run: |
+          mkdir -p /tmp/cv-engine-playwright
+          npm install --prefix /tmp/cv-engine-playwright --package-lock=false --ignore-scripts playwright@1.62.0
+          /tmp/cv-engine-playwright/node_modules/.bin/playwright install chromium --with-deps
+
+      - name: Start browser acceptance server
+        run: |
+          npm run dev > /tmp/cv-engine-e2e.log 2>&1 &
+          echo $! > /tmp/cv-engine-e2e.pid
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:3000/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/cv-engine-e2e.log
+          exit 1
+
+      - name: Browser acceptance
+        env:
+          CV_ENGINE_E2E_BASE_URL: http://localhost:3000
+          CV_ENGINE_PLAYWRIGHT_MODULE: file:///tmp/cv-engine-playwright/node_modules/playwright/index.mjs
+        run: |
+          node scripts/release-browser-acceptance.mjs
+          node scripts/release-browser-editor-controls.mjs
+          node scripts/release-browser-terminal-surfaces.mjs
+          node scripts/release-browser-market-surfaces.mjs
+
+      - name: Stop browser acceptance server
+        if: always()
+        run: |
+          if [ -f /tmp/cv-engine-e2e.pid ]; then
+            kill "$(cat /tmp/cv-engine-e2e.pid)" || true
+          fi
+          if [ -f /tmp/cv-engine-e2e.log ]; then
+            tail -n 120 /tmp/cv-engine-e2e.log
+          fi
+
+      - name: Record successful verification
+        if: success()
+        run: |
+          mkdir -p evidence
+          cat > evidence/ATS-AI-04-VERIFICATION.md <<EOF
+          # ATS-AI-04 Verification
+
+          - Source commit: ${GITHUB_SHA}
+          - Workflow run: ${GITHUB_RUN_ID}
+          - Result: PASS
+          - npm ci: PASS
+          - dependency audit: PASS
+          - lint: PASS
+          - typecheck: PASS
+          - behavior tests: PASS
+          - production build: PASS
+          - PDF.js bundle verification: PASS
+          - docker compose config: PASS
+          - Docker application image build: PASS
+          - Chromium acceptance: PASS
+
+          This receipt proves the application/runtime topology and release gates for the source commit above. It intentionally does not download the multi-gigabyte qwen3:8b model in CI; real-model quality remains a local dogfood gate.
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- evidence/ATS-AI-04-VERIFICATION.md
+          git commit -m "ATS-AI-04: record clean-room verification"
+          git push origin HEAD:agent/ats-ai-04-local-intelligence-runtime
