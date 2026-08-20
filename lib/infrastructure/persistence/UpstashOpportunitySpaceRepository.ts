@@ -4,6 +4,11 @@ import type {
   OpportunitySpaceHistory,
   OpportunitySpaceRepository,
 } from '../../application/opportunity/OpportunitySpaceHistory';
+import {
+  createDurableRedisFromEnv,
+  processDurableRedisEnvironment,
+  type DurableRedisEnvironment,
+} from './DurableRedisRuntime';
 
 const KEY_PREFIX = 'ats2:opportunity-spaces:v1';
 
@@ -23,11 +28,14 @@ export class UpstashOpportunitySpaceRepository implements OpportunitySpaceReposi
   }
 }
 
-export function createOpportunitySpaceRepositoryFromEnv(): OpportunitySpaceRepository {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) {
-    throw new Error('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required for durable OpportunitySpace storage.');
-  }
-  return new UpstashOpportunitySpaceRepository(new Redis({ url, token }));
+export type OpportunitySpaceEnvironment = DurableRedisEnvironment;
+
+export function createOpportunitySpaceRepository(redis: Redis): OpportunitySpaceRepository {
+  return new UpstashOpportunitySpaceRepository(redis);
+}
+
+export function createOpportunitySpaceRepositoryFromEnv(
+  env: OpportunitySpaceEnvironment = processDurableRedisEnvironment(),
+): OpportunitySpaceRepository {
+  return createOpportunitySpaceRepository(createDurableRedisFromEnv(env));
 }
