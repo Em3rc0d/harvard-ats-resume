@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { JobSnapshotId } from '@/lib/domain';
 import { resumeRequestSchema } from '@/lib/schemas';
-import { sanitizeResumeData } from '@/lib/gemini';
+import { sanitizeResumeData } from '@/lib/application/resume/ResumeInputSanitizer';
 import { deriveCareerVaultIdentity } from '@/lib/application/career-vault/CareerVaultIdentity';
 import { buildLegacyTruthContext } from '@/lib/application/legacy/LegacyResumeAdapter';
 import { MarketJobProjectionHistoryUnavailableError } from '@/lib/application/market/MarketJobProjectionHistory';
