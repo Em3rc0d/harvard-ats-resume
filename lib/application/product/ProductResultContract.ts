@@ -1,5 +1,6 @@
 import type { OpportunityAssessment } from '../opportunity/OpportunityAssessment';
 import type { ProductEvaluation } from './ProductEvaluationService';
+import type { TrustedAdviceItem } from './TrustedAdviceService';
 
 export type ExplainableRequirementStatus = 'MATCH' | 'POTENTIAL_MATCH' | 'GAP' | 'UNKNOWN' | 'BLOCKER';
 export type ExplainableRequirementNecessity = 'REQUIRED' | 'PREFERRED' | 'UNKNOWN';
@@ -74,6 +75,12 @@ export interface GeneratedResumeResult {
   readonly resumeVersion: ResumeVersionView;
   readonly resumePersistence: 'DURABLE_CAREER_VAULT';
   readonly careerVault: CareerVaultView;
+  readonly trustedAdvice: readonly TrustedAdviceItem[];
+  /**
+   * Compatibility projection for the existing results surface. Every item must
+   * be derived from trustedAdvice.message; model-authored suggestions never
+   * enter this field.
+   */
   readonly suggestions: readonly string[];
   readonly improvedResume?: string;
   // Legacy compatibility only. The ATS v2 UX must not present this as a single

@@ -4,7 +4,6 @@ import type { ResumeRequest } from '../../schemas';
 export const resumeGenerationProposalSchema = z.object({
   formattedResume: z.string().min(100),
   matchedKeywords: z.array(z.string()),
-  suggestions: z.array(z.string()),
   improvedResume: z.string(),
 });
 

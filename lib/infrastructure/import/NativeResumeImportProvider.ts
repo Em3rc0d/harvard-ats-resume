@@ -9,8 +9,8 @@ import type {
   ResumeImportProvider,
 } from '../../application/import/ResumeImportProvider';
 
-const IMPORTER_VERSION = 'native-text-gemini-v4-academic-honors';
-const GEMINI_IMPORT_MODEL = 'gemini-2.5-flash';
+const IMPORTER_VERSION = 'native-text-gemini-v5-low-latency';
+const GEMINI_IMPORT_MODEL = 'gemini-2.5-flash-lite';
 const DEFAULT_REQUEST_TIMEOUT_MS = 90_000;
 const MIN_REQUEST_TIMEOUT_MS = 30_000;
 const MAX_REQUEST_TIMEOUT_MS = 180_000;
@@ -714,6 +714,7 @@ async function extractStructuredCandidate(document: ExtractedResumeTextDocument)
         temperature: 0,
         topP: 0.8,
         maxOutputTokens: 8192,
+        thinkingConfig: { thinkingBudget: 0 },
         abortSignal: controller.signal,
       },
     });

@@ -4,25 +4,19 @@ import {
   type AIResumeProvider,
   type ResumeGenerationProposal,
 } from '../../application/ai/AIResumeProvider';
+import {
+  AIProviderFailure,
+  classifyAIProviderError,
+} from '../../application/ai/AIProviderFailure';
 import { normalizeGeneratedResumeText } from '../../application/resume/ResumeTextNormalization';
 import type { ResumeRequest } from '../../schemas';
 
 export const GEMINI_RESUME_PROVIDER = 'google-gemini';
 export const GEMINI_RESUME_MODEL = 'gemini-2.5-flash';
-export const GEMINI_RESUME_CONTRACT_VERSION = 'ats2-structured-resume-v1';
+export const GEMINI_RESUME_CONTRACT_VERSION = 'ats2-structured-resume-v2-trusted-advice-separation';
 const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 const MIN_REQUEST_TIMEOUT_MS = 30_000;
 const MAX_REQUEST_TIMEOUT_MS = 240_000;
-
-export class ResumeGenerationTimeoutError extends Error {
-  readonly timeoutMs: number;
-
-  constructor(timeoutMs: number) {
-    super(`Resume generation timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
-    this.name = 'ResumeGenerationTimeoutError';
-    this.timeoutMs = timeoutMs;
-  }
-}
 
 export function resolveResumeGenerationTimeoutMs(
   rawValue: string | undefined = process.env.RESUME_GENERATION_TIMEOUT_MS,
@@ -53,7 +47,8 @@ Rules:
 - Preserve factual meaning while improving clarity, concision, ordering, and action-oriented wording.
 - Do not translate candidate content. Preserve the language used by each source candidate statement unless the candidate data itself explicitly contains the translated wording.
 - Quantified impact may appear only when the exact quantity exists in candidate data.
-- Missing information belongs only in suggestions; never add placeholders to the resume.
+- Do not provide career advice or improvement suggestions. CV Engine derives product advice outside the model from deterministic evidence/context checks.
+- Missing information must remain missing; never add placeholders to the resume.
 - Keep the resume ATS-readable: standard headings, plain text, no tables, graphics, or decorative symbols beyond simple bullets.
 - formattedResume must use real newline characters between sections and between material claims. Put each bullet or claim on its own physical line.
 - Use clear uppercase standard section headings when a section is present (for example PROFESSIONAL SUMMARY, EXPERIENCE, EDUCATION, PROJECTS, CERTIFICATIONS, LANGUAGES, SKILLS).
@@ -76,26 +71,25 @@ const RESPONSE_JSON_SCHEMA = {
     matchedKeywords: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Job-description concepts already supported by candidate data and represented in the resume.',
-    },
-    suggestions: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'Actionable suggestions. Missing factual details must remain suggestions until candidate confirmation.',
+      description: 'Compatibility-only target-job concepts already supported by candidate data and represented in the resume.',
     },
     improvedResume: {
       type: 'string',
       description: 'Deprecated compatibility field. Always return an empty string.',
     },
   },
-  required: ['formattedResume', 'matchedKeywords', 'suggestions', 'improvedResume'],
+  required: ['formattedResume', 'matchedKeywords', 'improvedResume'],
 } as const;
 
 function getGeminiClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured');
+    throw new AIProviderFailure({
+      provider: GEMINI_RESUME_PROVIDER,
+      kind: 'AUTHENTICATION_FAILED',
+      message: 'GEMINI_API_KEY is not configured',
+    });
   }
 
   return new GoogleGenAI({ apiKey });
@@ -114,9 +108,10 @@ ${jobDescription?.trim() || 'No target job description supplied.'}
 
 Return:
 1. formattedResume: the complete plain-text resume, preserving candidate source language, using real line breaks, standard uppercase section headings, one material claim or bullet per physical line, COMPANY — ROLE experience headers, INSTITUTION — DEGREE [— HONORS only when education.honors exists] education lines, CERTIFICATION NAME — ISSUER — DATE certification lines, and LANGUAGE — PROFICIENCY language lines using exact candidate labels.
-2. matchedKeywords: only target-job concepts that candidate data independently supports.
-3. suggestions: improvements or missing evidence the candidate may choose to verify and add.
-4. improvedResume: always return an empty string; this compatibility field is no longer used.`;
+2. matchedKeywords: compatibility-only target-job concepts that candidate data independently supports. Return an empty array when there is no target job.
+3. improvedResume: always return an empty string; this compatibility field is no longer used.
+
+Do not return suggestions or career advice.`;
 }
 
 export class GeminiResumeProvider implements AIResumeProvider {
@@ -144,7 +139,11 @@ export class GeminiResumeProvider implements AIResumeProvider {
       const text = result.text?.trim();
 
       if (!text) {
-        throw new Error('Gemini returned an empty structured response');
+        throw new AIProviderFailure({
+          provider: GEMINI_RESUME_PROVIDER,
+          kind: 'INVALID_PROVIDER_RESPONSE',
+          message: 'Gemini returned an empty structured response',
+        });
       }
 
       let decoded: unknown;
@@ -152,7 +151,11 @@ export class GeminiResumeProvider implements AIResumeProvider {
       try {
         decoded = JSON.parse(text);
       } catch {
-        throw new Error('Gemini returned invalid JSON despite the structured output contract');
+        throw new AIProviderFailure({
+          provider: GEMINI_RESUME_PROVIDER,
+          kind: 'INVALID_PROVIDER_RESPONSE',
+          message: 'Gemini returned invalid JSON despite the structured output contract',
+        });
       }
 
       const proposal = parseResumeGenerationProposal(decoded);
@@ -161,10 +164,16 @@ export class GeminiResumeProvider implements AIResumeProvider {
         formattedResume: normalizeGeneratedResumeText(proposal.formattedResume),
       };
     } catch (error) {
+      if (error instanceof AIProviderFailure) throw error;
       if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
-        throw new ResumeGenerationTimeoutError(requestTimeoutMs);
+        throw new AIProviderFailure({
+          provider: GEMINI_RESUME_PROVIDER,
+          kind: 'REQUEST_TIMEOUT',
+          message: `Resume generation timed out after ${Math.round(requestTimeoutMs / 1000)} seconds.`,
+          underlying: error,
+        });
       }
-      throw error;
+      throw classifyAIProviderError(error, GEMINI_RESUME_PROVIDER);
     } finally {
       clearTimeout(timeout);
     }

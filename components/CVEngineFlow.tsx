@@ -180,6 +180,7 @@ export default function CVEngineFlow() {
           grounding: result.grounding,
           semanticGrounding: result.semanticGrounding,
           persistence: result.persistence,
+          provider: result.provider,
           composition: result.composition,
         });
         return;
@@ -206,7 +207,14 @@ export default function CVEngineFlow() {
   };
 
   const targetBackStage: FlowStage = importContext ? 'IMPORTED_REVIEW' : 'EDIT';
-  const canRetryFailure = Boolean(generationFailure && !generationFailure.grounding && !generationFailure.semanticGrounding && resumeData);
+  const canRetryFailure = Boolean(
+    generationFailure &&
+    !generationFailure.grounding &&
+    !generationFailure.semanticGrounding &&
+    generationFailure.provider?.retryable !== false &&
+    generationFailure.persistence?.retryable !== false &&
+    resumeData,
+  );
 
   return (
     <div className="app-shell min-h-screen overflow-x-hidden">

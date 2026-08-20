@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ResumeRequest } from '../../lib/schemas';
-import { evaluateProductResume } from '../../lib/application/product/ProductEvaluationService';
+import {
+  PRODUCT_EVALUATION_VERSION,
+  evaluateProductResume,
+} from '../../lib/application/product/ProductEvaluationService';
 
 function candidate(jobDescription = 'Requirements:\n- TypeScript'): ResumeRequest {
   return {
@@ -57,11 +60,13 @@ SKILLS
 Technical Skills: TypeScript, Docker
 Soft Skills: Collaboration`;
 
-test('resume quality and ATS parseability are deterministic and independent from target Job Description', () => {
+test('product evaluation v2 is deterministic and independent from target Job Description', () => {
   const first = evaluateProductResume(candidate('Requirements:\n- TypeScript'), RENDERED);
   const second = evaluateProductResume(candidate('Requirements:\n- Kubernetes AWS Terraform Kafka TypeScript Docker'), RENDERED);
 
   assert.deepEqual(first, second);
+  assert.equal(first.resumeQuality.version, PRODUCT_EVALUATION_VERSION);
+  assert.equal(PRODUCT_EVALUATION_VERSION, 'ats2-product-evaluation-v2');
   assert.ok(first.resumeQuality.score >= 0 && first.resumeQuality.score <= 100);
   assert.ok(first.atsParseability.score >= 0 && first.atsParseability.score <= 100);
 });
@@ -95,15 +100,40 @@ test('table-like formatting reduces structural parseability without changing can
   assert.equal(tableLike.resumeQuality.score, clean.resumeQuality.score);
 });
 
-test('accented Spanish action verbs are recognized after evaluator normalization', () => {
+test('quality evaluation is language-neutral and does not score hardcoded action verbs', () => {
   const spanishCandidate = candidate();
   spanishCandidate.experience[0] = {
     ...spanishCandidate.experience[0],
-    description: 'Automaticé procesos internos con TypeScript para reducir tareas manuales repetitivas.',
+    description: 'Ejecutar pruebas funcionales, manuales y de regresión en soluciones empresariales.',
   };
   const evaluation = evaluateProductResume(spanishCandidate, RENDERED);
-  const actionCheck = evaluation.resumeQuality.checks.find((check) => check.id === 'quality-action-language');
 
-  assert.ok(actionCheck);
-  assert.equal(actionCheck.status, 'PASS');
+  assert.equal(evaluation.resumeQuality.checks.some((check) => check.id === 'quality-action-language'), false);
+  assert.equal(evaluation.resumeQuality.checks.find((check) => check.id === 'quality-substantive-evidence')?.status, 'PASS');
+  assert.match(
+    evaluation.resumeQuality.checks.find((check) => check.id === 'quality-action-language-boundary')?.detail ?? '',
+    /hardcoded language-specific action-verb list/i,
+  );
+});
+
+test('long plain-text wrapping alone is not treated as a structural ATS defect', () => {
+  const longSummary = `${'Evidence-backed professional summary statement '.repeat(7)}with a normal semantic ending.`;
+  const rendered = RENDERED.replace(
+    'Backend engineer focused on reliable APIs, maintainable services, and clear delivery practices.',
+    longSummary,
+  );
+  const data = candidate();
+  data.summary = longSummary;
+  const evaluation = evaluateProductResume(data, rendered);
+
+  assert.equal(evaluation.atsParseability.checks.some((check) => check.id === 'parse-line-density'), false);
+  assert.equal(evaluation.atsParseability.checks.find((check) => check.id === 'parse-claim-separation')?.status, 'PASS');
+});
+
+test('escaped newlines or compressed bullets reduce claim-separation parseability', () => {
+  const clean = evaluateProductResume(candidate(), RENDERED);
+  const ambiguous = evaluateProductResume(candidate(), `${RENDERED}\\nEXPERIENCE • Built APIs • Maintained services`);
+
+  assert.ok(ambiguous.atsParseability.score < clean.atsParseability.score);
+  assert.equal(ambiguous.atsParseability.checks.find((check) => check.id === 'parse-claim-separation')?.status, 'WARN');
 });

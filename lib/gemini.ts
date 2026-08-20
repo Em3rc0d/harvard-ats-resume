@@ -2,14 +2,18 @@ import {
   hasMaterialCareerEvidence,
   type ResumeRequest,
 } from './schemas';
-import { GeminiResumeProvider } from './infrastructure/ai/GeminiResumeProvider';
+import { AIProviderFailure, classifyAIProviderError } from './application/ai/AIProviderFailure';
+import {
+  GEMINI_RESUME_PROVIDER,
+  GeminiResumeProvider,
+} from './infrastructure/ai/GeminiResumeProvider';
 
 export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
   success: boolean;
   formattedResume?: string;
   matchedKeywords?: string[];
-  suggestions?: string[];
   improvedResume?: string;
+  providerFailure?: AIProviderFailure;
   error?: string;
 }> {
   try {
@@ -21,14 +25,22 @@ export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
       success: true,
       formattedResume: proposal.formattedResume,
       matchedKeywords: proposal.matchedKeywords,
-      suggestions: proposal.suggestions,
       improvedResume: improvedResume.length > 100 ? improvedResume : undefined,
     };
   } catch (error) {
-    console.error('Gemini API Error:', error);
+    const failure = error instanceof AIProviderFailure
+      ? error
+      : classifyAIProviderError(error, GEMINI_RESUME_PROVIDER);
+    console.error('Gemini resume provider failure:', {
+      kind: failure.kind,
+      provider: failure.provider,
+      retryable: failure.retryable,
+      statusCode: failure.statusCode,
+    });
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to generate resume',
+      providerFailure: failure,
+      error: failure.message,
     };
   }
 }
@@ -102,6 +114,7 @@ function formatEducation(education: ResumeRequest['education']): string {
   education.forEach((item) => {
     if (item.institution.trim()) text += `${item.institution}\n`;
     if (item.degree.trim()) text += `${item.degree}\n`;
+    if (item.honors?.trim()) text += `${item.honors}\n`;
     const period = [item.startDate, item.endDate].filter((value) => value.trim()).join(' - ');
     if (period) text += `${period}\n`;
     text += '\n';
