@@ -35,6 +35,14 @@ jobs:
       - name: Dependency audit
         run: npm audit --audit-level=moderate
 
+      - name: Enforce local-only AI runtime
+        run: |
+          if grep -R -n -E 'Gemini|GoogleGenAI|@google/genai|GEMINI_API_KEY' \
+            app lib components package.json package-lock.json .env.example; then
+            echo 'Remote Gemini runtime residue detected.' >&2
+            exit 1
+          fi
+
       - name: Lint
         run: npm run lint
 
