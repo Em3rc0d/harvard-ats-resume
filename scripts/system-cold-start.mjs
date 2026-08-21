@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { captureCanonicalRuntimeIdentity } from './system-runtime-identity.mjs';
 
 const BASE_URL = (process.env.CV_ENGINE_E2E_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 
@@ -31,6 +32,19 @@ function identifiedCompose(...args) {
   if (result.status !== 0) throw new Error(`Identified Docker Compose failed with exit ${result.status}.`);
 }
 
+function serviceStartedAt(service) {
+  try {
+    const id = dockerCompose('ps', '-q', service).trim();
+    if (!id) return null;
+    const value = execFileSync('docker', ['inspect', '--format', '{{.State.StartedAt}}', id], {
+      encoding: 'utf8',
+    }).trim();
+    return Number.isFinite(Date.parse(value)) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 async function health() {
   const response = await fetch(`${BASE_URL}/api/health`, { headers: { 'cache-control': 'no-cache' } });
   let body;
@@ -42,19 +56,59 @@ async function health() {
   return { statusCode: response.status, body };
 }
 
+function resolvedModelsPresent(body) {
+  const capabilities = body?.configuration?.status === 'RESOLVED'
+    ? body.configuration.capabilities
+    : null;
+  return Boolean(
+    capabilities?.resumeImport?.model
+      && capabilities?.inlineOptimize?.model
+      && capabilities?.resumeAssembly?.model,
+  );
+}
+
 async function waitForReady(expectedSha, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   let last;
+  const events = {
+    trustedCoreReadyAt: null,
+    redisReadyAt: null,
+    providerResolutionAt: null,
+    modelResolutionAt: null,
+    aiCapabilityReadyAt: null,
+  };
+
   while (Date.now() < deadline) {
     try {
       last = await health();
+      const now = new Date().toISOString();
+      const identityMatches = last.body?.identity?.buildSha === expectedSha
+        && last.body?.identity?.releaseQualifiableIdentity === true;
+
+      if (identityMatches) {
+        if (!events.redisReadyAt && last.body?.dependencies?.durableRedis?.status === 'READY') {
+          events.redisReadyAt = now;
+        }
+        if (!events.providerResolutionAt && last.body?.configuration?.status === 'RESOLVED') {
+          events.providerResolutionAt = now;
+        }
+        if (!events.modelResolutionAt && resolvedModelsPresent(last.body)) {
+          events.modelResolutionAt = now;
+        }
+        if (!events.aiCapabilityReadyAt && last.body?.dependencies?.localAI?.status === 'READY') {
+          events.aiCapabilityReadyAt = now;
+        }
+        if (!events.trustedCoreReadyAt && last.body?.trustedCoreAvailable === true) {
+          events.trustedCoreReadyAt = now;
+        }
+      }
+
       if (
-        last.statusCode === 200
+        identityMatches
+        && last.statusCode === 200
         && last.body?.status === 'READY'
-        && last.body?.identity?.buildSha === expectedSha
-        && last.body?.identity?.releaseQualifiableIdentity === true
       ) {
-        return last;
+        return { health: last, events };
       }
     } catch {
       // Container may not be listening yet.
@@ -62,6 +116,13 @@ async function waitForReady(expectedSha, timeoutMs) {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
   }
   throw new Error(`Docker stack did not reach identified READY state within ${timeoutMs}ms. Last state: ${JSON.stringify(last)}`);
+}
+
+function elapsedMs(startIso, endIso) {
+  if (!startIso || !endIso) return null;
+  const start = Date.parse(startIso);
+  const end = Date.parse(endIso);
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : null;
 }
 
 async function main() {
@@ -81,22 +142,55 @@ async function main() {
   identifiedCompose('build', 'app');
 
   const attempts = [];
+  let runtimeIdentityRef;
+  let runtimeIdentity;
   try {
     for (let index = 1; index <= repetitions; index += 1) {
       dockerCompose('down');
-      const startedAt = new Date().toISOString();
+      const orchestrationStartedAt = new Date().toISOString();
       const started = performance.now();
       identifiedCompose('up', '-d');
-      const ready = await waitForReady(expectedSha, timeoutMs);
+      const containerStartAt = serviceStartedAt('app');
+      const readiness = await waitForReady(expectedSha, timeoutMs);
+      const ready = readiness.health;
+      const trustedCoreReadyAt = readiness.events.trustedCoreReadyAt;
+      const readyAt = new Date().toISOString();
       const readyLatencyMs = Math.round(performance.now() - started);
+
+      if (!runtimeIdentityRef) {
+        const captured = await captureCanonicalRuntimeIdentity({
+          baseUrl: BASE_URL,
+          expectedBuildSha: expectedSha,
+          healthStatusCode: ready.statusCode,
+          healthBody: ready.body,
+        });
+        runtimeIdentityRef = captured.runtimeIdentityRef;
+        runtimeIdentity = captured.runtimeIdentity;
+      }
+
       const ps = dockerCompose('ps');
       const models = dockerCompose('exec', '-T', 'ollama', 'ollama', 'list');
       const attempt = {
         attempt: index,
-        startedAt,
-        readyAt: new Date().toISOString(),
+        orchestrationStartedAt,
+        containerStartAt,
+        trustedCoreReadyAt,
+        redisReadyAt: readiness.events.redisReadyAt,
+        providerResolutionAt: readiness.events.providerResolutionAt,
+        modelResolutionAt: readiness.events.modelResolutionAt,
+        aiCapabilityReadyAt: readiness.events.aiCapabilityReadyAt,
+        firstTrustedRequestAt: null,
+        firstTrustedResponseAt: null,
+        firstTrustedRequestState: 'UNKNOWN_NOT_EXERCISED_BY_COLD_START',
+        readyAt,
         readyLatencyMs,
+        observations: {
+          containerToTrustedCoreReadyMs: elapsedMs(containerStartAt, trustedCoreReadyAt),
+          containerToAiReadyMs: elapsedMs(containerStartAt, readiness.events.aiCapabilityReadyAt),
+          containerToReadyMs: elapsedMs(containerStartAt, readyAt),
+        },
         expectedBuildSha: expectedSha,
+        runtimeIdentityRef,
         identity: ready.body.identity,
         health: ready.body,
         dockerPs: ps,
@@ -112,19 +206,28 @@ async function main() {
   }
 
   const receipt = {
-    receiptVersion: 'ats-sys-01-cold-start-v0.1',
+    receiptVersion: 'ats-sys-02-cold-start-v0.1',
     semantics: 'CONTAINERS_COLD_VOLUMES_RETAINED',
     volumesRetained: true,
     destructiveVolumeReset: false,
     expectedBuildSha: expectedSha,
     runtimeProfileId: process.env.CVENGINE_RUNTIME_PROFILE_ID,
+    runtimeIdentityRef: runtimeIdentityRef || null,
+    runtimeIdentity: runtimeIdentity || null,
     repetitions,
     attempts,
     result: attempts.length === repetitions && attempts.every((attempt) => attempt.result === 'PASS') ? 'PASS' : 'FAIL',
     latencyBudgetApplied: false,
-    note: 'Ready latency is observational in v0.1. Fresh-install/model-download cold start is a separate, still-uncharacterized scenario.',
+    unknowns: [
+      'firstTrustedRequestAt',
+      'firstTrustedResponseAt',
+      'firstDeterministicResumeLatency',
+      'firstInlineOptimizeLatency',
+    ],
+    note: 'Cold-start timing is observational only. No latency budget or hardware support claim is inferred. Fresh-install/model-download cold start remains a separate uncharacterized scenario.',
   };
   await writeFile(resolve(outputDir, 'cold-start-receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+  process.stdout.write(`Runtime identity: ${receipt.runtimeIdentityRef}\n`);
   process.stdout.write(`Evidence: ${outputDir}\n`);
   if (receipt.result !== 'PASS') process.exitCode = 1;
 }
