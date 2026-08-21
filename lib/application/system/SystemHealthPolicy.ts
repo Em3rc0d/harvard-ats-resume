@@ -11,6 +11,7 @@ export interface SystemHealthDecision {
   readonly httpStatus: 200 | 503;
   readonly trustedCoreAvailable: boolean;
   readonly degradedCapabilities: readonly string[];
+  readonly unavailableCapabilities: readonly string[];
 }
 
 /**
@@ -20,6 +21,11 @@ export interface SystemHealthDecision {
  * without taking the trusted core offline. Durable Redis is currently required
  * for trusted Career Vault / ResumeVersion state and therefore remains a core
  * availability dependency.
+ *
+ * `degradedCapabilities` is retained exactly for ATS-SYS-01 compatibility.
+ * ATS-SYS-02 additionally exposes `unavailableCapabilities` so fault receipts
+ * can distinguish degraded optional intelligence from a capability whose
+ * trusted guarantee is not available at all.
  */
 export function evaluateSystemHealth(input: SystemHealthInput): SystemHealthDecision {
   if (input.durableRedis !== 'READY') {
@@ -30,6 +36,7 @@ export function evaluateSystemHealth(input: SystemHealthInput): SystemHealthDeci
       degradedCapabilities: input.localAI === 'READY'
         ? ['durable-state']
         : ['durable-state', 'resume-import-ai', 'inline-optimize'],
+      unavailableCapabilities: ['durable-state'],
     };
   }
 
@@ -39,6 +46,7 @@ export function evaluateSystemHealth(input: SystemHealthInput): SystemHealthDeci
       httpStatus: 200,
       trustedCoreAvailable: true,
       degradedCapabilities: ['resume-import-ai', 'inline-optimize'],
+      unavailableCapabilities: [],
     };
   }
 
@@ -47,5 +55,6 @@ export function evaluateSystemHealth(input: SystemHealthInput): SystemHealthDeci
     httpStatus: 200,
     trustedCoreAvailable: true,
     degradedCapabilities: [],
+    unavailableCapabilities: [],
   };
 }
