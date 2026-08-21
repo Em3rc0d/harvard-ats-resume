@@ -4,6 +4,7 @@ import {
   DurablePersistenceUnavailableError,
 } from '@/lib/infrastructure/persistence/DurableRedisRuntime';
 import { AIProviderFailure } from '@/lib/application/ai/AIProviderFailure';
+import { resolveRuntimeIdentity } from '@/lib/application/system/RuntimeIdentity';
 import { OllamaStructuredClient, resolveOllamaModel } from '@/lib/infrastructure/ai/OllamaStructuredClient';
 import { DEFAULT_OLLAMA_IMPORT_V3_MODEL } from '@/lib/infrastructure/import/OllamaResumeImportV3Provider';
 import { DEFAULT_OLLAMA_OPTIMIZE_MODEL } from '@/lib/infrastructure/ai/OllamaCandidateTextOptimizer';
@@ -61,11 +62,13 @@ export async function GET() {
   }
 
   const ready = dependencies.localAI.status === 'READY' && dependencies.durableRedis.status === 'READY';
+  const identity = resolveRuntimeIdentity();
 
   return NextResponse.json(
     {
       status: ready ? 'READY' : 'DEGRADED',
       runtime: 'LOCAL_AI_WITH_DETERMINISTIC_FINAL_ASSEMBLY',
+      identity,
       dependencies,
     },
     {

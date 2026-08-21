@@ -1,3 +1,6 @@
+ARG CVENGINE_BUILD_SHA=UNIDENTIFIED
+ARG CVENGINE_ARCHITECTURE_VERSION=ats-sys-01-v0.1
+
 FROM node:24-bookworm-slim AS dependencies
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -10,11 +13,15 @@ COPY . .
 RUN npm run build
 
 FROM node:24-bookworm-slim AS runtime
+ARG CVENGINE_BUILD_SHA
+ARG CVENGINE_ARCHITECTURE_VERSION
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    CVENGINE_BUILD_SHA=${CVENGINE_BUILD_SHA} \
+    CVENGINE_ARCHITECTURE_VERSION=${CVENGINE_ARCHITECTURE_VERSION}
 
 # Keep the exact tested dependency graph and Next build together. The model and
 # durable stores are separate containers so this image stays application-only.

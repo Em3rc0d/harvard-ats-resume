@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.behavior.json && node --test .test-dist/tests/ats2/*.test.js"
+    "test": "tsc -p tsconfig.behavior.json && node --test .test-dist/tests/ats2/*.test.js",
+    "docker:identified": "node scripts/docker-compose-identified.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

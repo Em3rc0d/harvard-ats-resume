@@ -80,12 +80,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        CVENGINE_BUILD_SHA: ${CVENGINE_BUILD_SHA:-UNIDENTIFIED}
+        CVENGINE_ARCHITECTURE_VERSION: ${CVENGINE_ARCHITECTURE_VERSION:-ats-sys-01-v0.1}
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      CVENGINE_RUNTIME_PROFILE_ID: ${CVENGINE_RUNTIME_PROFILE_ID:-UNCHARACTERIZED}
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${DOCKER_OLLAMA_MODEL:-qwen3:1.7b}
       OLLAMA_IMPORT_MODEL: ${DOCKER_OLLAMA_IMPORT_MODEL:-qwen3:1.7b}
