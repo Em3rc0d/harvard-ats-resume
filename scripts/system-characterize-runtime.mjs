@@ -2,6 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { cpus, freemem, platform, release, totalmem } from 'node:os';
 import { resolve } from 'node:path';
+import { captureCanonicalRuntimeIdentity } from './system-runtime-identity.mjs';
 
 const SERVICES = ['app', 'ollama', 'redis', 'redis-http'];
 
@@ -52,13 +53,17 @@ function serviceSnapshot(service, id) {
 
 async function main() {
   const stamp = isoSafe(new Date().toISOString());
-  const bundleDir = resolve(process.env.CVENGINE_SYSTEM_BUNDLE_DIR || `evidence/system/characterization/${stamp}`);
+  const bundleDir = resolve(process.env.CVENGINE_SYSTEM_BUNDLE_DIR || `evidence/ats-sys-02/runtime-characterization/${stamp}`);
   const personaDir = resolve(bundleDir, 'personas');
   await mkdir(personaDir, { recursive: true });
+
+  const expectedBuildSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const capturedIdentity = await captureCanonicalRuntimeIdentity({ expectedBuildSha });
 
   const ids = Object.fromEntries(SERVICES.map((service) => [service, containerId(service)]));
   const maxMemoryMiBByService = Object.fromEntries(SERVICES.map((service) => [service, 0]));
   const maxCpuPercentByService = Object.fromEntries(SERVICES.map((service) => [service, 0]));
+  const rawSamples = [];
   let maxAggregateMemoryMiB = 0;
   let samples = 0;
   let busy = false;
@@ -68,9 +73,12 @@ async function main() {
     if (busy || stopped) return;
     busy = true;
     try {
+      const sampledAt = new Date().toISOString();
       let aggregate = 0;
+      const services = {};
       for (const service of SERVICES) {
         const snapshot = serviceSnapshot(service, ids[service]);
+        services[service] = snapshot ?? { cpuPercent: null, memoryMiB: null };
         if (!snapshot) continue;
         if (Number.isFinite(snapshot.memoryMiB)) {
           maxMemoryMiBByService[service] = Math.max(maxMemoryMiBByService[service], snapshot.memoryMiB);
@@ -81,6 +89,12 @@ async function main() {
         }
       }
       maxAggregateMemoryMiB = Math.max(maxAggregateMemoryMiB, aggregate);
+      rawSamples.push({
+        sample: samples + 1,
+        sampledAt,
+        aggregateMemoryMiB: Math.round(aggregate * 10) / 10,
+        services,
+      });
       samples += 1;
     } finally {
       busy = false;
@@ -92,7 +106,11 @@ async function main() {
   const startedAt = new Date().toISOString();
   const child = spawn(process.execPath, ['scripts/system-characterize.mjs', ...process.argv.slice(2)], {
     stdio: 'inherit',
-    env: { ...process.env, CVENGINE_SYSTEM_EVIDENCE_DIR: personaDir },
+    env: {
+      ...process.env,
+      CVENGINE_SYSTEM_EVIDENCE_DIR: personaDir,
+      CVENGINE_RUNTIME_IDENTITY_REF: capturedIdentity.runtimeIdentityRef,
+    },
   });
   const exitCode = await new Promise((resolvePromise, reject) => {
     child.once('error', reject);
@@ -102,8 +120,23 @@ async function main() {
   clearInterval(timer);
   await sample();
 
+  await writeFile(
+    resolve(bundleDir, 'runtime-samples.json'),
+    `${JSON.stringify({
+      observationVersion: 'ats-sys-02-runtime-samples-v0.1',
+      runtimeIdentityRef: capturedIdentity.runtimeIdentityRef,
+      runtimeIdentity: capturedIdentity.runtimeIdentity,
+      sampleIntervalMs: 1000,
+      samples: rawSamples,
+      policy: 'Raw samples are observations only. Sampled maxima are not exact hardware peaks or support budgets.',
+    }, null, 2)}\n`,
+    'utf8',
+  );
+
   const observation = {
-    observationVersion: 'ats-sys-01-runtime-observation-v0.1',
+    observationVersion: 'ats-sys-02-runtime-observation-v0.1',
+    runtimeIdentityRef: capturedIdentity.runtimeIdentityRef,
+    runtimeIdentity: capturedIdentity.runtimeIdentity,
     startedAt,
     completedAt: new Date().toISOString(),
     host: {
@@ -118,6 +151,7 @@ async function main() {
       ids,
       samples,
       sampleIntervalMs: 1000,
+      rawSamplesRef: resolve(bundleDir, 'runtime-samples.json'),
       maxMemoryMiBByService,
       maxAggregateMemoryMiB: Math.round(maxAggregateMemoryMiB * 10) / 10,
       maxCpuPercentByService,
@@ -125,10 +159,12 @@ async function main() {
     personaEvidenceDir: personaDir,
     characterizationExitCode: exitCode,
     status: exitCode === 0 ? 'OBSERVED' : 'OBSERVED_WITH_FAILURE',
-    policy: 'Measurements are observations only. ATS-SYS-01 v0.1 applies no latency, CPU, or memory budget.',
+    policy: 'Measurements are observations only. ATS-SYS-02 applies no latency, CPU, memory, or minimum-hardware budget during characterization.',
   };
 
   await writeFile(resolve(bundleDir, 'runtime-observation.json'), `${JSON.stringify(observation, null, 2)}\n`, 'utf8');
+  process.stdout.write(`Runtime identity: ${capturedIdentity.runtimeIdentityRef}\n`);
+  process.stdout.write(`Raw samples: ${resolve(bundleDir, 'runtime-samples.json')}\n`);
   process.stdout.write(`Runtime observation: ${resolve(bundleDir, 'runtime-observation.json')}\n`);
   process.exitCode = exitCode;
 }
