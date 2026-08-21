@@ -12,6 +12,7 @@
     "test": "tsc -p tsconfig.behavior.json && node --test .test-dist/tests/ats2/*.test.js",
     "docker:identified": "node scripts/docker-compose-identified.mjs",
     "system:characterize": "node scripts/system-characterize.mjs",
+    "system:characterize:runtime": "node scripts/system-characterize-runtime.mjs",
     "system:faults": "node scripts/system-fault-injection.mjs",
     "system:release-evaluate": "node scripts/system-release-evaluate.mjs"
   },
@@ -28,7 +29,7 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.624",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "react-dom": "^19.2.8",
     "react-hook-form": "^7.53.0",
     "tesseract.js": "^7.0.0",
     "zod": "^3.23.0"
