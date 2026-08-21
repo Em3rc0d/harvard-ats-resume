@@ -75,6 +75,36 @@ Permanent test/characterization requirement:
 
 ---
 
+## ATS-SYS-INC-004 — ResumeVersion generation provenance mismatch
+
+**Status:** VERIFIED  
+**Class:** PROVENANCE
+
+Observed behavior from repository inspection:
+
+- final resume assembly had already become deterministic through `generateResumeDraft` / the compatibility alias `generateResumeWithAI`;
+- `app/api/generate-resume/route.ts` still populated `ResumeVersion.generation` from the retired `OllamaResumeProvider` constants;
+- therefore a trusted artifact could accurately preserve candidate facts while inaccurately describing the mechanism that produced the artifact.
+
+Containment/correction:
+
+- the generation route now requires the actual assembly result to provide generation provenance;
+- `composeApprovedResumeVersion` receives `localAIResult.generation` rather than hard-coded Ollama metadata;
+- missing generation provenance fails closed before a trusted ResumeVersion is emitted;
+- the release evaluator requires the deterministic provider/model/contract tuple for promoted personas.
+
+System lesson:
+
+> Provenance includes operational provenance, not only candidate-fact provenance. A trusted artifact must truthfully describe both what supports its claims and how the artifact was materialized.
+
+Permanent test/characterization requirement:
+
+- behavior regression forbids `OLLAMA_RESUME_*` metadata at the final-generation route boundary;
+- persona receipts preserve ResumeVersion generation metadata;
+- `truth-invariants` fails when final-generation provenance does not match the active compositor.
+
+---
+
 ## Incident closure rule
 
 A future incident closes only when:
