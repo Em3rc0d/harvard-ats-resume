@@ -61,8 +61,18 @@ jobs:
       - name: Validate Docker Compose topology
         run: docker compose config --quiet
 
-      - name: Build CV Engine Docker image
-        run: docker build --tag cv-engine-ci .
+      - name: Build identified CV Engine Docker image
+        run: |
+          docker build \
+            --build-arg CVENGINE_BUILD_SHA="$GITHUB_SHA" \
+            --build-arg CVENGINE_ARCHITECTURE_VERSION="ats-sys-01-v0.1" \
+            --tag cv-engine-ci .
+
+      - name: Verify Docker build identity
+        run: |
+          docker image inspect cv-engine-ci --format '{{range .Config.Env}}{{println .}}{{end}}' > /tmp/cv-engine-image-env.txt
+          grep -Fx "CVENGINE_BUILD_SHA=$GITHUB_SHA" /tmp/cv-engine-image-env.txt
+          grep -Fx 'CVENGINE_ARCHITECTURE_VERSION=ats-sys-01-v0.1' /tmp/cv-engine-image-env.txt
 
       - name: Install browser acceptance runtime
         run: |
