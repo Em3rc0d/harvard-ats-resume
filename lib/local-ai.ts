@@ -1,3 +1,4 @@
+import type { AIProviderFailure } from './application/ai/AIProviderFailure';
 import type { ResumeRequest } from './schemas';
 
 export { sanitizeResumeData } from './application/resume/ResumeInputSanitizer';
@@ -11,6 +12,8 @@ export interface ResumeDraftResult {
   readonly formattedResume?: string;
   readonly matchedKeywords?: string[];
   readonly improvedResume?: string;
+  /** Compatibility field for the existing route error contract. Deterministic assembly never sets it. */
+  readonly providerFailure?: AIProviderFailure;
   readonly generation?: {
     readonly provider: string;
     readonly model: string;
