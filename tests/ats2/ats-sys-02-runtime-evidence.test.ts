@@ -148,3 +148,37 @@ test('ATS-SYS-02 cold-start receipt is runtime-bound and records readiness event
   assert.match(source, /UNKNOWN_NOT_EXERCISED_BY_COLD_START/);
   assert.match(source, /latencyBudgetApplied:\s*false/);
 });
+
+test('ATS-SYS-02 normal runtime characterization persists raw samples bound to the canonical runtime', () => {
+  const source = readFileSync('scripts/system-characterize-runtime.mjs', 'utf8');
+  assert.match(source, /captureCanonicalRuntimeIdentity/);
+  assert.match(source, /runtimeIdentityRef/);
+  assert.match(source, /runtime-samples\.json/);
+  assert.match(source, /sampledAt/);
+  assert.match(source, /aggregateMemoryMiB/);
+  assert.match(source, /Measurements are observations only/);
+});
+
+test('ATS-SYS-02 persona and Inline Optimize receipts point to the exact runtime evidence artifact', () => {
+  const personaSource = readFileSync('scripts/system-characterize.mjs', 'utf8');
+  const optimizeSource = readFileSync('scripts/system-characterize-inline-optimize.mjs', 'utf8');
+
+  assert.match(personaSource, /runtimeIdentityRef/);
+  assert.match(personaSource, /fixtureRef/);
+  assert.match(personaSource, /canonical-persona-e2e/);
+  assert.match(optimizeSource, /runtimeIdentityRef/);
+  assert.match(optimizeSource, /fixtureRef/);
+  assert.match(optimizeSource, /ats-sys-02-inline-optimize-observation-v0\.1/);
+  assert.match(optimizeSource, /budgetApplied:\s*false/);
+});
+
+test('ATS-SYS-02 P10 receipts distinguish degraded and unavailable capability evidence and record recovery', () => {
+  const source = readFileSync('scripts/system-fault-injection.mjs', 'utf8');
+  assert.match(source, /runtimeIdentityRef/);
+  assert.match(source, /faultId/);
+  assert.match(source, /injectionMethod/);
+  assert.match(source, /degradedCapabilities/);
+  assert.match(source, /unavailableCapabilities/);
+  assert.match(source, /recoveryObserved/);
+  assert.match(source, /faultDetectionLatencyMs/);
+});
