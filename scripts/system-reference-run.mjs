@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 const REQUIRED_PROFILE = 'REFERENCE-CPU-01';
 const EXPECTED_POLICY_BLOCKERS = ['latency-budgets', 'runtime-envelope'];
+const GENERATED_EVIDENCE_PREFIX = 'evidence/ats-sys-02/';
 
 function argValue(name) {
   const index = process.argv.indexOf(name);
@@ -37,11 +38,30 @@ async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
 }
 
-function ensureCleanRepository() {
-  const dirty = command('git', ['status', '--porcelain']);
-  if (dirty) {
-    throw new Error('REFERENCE-CPU-01 evidence requires a clean Git worktree. Commit or discard local changes before execution.');
+function ensureSourceIdentifiableRepository() {
+  const status = command('git', ['status', '--porcelain=v1', '--untracked-files=all']);
+  if (!status) return { ignoredGeneratedEvidence: [] };
+
+  const lines = status.split(/\r?\n/).filter(Boolean);
+  const ignoredGeneratedEvidence = [];
+  const sourceChanges = [];
+  for (const line of lines) {
+    const code = line.slice(0, 2);
+    const path = line.slice(3).replace(/\\/g, '/');
+    if (code === '??' && path.startsWith(GENERATED_EVIDENCE_PREFIX)) {
+      ignoredGeneratedEvidence.push(path);
+      continue;
+    }
+    sourceChanges.push(line);
   }
+
+  if (sourceChanges.length > 0) {
+    throw new Error(
+      `REFERENCE-CPU-01 evidence requires committed source. Resolve these Git changes before execution: ${sourceChanges.join(' | ')}`,
+    );
+  }
+
+  return { ignoredGeneratedEvidence };
 }
 
 function ensureReferenceProfile() {
@@ -86,10 +106,11 @@ function sameStringSet(actual, expected) {
 
 async function main() {
   const runtimeProfileId = ensureReferenceProfile();
-  ensureCleanRepository();
+  const sourceStatus = ensureSourceIdentifiableRepository();
 
-  // This runner executes committed code only. Git SHA therefore identifies the
-  // exact source that Docker builds and the receipts evaluate.
+  // Only committed source may affect the application image. Prior untracked
+  // ATS-SYS-02 evidence is permitted because .dockerignore excludes it from the
+  // image context and it cannot alter the runtime being characterized.
   const buildSha = command('git', ['rev-parse', 'HEAD']);
   const branch = command('git', ['branch', '--show-current']) || 'DETACHED';
   const nodeVersion = process.version;
@@ -136,7 +157,8 @@ async function main() {
     build: {
       sha: buildSha,
       branch,
-      cleanWorktree: true,
+      sourceIdentifiable: true,
+      ignoredGeneratedEvidenceCount: sourceStatus.ignoredGeneratedEvidence.length,
       nodeVersion,
       dockerVersion,
     },
@@ -157,7 +179,7 @@ async function main() {
       releaseRoot,
     },
     steps: [],
-    policy: 'Instrumentation and execution evidence only. EVIDENCE_CAPTURED != supported runtime; observed latency != approved budget; UNKNOWN/UNCHARACTERIZED != PASS.',
+    policy: 'Instrumentation and execution evidence only. EVIDENCE_CAPTURED != supported runtime; observed latency != approved budget; UNKNOWN/UNCHARACTERIZED != PASS. Generated ATS-SYS-02 evidence is excluded from the Docker image context.',
   };
   const manifestPath = resolve(root, 'reference-run-manifest.json');
   await persistJson(manifestPath, manifest);
