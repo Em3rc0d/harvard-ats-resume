@@ -28,11 +28,6 @@ import {
   aiProviderFailureHttpStatus,
   aiProviderFailureMessage,
 } from '@/lib/application/ai/AIProviderFailure';
-import {
-  OLLAMA_RESUME_CONTRACT_VERSION,
-  OLLAMA_RESUME_MODEL,
-  OLLAMA_RESUME_PROVIDER,
-} from '@/lib/infrastructure/ai/OllamaResumeProvider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -45,10 +40,11 @@ const resumeGenerationInputSchema = resumeRequestSchema.extend({
 /**
  * POST /api/generate-resume
  *
- * Main endpoint for generating evidence-bound resumes. Local model output is
- * always an untrusted proposal: grounding, semantic grounding, claim
- * traceability, and Career Vault integrity remain the authorities that decide
- * whether a trusted ResumeVersion can be emitted.
+ * Main endpoint for materializing evidence-bound resumes. The assembly result
+ * is never a truth authority: grounding, semantic grounding, claim
+ * traceability, and Career Vault integrity decide whether a trusted
+ * ResumeVersion can be emitted. Generation provenance must describe the actual
+ * composer that produced the artifact.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -206,6 +202,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!localAIResult.generation) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Resume assembly completed without generation provenance. No trusted ResumeVersion was emitted.',
+          composition: { status: 'MISSING_GENERATION_PROVENANCE' },
+        },
+        {
+          status: 500,
+          headers: {
+            ...rateLimitHeaders,
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        },
+      );
+    }
+
     const groundingReport = validateGeneratedResumeGrounding(
       sanitizedData,
       localAIResult.formattedResume,
@@ -274,11 +287,7 @@ export async function POST(request: NextRequest) {
         targetedJobDescriptionId: jobIntelligence?.jobDescription.id,
         targetJobDescription: jobIntelligence?.jobDescription.sourceText,
         matchReportId: jobMatch?.report.id,
-        generation: {
-          provider: OLLAMA_RESUME_PROVIDER,
-          model: OLLAMA_RESUME_MODEL,
-          contractVersion: OLLAMA_RESUME_CONTRACT_VERSION,
-        },
+        generation: localAIResult.generation,
         createdAt: capturedAt,
       });
     } catch (compositionError) {
