@@ -10,7 +10,9 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "tsc -p tsconfig.behavior.json && node --test .test-dist/tests/ats2/*.test.js",
-    "docker:identified": "node scripts/docker-compose-identified.mjs"
+    "docker:identified": "node scripts/docker-compose-identified.mjs",
+    "system:characterize": "node scripts/system-characterize.mjs",
+    "system:faults": "node scripts/system-fault-injection.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
