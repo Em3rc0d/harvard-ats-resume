@@ -1,0 +1,150 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+import {
+  RUNTIME_IDENTITY_CONTRACT_VERSION,
+  RUNTIME_IDENTITY_EVIDENCE_VERSION,
+  type RuntimeIdentityEvidence,
+  validateRuntimeIdentityEvidence,
+} from '../../lib/application/system/RuntimeIdentityEvidence';
+import { resolveRuntimeIdentity } from '../../lib/application/system/RuntimeIdentity';
+
+function baseEvidence(): RuntimeIdentityEvidence {
+  const sourceIdentity = resolveRuntimeIdentity({
+    CVENGINE_BUILD_SHA: 'build-123',
+    CVENGINE_RUNTIME_PROFILE_ID: 'REFERENCE-CPU-01',
+  });
+
+  return {
+    runtimeIdentityVersion: RUNTIME_IDENTITY_EVIDENCE_VERSION,
+    buildSha: sourceIdentity.buildSha,
+    architectureVersion: sourceIdentity.architectureVersion,
+    contractVersion: RUNTIME_IDENTITY_CONTRACT_VERSION,
+    environment: 'production',
+    runtimeProfile: sourceIdentity.runtimeProfileId,
+    sourceIdentity,
+    host: {
+      profileId: sourceIdentity.runtimeProfileId,
+      cpu: 'Reference CPU',
+      cores: 8,
+      memoryBytes: 16 * 1024 ** 3,
+      operatingSystem: 'linux test',
+      architecture: 'x64',
+    },
+    container: {
+      image: 'cv-engine-app',
+      imageDigest: 'sha256:abc123',
+      dockerVersion: '28.0.0',
+    },
+    capabilities: {
+      resumeImport: {
+        configured: true,
+        observedState: 'READY',
+        provider: 'ollama',
+        model: 'qwen3:1.7b',
+      },
+      jobIntelligence: {
+        configured: true,
+        observedState: 'UNKNOWN',
+      },
+      opportunityAssessment: {
+        configured: true,
+        observedState: 'UNKNOWN',
+      },
+      deterministicComposer: {
+        configured: true,
+        observedState: 'CONFIGURED',
+        provider: 'cv-engine-deterministic',
+        model: 'source-preserving-resume-composer-v2',
+        contractVersion: 'ats2-evidence-bound-resume-v2',
+      },
+      inlineOptimize: {
+        configured: true,
+        observedState: 'READY',
+        provider: 'ollama',
+        model: 'qwen3:4b-instruct',
+      },
+      persistence: {
+        configured: true,
+        observedState: 'READY',
+      },
+    },
+    ai: {
+      provider: 'ollama',
+      endpoint: 'http://ollama:11434',
+      capabilities: {
+        resumeImport: {
+          resolvedModel: 'qwen3:1.7b',
+          modelVersion: 'UNKNOWN',
+          capability: 'resumeImport',
+        },
+        inlineOptimize: {
+          resolvedModel: 'qwen3:4b-instruct',
+          modelVersion: 'UNKNOWN',
+          capability: 'inlineOptimize',
+        },
+      },
+    },
+    redis: {
+      provider: 'redis:7-alpine via hiett/serverless-redis-http:latest',
+      connectivity: 'READY',
+      namespace: 'UNKNOWN',
+      environment: 'production',
+      endpoint: 'http://redis-http:80',
+    },
+    capturedAt: '2026-08-21T12:00:00.000Z',
+  };
+}
+
+test('ATS-SYS-02 accepts a complete identified runtime evidence snapshot while preserving explicit UNKNOWN fields', () => {
+  const evidence = baseEvidence();
+  const evaluation = validateRuntimeIdentityEvidence(evidence);
+
+  assert.equal(evaluation.valid, true);
+  assert.deepEqual(evaluation.blockingReasons, []);
+  assert.equal(evidence.ai.capabilities.resumeImport.modelVersion, 'UNKNOWN');
+  assert.equal(evidence.redis.namespace, 'UNKNOWN');
+  assert.equal(evidence.capabilities.jobIntelligence.observedState, 'UNKNOWN');
+});
+
+test('ATS-SYS-02 rejects runtime evidence whose canonical build/profile no longer matches ATS-SYS-01 identity', () => {
+  const evidence = baseEvidence();
+  const evaluation = validateRuntimeIdentityEvidence({
+    ...evidence,
+    buildSha: 'different-build',
+    runtimeProfile: 'DIFFERENT-PROFILE',
+  });
+
+  assert.equal(evaluation.valid, false);
+  assert.ok(evaluation.blockingReasons.includes('build-sha-mismatch'));
+  assert.ok(evaluation.blockingReasons.includes('runtime-profile-mismatch'));
+  assert.ok(evaluation.blockingReasons.includes('host-profile-mismatch'));
+});
+
+test('ATS-SYS-02 runtime capture records host/container/provider/persistence evidence and never reads Redis credentials', () => {
+  const source = readFileSync('scripts/system-runtime-identity.mjs', 'utf8');
+  assert.match(source, /captureCanonicalRuntimeIdentity/);
+  assert.match(source, /imageDigest/);
+  assert.match(source, /dockerVersion/);
+  assert.match(source, /resumeImport/);
+  assert.match(source, /inlineOptimize/);
+  assert.match(source, /UPSTASH_REDIS_REST_URL/);
+  assert.doesNotMatch(source, /UPSTASH_REDIS_REST_TOKEN/);
+  assert.match(source, /modelVersion:\s*'UNKNOWN'/);
+  assert.match(source, /namespace:\s*'UNKNOWN'/);
+});
+
+test('ATS-SYS-02 cold-start receipt is runtime-bound and records readiness events without inventing first product request evidence', () => {
+  const source = readFileSync('scripts/system-cold-start.mjs', 'utf8');
+  assert.match(source, /captureCanonicalRuntimeIdentity/);
+  assert.match(source, /runtimeIdentityRef/);
+  assert.match(source, /containerStartAt/);
+  assert.match(source, /trustedCoreReadyAt/);
+  assert.match(source, /redisReadyAt/);
+  assert.match(source, /providerResolutionAt/);
+  assert.match(source, /modelResolutionAt/);
+  assert.match(source, /aiCapabilityReadyAt/);
+  assert.match(source, /firstTrustedRequestAt:\s*null/);
+  assert.match(source, /UNKNOWN_NOT_EXERCISED_BY_COLD_START/);
+  assert.match(source, /latencyBudgetApplied:\s*false/);
+});
