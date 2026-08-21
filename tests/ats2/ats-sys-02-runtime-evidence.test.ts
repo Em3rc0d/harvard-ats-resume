@@ -182,3 +182,29 @@ test('ATS-SYS-02 P10 receipts distinguish degraded and unavailable capability ev
   assert.match(source, /recoveryObserved/);
   assert.match(source, /faultDetectionLatencyMs/);
 });
+
+test('ATS-SYS-02 reference runner refuses ambiguous source/runtime identity and never destroys persistent volumes', () => {
+  const source = readFileSync('scripts/system-reference-run.mjs', 'utf8');
+  assert.match(source, /REFERENCE-CPU-01/);
+  assert.match(source, /git', \['status', '--porcelain'\]/);
+  assert.match(source, /clean Git worktree/);
+  assert.match(source, /Refusing to label an undeclared host/);
+  assert.doesNotMatch(source, /down[^\n]*-v/);
+  assert.doesNotMatch(source, /docker compose down -v/);
+});
+
+test('ATS-SYS-02 reference runner repeats canonical personas and preserves policy blockers instead of manufacturing support', () => {
+  const source = readFileSync('scripts/system-reference-run.mjs', 'utf8');
+  assert.match(source, /personaRepetitions.*3/);
+  assert.match(source, /optimizeRepetitions/);
+  assert.match(source, /coldStartRepetitions.*3/);
+  assert.match(source, /system-characterize-runtime\.mjs/);
+  assert.match(source, /system-characterize-inline-optimize\.mjs/);
+  assert.match(source, /system-fault-injection\.mjs/);
+  assert.match(source, /system-release-evaluate\.mjs/);
+  assert.match(source, /EXPECTED_POLICY_BLOCKERS = \['latency-budgets', 'runtime-envelope'\]/);
+  assert.match(source, /BLOCKED_PENDING_INTERPRETATION/);
+  assert.match(source, /runtimeEnvelopeStatus = everyReady \? 'PASS' : 'UNCHARACTERIZED'/);
+  assert.match(source, /latencyBudgetStatus = everyReady \? 'PASS' : 'UNCHARACTERIZED'/);
+  assert.match(source, /EVIDENCE_CAPTURED != supported runtime/);
+});
