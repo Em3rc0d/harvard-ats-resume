@@ -51,7 +51,7 @@ test('resume generation validates first, then preflights durability before model
   const route = readFileSync(join(process.cwd(), 'app/api/generate-resume/route.ts'), 'utf8');
   const validation = route.indexOf('resumeGenerationInputSchema.safeParse');
   const preflight = route.indexOf('await durableRuntime.assertReady()');
-  const modelWork = route.indexOf('const geminiResult = await generateResumeWithGemini');
+  const modelWork = route.indexOf('const localAIResult = await generateResumeWithAI');
 
   assert.ok(validation >= 0 && preflight > validation, 'durability preflight must follow request validation');
   assert.ok(modelWork > preflight, 'durability preflight must happen before model generation');

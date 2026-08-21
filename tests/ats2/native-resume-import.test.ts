@@ -14,6 +14,10 @@ import {
   validateAndMapEvidence,
   type ExtractedResumeTextDocument,
 } from '../../lib/infrastructure/import/NativeResumeImportProvider';
+import {
+  DEFAULT_OLLAMA_IMPORT_V3_MODEL,
+  IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS,
+} from '../../lib/infrastructure/import/OllamaResumeImportV3Provider';
 
 function candidateFixture(): ImportedCandidateDraft {
   return {
@@ -151,30 +155,37 @@ test('legacy binary DOC is rejected rather than routed through an opaque convert
   assert.throws(() => resolveResumeMimeType('candidate.doc', 'application/msword'), /Use PDF or DOCX/);
 });
 
-test('native resume import timeout defaults to 90 seconds and supports bounded override', () => {
-  assert.equal(resolveResumeImportTimeoutMs(undefined), 90_000);
-  assert.equal(resolveResumeImportTimeoutMs('120000'), 120_000);
+test('runtime resume import v3 uses a bounded sectioned local extraction budget', () => {
+  assert.equal(DEFAULT_OLLAMA_IMPORT_V3_MODEL, 'qwen3:1.7b');
+  assert.equal(IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS, 1_024);
+  assert.equal(resolveResumeImportTimeoutMs(undefined), 180_000);
+  assert.equal(resolveResumeImportTimeoutMs('240000'), 240_000);
 });
 
 test('native resume import rejects unsafe timeout configuration', () => {
-  assert.throws(() => resolveResumeImportTimeoutMs('1000'), /between 30000 and 180000/);
-  assert.throws(() => resolveResumeImportTimeoutMs('not-a-number'), /between 30000 and 180000/);
+  assert.throws(() => resolveResumeImportTimeoutMs('1000'), /between 30000 and 300000/);
+  assert.throws(() => resolveResumeImportTimeoutMs('not-a-number'), /between 30000 and 300000/);
+  assert.throws(() => resolveResumeImportTimeoutMs('400000'), /between 30000 and 300000/);
 });
 
 test('runtime resume import derives source evidence in ATS and classifies each safe failure boundary', () => {
   const route = readFileSync(join(process.cwd(), 'app/api/import-resume/route.ts'), 'utf8');
+  const sectionedProvider = readFileSync(join(process.cwd(), 'lib/infrastructure/import/OllamaResumeImportV3Provider.ts'), 'utf8');
   const nativeProvider = readFileSync(join(process.cwd(), 'lib/infrastructure/import/NativeResumeImportProvider.ts'), 'utf8');
 
-  assert.match(route, /NativeResumeImportProvider/);
+  assert.match(route, /OllamaResumeImportV3Provider/);
   assert.match(route, /ResumeImportTimeoutError/);
+  assert.match(route, /ResumeExtractionIncompleteError/);
   assert.match(route, /status: 504/);
   assert.match(route, /RESUME_IMPORT_TIMEOUT/);
+  assert.match(route, /RESUME_EXTRACTION_INCOMPLETE/);
   assert.match(route, /SOURCE_RECONCILIATION_REJECTED/);
   assert.match(route, /classifyImportFailure/);
-  assert.match(nativeProvider, /reconcileCandidateToSource\(candidate, document\)/);
+  assert.match(sectionedProvider, /reconcileCandidateToSource\(candidate, document\)/);
+  assert.match(sectionedProvider, /assertResumeExtractionCompleteness\(document, reconciliation\.candidate\)/);
   assert.match(nativeProvider, /deriveCandidateEvidence\(reconciled, document\)/);
   assert.match(nativeProvider, /no source match -> no imported fact/i);
-  assert.doesNotMatch(nativeProvider, /rawImportExtractionSchema|evidenceMap: z\.array/);
+  assert.doesNotMatch(sectionedProvider, /rawImportExtractionSchema|evidenceMap: z\.array/);
   assert.doesNotMatch(route, /N8nResumeImportProvider|NEXT_PUBLIC_N8N_RESUME_URL/);
-  assert.doesNotMatch(nativeProvider, /fetch\(.*N8N|NEXT_PUBLIC_N8N_RESUME_URL/);
+  assert.doesNotMatch(sectionedProvider, /fetch\(.*N8N|NEXT_PUBLIC_N8N_RESUME_URL/);
 });

@@ -5,9 +5,17 @@ import {
   validateResumeFileSize,
 } from '@/lib/application/import/ResumeImportService';
 import {
-  NativeResumeImportProvider,
+  OllamaResumeImportV3Provider,
+  ResumeExtractionIncompleteError,
   ResumeImportTimeoutError,
-} from '@/lib/infrastructure/import/NativeResumeImportProvider';
+} from '@/lib/infrastructure/import/OllamaResumeImportV3Provider';
+import {
+  aiProviderFailureHttpStatus,
+  aiProviderFailureMessage,
+  classifyAIProviderError,
+  type AIProviderFailureView,
+} from '@/lib/application/ai/AIProviderFailure';
+import { OLLAMA_PROVIDER } from '@/lib/infrastructure/ai/OllamaStructuredClient';
 import {
   getRateLimitHeaders,
   rateLimitPublicApiRequest,
@@ -17,6 +25,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MAX_RESUME_MULTIPART_REQUEST_BYTES = MAX_RESUME_FILE_BYTES + (1024 * 1024);
+const RESUME_IMPORT_AI_PROVIDER = OLLAMA_PROVIDER;
 
 type ImportFailure = {
   readonly status: number;
@@ -24,18 +33,31 @@ type ImportFailure = {
   readonly stage: 'VALIDATION' | 'DOCUMENT_TEXT' | 'AI_EXTRACTION' | 'SOURCE_RECONCILIATION' | 'RUNTIME';
   readonly canRetry: boolean;
   readonly error: string;
+  readonly provider?: AIProviderFailureView;
 };
 
 function classifyImportFailure(error: unknown): ImportFailure {
   const message = error instanceof Error ? error.message : 'Resume import failed.';
 
   if (error instanceof ResumeImportTimeoutError) {
+    const providerFailure = classifyAIProviderError(error, RESUME_IMPORT_AI_PROVIDER);
     return {
       status: 504,
       errorCode: 'RESUME_IMPORT_TIMEOUT',
       stage: 'AI_EXTRACTION',
+      canRetry: providerFailure.retryable,
+      error: aiProviderFailureMessage(providerFailure, 'resume import'),
+      provider: providerFailure.toView(),
+    };
+  }
+
+  if (error instanceof ResumeExtractionIncompleteError) {
+    return {
+      status: 502,
+      errorCode: 'RESUME_EXTRACTION_INCOMPLETE',
+      stage: 'AI_EXTRACTION',
       canRetry: true,
-      error: 'Resume extraction timed out while waiting for the AI parser. Please try again.',
+      error: 'The local extraction pipeline could not safely represent one or more explicit resume sections. CV Engine rejected the incomplete import instead of treating it as career truth. Please retry or continue with manual career evidence.',
     };
   }
 
@@ -84,16 +106,6 @@ function classifyImportFailure(error: unknown): ImportFailure {
     };
   }
 
-  if (message.includes('Gemini returned an empty') || message.includes('Gemini returned invalid JSON')) {
-    return {
-      status: 502,
-      errorCode: 'AI_EXTRACTION_INVALID_RESPONSE',
-      stage: 'AI_EXTRACTION',
-      canRetry: true,
-      error: 'The resume parser returned an invalid extraction response. Your file was not accepted as trusted career evidence. Please try again.',
-    };
-  }
-
   if (
     message.includes('Resume extraction value is not present') ||
     message.includes('Resume extraction evidence is not present') ||
@@ -105,6 +117,18 @@ function classifyImportFailure(error: unknown): ImportFailure {
       stage: 'SOURCE_RECONCILIATION',
       canRetry: true,
       error: 'The parser proposed information that could not be safely reconciled with the source resume. Unsupported values were not accepted.',
+    };
+  }
+
+  const providerFailure = classifyAIProviderError(error, RESUME_IMPORT_AI_PROVIDER);
+  if (providerFailure.kind !== 'UNKNOWN_PROVIDER_FAILURE') {
+    return {
+      status: aiProviderFailureHttpStatus(providerFailure),
+      errorCode: `AI_PROVIDER_${providerFailure.kind}`,
+      stage: 'AI_EXTRACTION',
+      canRetry: providerFailure.retryable,
+      error: aiProviderFailureMessage(providerFailure, 'resume import'),
+      provider: providerFailure.toView(),
     };
   }
 
@@ -183,7 +207,7 @@ export async function POST(request: NextRequest) {
     validateResumeFileSize(file.size);
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const provider = new NativeResumeImportProvider();
+    const provider = new OllamaResumeImportV3Provider();
     const imported = await importResumeWithProvenance(provider, {
       originalFileName: file.name,
       suppliedMimeType: file.type,
@@ -199,11 +223,10 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     const failure = classifyImportFailure(error);
-    // The server owns diagnostic logging. Browser clients receive a stable,
-    // actionable failure code instead of the implementation exception.
     console.error('Resume import boundary failure', {
       errorCode: failure.errorCode,
       stage: failure.stage,
+      providerKind: failure.provider?.kind,
       cause: error instanceof Error ? error.message : String(error),
     });
 
@@ -214,6 +237,7 @@ export async function POST(request: NextRequest) {
         errorCode: failure.errorCode,
         stage: failure.stage,
         canRetry: failure.canRetry,
+        ...(failure.provider ? { provider: failure.provider } : {}),
       },
       { status: failure.status, headers: { 'Cache-Control': 'no-store, max-age=0' } },
     );

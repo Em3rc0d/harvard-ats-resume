@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { resumeRequestSchema } from '@/lib/schemas';
 import { resumeImportContextSchema } from '@/lib/application/import/ResumeImportProvider';
 import { generationValidationIssues } from '@/lib/application/product/GenerationReadiness';
-import { generateResumeWithGemini, sanitizeResumeData } from '@/lib/gemini';
-import { extractKeywords, calculateATSScore, generateSuggestions } from '@/lib/ats-scoring';
+import { generateResumeWithAI, sanitizeResumeData } from '@/lib/local-ai';
+import { extractKeywords, calculateATSScore } from '@/lib/ats-scoring';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { buildLegacyTruthContext } from '@/lib/application/legacy/LegacyResumeAdapter';
 import { validateGeneratedResumeGrounding } from '@/lib/application/grounding/GroundingValidator';
@@ -12,6 +12,7 @@ import { evaluateGeneratedResumeSemanticGrounding } from '@/lib/application/grou
 import { analyzeJobDescription } from '@/lib/application/job/JobIntelligenceEngine';
 import { matchJobToCandidate } from '@/lib/application/matching/JobMatchEngine';
 import { evaluateProductResume } from '@/lib/application/product/ProductEvaluationService';
+import { deriveTrustedAdvice } from '@/lib/application/product/TrustedAdviceService';
 import { composeApprovedResumeVersion } from '@/lib/application/resume/ResumeCompositionService';
 import { deriveCareerVaultIdentity } from '@/lib/application/career-vault/CareerVaultIdentity';
 import {
@@ -24,10 +25,14 @@ import {
   DurablePersistenceUnavailableError,
 } from '@/lib/infrastructure/persistence/DurableRedisRuntime';
 import {
-  GEMINI_RESUME_CONTRACT_VERSION,
-  GEMINI_RESUME_MODEL,
-  GEMINI_RESUME_PROVIDER,
-} from '@/lib/infrastructure/ai/GeminiResumeProvider';
+  aiProviderFailureHttpStatus,
+  aiProviderFailureMessage,
+} from '@/lib/application/ai/AIProviderFailure';
+import {
+  OLLAMA_RESUME_CONTRACT_VERSION,
+  OLLAMA_RESUME_MODEL,
+  OLLAMA_RESUME_PROVIDER,
+} from '@/lib/infrastructure/ai/OllamaResumeProvider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,15 +45,13 @@ const resumeGenerationInputSchema = resumeRequestSchema.extend({
 /**
  * POST /api/generate-resume
  *
- * Main endpoint for generating ATS-optimized resumes. Import provenance is
- * accepted separately from candidate facts and is never forwarded to the LLM
- * or treated as Job Description content.
+ * Main endpoint for generating evidence-bound resumes. Local model output is
+ * always an untrusted proposal: grounding, semantic grounding, claim
+ * traceability, and Career Vault integrity remain the authorities that decide
+ * whether a trusted ResumeVersion can be emitted.
  */
 export async function POST(request: NextRequest) {
   try {
-    // Validate before touching distributed infrastructure. Invalid candidate
-    // drafts should return a deterministic review instruction immediately and
-    // should neither consume rate-limit capacity nor wait on Redis connectivity.
     const body = await request.json();
     const validationResult = resumeGenerationInputSchema.safeParse(body);
 
@@ -76,9 +79,7 @@ export async function POST(request: NextRequest) {
         },
         {
           status: 400,
-          headers: {
-            'Cache-Control': 'no-store, max-age=0',
-          },
+          headers: { 'Cache-Control': 'no-store, max-age=0' },
         },
       );
     }
@@ -97,10 +98,7 @@ export async function POST(request: NextRequest) {
           error: 'Rate limit exceeded. You can generate 50 resumes per hour. Please try again later.',
           retryAfter: new Date(rateLimitResult.reset).toISOString(),
         },
-        {
-          status: 429,
-          headers: rateLimitHeaders,
-        }
+        { status: 429, headers: rateLimitHeaders },
       );
     }
 
@@ -109,10 +107,6 @@ export async function POST(request: NextRequest) {
     const capturedAt = new Date().toISOString();
     const vaultIdentity = deriveCareerVaultIdentity(sanitizedData, careerVaultId, sourceContext);
 
-    // Any successful response below is a durability claim. Check the shared
-    // durable backend before performing Job Match or paying for model work.
-    // This readiness probe never replaces the later save -> reload -> integrity
-    // verification performed by persistCareerVault.
     let careerVaultRepository;
     try {
       const durableRuntime = createDurableRedisRuntimeFromEnv();
@@ -140,7 +134,7 @@ export async function POST(request: NextRequest) {
               ...rateLimitHeaders,
               'Cache-Control': 'no-store, max-age=0',
             },
-          }
+          },
         );
       }
       throw storageError;
@@ -160,10 +154,7 @@ export async function POST(request: NextRequest) {
           success: false,
           error: 'No evidence-backed resume claims could be created from the supplied candidate data.',
         },
-        {
-          status: 400,
-          headers: rateLimitHeaders,
-        }
+        { status: 400, headers: rateLimitHeaders },
       );
     }
 
@@ -181,30 +172,43 @@ export async function POST(request: NextRequest) {
         })
       : undefined;
 
-    // Legacy keyword analysis is retained as a compatibility payload only. G13
-    // no longer presents it as the primary product truth or "ATS compatibility".
-    const jobKeywords = sanitizedData.jobDescription
+    const jobKeywords = sanitizedData.jobDescription?.trim()
       ? extractKeywords(sanitizedData.jobDescription)
       : [];
 
-    const geminiResult = await generateResumeWithGemini(sanitizedData);
+    const localAIResult = await generateResumeWithAI(sanitizedData);
 
-    if (!geminiResult.success || !geminiResult.formattedResume) {
+    if (!localAIResult.success || !localAIResult.formattedResume) {
+      if (localAIResult.providerFailure) {
+        const providerFailure = localAIResult.providerFailure;
+        return NextResponse.json(
+          {
+            success: false,
+            error: aiProviderFailureMessage(providerFailure, 'resume generation'),
+            provider: providerFailure.toView(),
+          },
+          {
+            status: aiProviderFailureHttpStatus(providerFailure),
+            headers: {
+              ...rateLimitHeaders,
+              'Cache-Control': 'no-store, max-age=0',
+            },
+          },
+        );
+      }
+
       return NextResponse.json(
         {
           success: false,
-          error: geminiResult.error || 'Failed to generate resume',
+          error: localAIResult.error || 'Failed to generate resume',
         },
-        {
-          status: 500,
-          headers: rateLimitHeaders,
-        }
+        { status: 500, headers: rateLimitHeaders },
       );
     }
 
     const groundingReport = validateGeneratedResumeGrounding(
       sanitizedData,
-      geminiResult.formattedResume,
+      localAIResult.formattedResume,
     );
 
     if (groundingReport.status !== 'APPROVED') {
@@ -227,12 +231,12 @@ export async function POST(request: NextRequest) {
             ...rateLimitHeaders,
             'Cache-Control': 'no-store, max-age=0',
           },
-        }
+        },
       );
     }
 
     const semanticGroundingReport = evaluateGeneratedResumeSemanticGrounding(
-      geminiResult.formattedResume,
+      localAIResult.formattedResume,
       truthContext.assertions,
     );
 
@@ -257,23 +261,23 @@ export async function POST(request: NextRequest) {
             ...rateLimitHeaders,
             'Cache-Control': 'no-store, max-age=0',
           },
-        }
+        },
       );
     }
 
     let resumeComposition;
     try {
       resumeComposition = composeApprovedResumeVersion({
-        formattedResume: geminiResult.formattedResume,
+        formattedResume: localAIResult.formattedResume,
         candidateProfileId: truthContext.candidateProfile.id,
         assertions: truthContext.assertions,
         targetedJobDescriptionId: jobIntelligence?.jobDescription.id,
         targetJobDescription: jobIntelligence?.jobDescription.sourceText,
         matchReportId: jobMatch?.report.id,
         generation: {
-          provider: GEMINI_RESUME_PROVIDER,
-          model: GEMINI_RESUME_MODEL,
-          contractVersion: GEMINI_RESUME_CONTRACT_VERSION,
+          provider: OLLAMA_RESUME_PROVIDER,
+          model: OLLAMA_RESUME_MODEL,
+          contractVersion: OLLAMA_RESUME_CONTRACT_VERSION,
         },
         createdAt: capturedAt,
       });
@@ -283,9 +287,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: 'ATS v2 approved the generated wording but could not establish complete claim provenance. No resume version was emitted.',
-          composition: {
-            status: 'UNTRACEABLE',
-          },
+          composition: { status: 'UNTRACEABLE' },
         },
         {
           status: 422,
@@ -293,7 +295,7 @@ export async function POST(request: NextRequest) {
             ...rateLimitHeaders,
             'Cache-Control': 'no-store, max-age=0',
           },
-        }
+        },
       );
     }
 
@@ -304,23 +306,28 @@ export async function POST(request: NextRequest) {
 
     const atsScoreResult = calculateATSScore(
       jobKeywords,
-      geminiResult.formattedResume,
-      allSkills
+      localAIResult.formattedResume,
+      allSkills,
     );
-
-    const suggestions = generateSuggestions(
-      atsScoreResult.atsScore,
-      atsScoreResult.missingKeywords,
-      sanitizedData.experience
-    );
-
-    const allSuggestions = [
-      ...suggestions,
-      ...(geminiResult.suggestions || []),
-    ];
 
     const assertionsById = new Map(truthContext.assertions.map((assertion) => [assertion.id, assertion]));
-    const productEvaluation = evaluateProductResume(sanitizedData, geminiResult.formattedResume);
+    const productEvaluation = evaluateProductResume(sanitizedData, localAIResult.formattedResume);
+
+    const adviceJobMatch = jobMatch
+      ? {
+          score: jobMatch.score,
+          requirements: jobMatch.requirements.map((requirement, index) => ({
+            statement: requirement.statement,
+            necessity: requirement.necessity,
+            status: jobMatch.report.matches[index]?.status ?? 'UNKNOWN',
+          })),
+        }
+      : undefined;
+
+    const trustedAdvice = deriveTrustedAdvice(sanitizedData, productEvaluation, {
+      now: new Date(capturedAt),
+      jobMatch: adviceJobMatch,
+    });
 
     const explainableJobMatch = jobMatch && jobIntelligence
       ? {
@@ -404,7 +411,7 @@ export async function POST(request: NextRequest) {
             ...rateLimitHeaders,
             'Cache-Control': 'no-store, max-age=0',
           },
-        }
+        },
       );
     }
 
@@ -412,7 +419,7 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         data: {
-          formattedResume: geminiResult.formattedResume,
+          formattedResume: localAIResult.formattedResume,
           productEvaluation,
           jobMatch: explainableJobMatch,
           claimTraceability,
@@ -427,11 +434,11 @@ export async function POST(request: NextRequest) {
             createdAt: careerVault.createdAt,
             updatedAt: careerVault.updatedAt,
           },
-          // Compatibility payload: intentionally not used as ATS v2 primary UX.
+          trustedAdvice,
+          suggestions: trustedAdvice.slice(0, 10).map((advice) => advice.message),
           atsScore: atsScoreResult.atsScore,
           matchedKeywords: atsScoreResult.matchedKeywords,
           missingKeywords: atsScoreResult.missingKeywords,
-          suggestions: allSuggestions.slice(0, 10),
           legacyAnalysis: {
             status: 'LEGACY_COMPATIBILITY_ONLY',
             atsScore: atsScoreResult.atsScore,
@@ -446,9 +453,8 @@ export async function POST(request: NextRequest) {
           ...rateLimitHeaders,
           'Cache-Control': 'no-store, max-age=0',
         },
-      }
+      },
     );
-
   } catch (error) {
     console.error('API Error:', error);
 
@@ -457,7 +463,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: 'An unexpected error occurred. Please try again.',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -465,20 +471,20 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json(
     { success: false, error: 'Method not allowed' },
-    { status: 405 }
+    { status: 405 },
   );
 }
 
 export async function PUT() {
   return NextResponse.json(
     { success: false, error: 'Method not allowed' },
-    { status: 405 }
+    { status: 405 },
   );
 }
 
 export async function DELETE() {
   return NextResponse.json(
     { success: false, error: 'Method not allowed' },
-    { status: 405 }
+    { status: 405 },
   );
 }

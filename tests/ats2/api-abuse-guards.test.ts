@@ -75,7 +75,7 @@ test('inline optimization is rate limited before any model-backed rewrite work',
   const route = source('app/api/optimize-content/route.ts');
   const rateLimitAt = route.indexOf("await rateLimitPublicApiRequest(request.headers, 'optimize-content')");
   const optimizeAt = route.indexOf('await optimizeCandidateText(');
-  const providerAt = route.indexOf('new GeminiCandidateTextOptimizer()');
+  const providerAt = route.indexOf('new OllamaCandidateTextOptimizer()');
 
   assert.ok(rateLimitAt >= 0 && optimizeAt >= 0 && rateLimitAt < optimizeAt);
   assert.ok(rateLimitAt < providerAt);

@@ -2,23 +2,71 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { ResumeRequest } from '../../lib/schemas';
 import { normalizeCandidatePresentationText } from '../../lib/application/presentation/InlineCandidateTextCleanup';
 import { normalizeGeneratedResumeText } from '../../lib/application/resume/ResumeTextNormalization';
-import { resolveResumeGenerationTimeoutMs } from '../../lib/infrastructure/ai/GeminiResumeProvider';
+import {
+  DETERMINISTIC_RESUME_CONTRACT_VERSION,
+  DETERMINISTIC_RESUME_MODEL,
+  DETERMINISTIC_RESUME_PROVIDER,
+  generateResumeDraft,
+} from '../../lib/local-ai';
 
 function source(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
 }
 
-test('final resume generation uses a bounded 120 second timeout policy', () => {
-  assert.equal(resolveResumeGenerationTimeoutMs(undefined), 120_000);
-  assert.equal(resolveResumeGenerationTimeoutMs('180000'), 180_000);
-});
+function deterministicResumeFixture(): ResumeRequest {
+  return {
+    personalInfo: {
+      fullName: 'Jane Candidate',
+      location: 'Lima, Peru',
+      email: 'jane@example.com',
+      linkedin: '',
+      github: '',
+    },
+    summary: 'Backend engineer focused on TypeScript APIs.',
+    experience: [{
+      company: 'Acme',
+      role: 'Backend Engineer',
+      startDate: '2023',
+      endDate: '2025',
+      description: 'Built TypeScript APIs for internal workflows.',
+      technologies: ['TypeScript'],
+    }],
+    education: [],
+    skills: { hardSkills: ['TypeScript'], softSkills: [] },
+    projects: [],
+    certifications: [],
+    languages: [{ language: 'Spanish', proficiency: 'Native' }],
+    jobDescription: 'Requires Go. This must never become candidate truth.',
+  };
+}
 
-test('final resume generation rejects unsafe timeout configuration', () => {
-  assert.throws(() => resolveResumeGenerationTimeoutMs('1000'), /between 30000 and 240000/);
-  assert.throws(() => resolveResumeGenerationTimeoutMs('300000'), /between 30000 and 240000/);
-  assert.throws(() => resolveResumeGenerationTimeoutMs('invalid'), /between 30000 and 240000/);
+test('final resume assembly is deterministic and never calls the local model', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    throw new Error('Final assembly must not make a model/network request.');
+  }) as typeof fetch;
+
+  try {
+    const first = await generateResumeDraft(deterministicResumeFixture());
+    const second = await generateResumeDraft(deterministicResumeFixture());
+
+    assert.equal(first.success, true);
+    assert.equal(first.formattedResume, second.formattedResume);
+    assert.equal(fetchCalled, false);
+    assert.equal(first.generation?.provider, DETERMINISTIC_RESUME_PROVIDER);
+    assert.equal(first.generation?.model, DETERMINISTIC_RESUME_MODEL);
+    assert.equal(first.generation?.contractVersion, DETERMINISTIC_RESUME_CONTRACT_VERSION);
+    assert.match(first.formattedResume ?? '', /Acme — Backend Engineer/);
+    assert.match(first.formattedResume ?? '', /Built TypeScript APIs for internal workflows\./);
+    assert.doesNotMatch(first.formattedResume ?? '', /Requires Go/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('legacy presentation cleanup remains deterministic and never invents candidate facts', () => {
@@ -49,17 +97,17 @@ test('generated resume normalization recovers compressed uppercase sections and 
   assert.match(output, /\nEXPERIENCE\nACME — BACKEND ENGINEER\n• Built TypeScript APIs\./);
 });
 
-test('inline optimize stays on the internal endpoint and model output crosses a deterministic truth guard', () => {
+test('inline optimize stays on the internal endpoint and local-model output crosses a deterministic truth guard', () => {
   const config = source('next.config.js');
   const form = source('components/ResumeForm.tsx');
   const route = source('app/api/optimize-content/route.ts');
   const optimizer = source('lib/application/presentation/CandidateTextOptimizer.ts');
-  const provider = source('lib/infrastructure/ai/GeminiCandidateTextOptimizer.ts');
+  const provider = source('lib/infrastructure/ai/OllamaCandidateTextOptimizer.ts');
 
   assert.match(config, /NEXT_PUBLIC_N8N_OPTIMIZE_URL:\s*['"]\/api\/optimize-content['"]/);
   assert.doesNotMatch(form, /https?:\/\/[^'"`]*n8n|webhook[^'"`]*n8n/i);
   assert.match(route, /optimizeCandidateText/);
-  assert.match(route, /GeminiCandidateTextOptimizer/);
+  assert.match(route, /OllamaCandidateTextOptimizer/);
   assert.doesNotMatch(route, /jobDescription|CareerTarget|JobRequirement|MatchReport/);
 
   assert.match(optimizer, /PRESENTATION_ONLY_FALLBACK/);
@@ -71,7 +119,8 @@ test('inline optimize stays on the internal endpoint and model output crosses a 
 
   assert.match(provider, /source text is the ONLY authority/i);
   assert.match(provider, /Never add metrics/);
-  assert.match(provider, /responseJsonSchema/);
+  assert.match(provider, /generateStructured/);
+  assert.match(provider, /schema:\s*RESPONSE_SCHEMA/);
 });
 
 test('PDF.js is server-only and certificate PDF extraction cannot mount it in the browser', () => {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { resumeRequestSchema } from '@/lib/schemas';
-import { sanitizeResumeData } from '@/lib/gemini';
+import { sanitizeResumeData } from '@/lib/application/resume/ResumeInputSanitizer';
 import { buildLegacyTruthContext } from '@/lib/application/legacy/LegacyResumeAdapter';
 import { analyzeJobDescription } from '@/lib/application/job/JobIntelligenceEngine';
 import { matchJobToCandidate } from '@/lib/application/matching/JobMatchEngine';

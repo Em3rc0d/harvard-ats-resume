@@ -1,61 +1,63 @@
-import {
-  hasMaterialCareerEvidence,
-  type ResumeRequest,
-} from './schemas';
-import { GeminiResumeProvider } from './infrastructure/ai/GeminiResumeProvider';
+import type { AIProviderFailure } from './application/ai/AIProviderFailure';
+import type { ResumeRequest } from './schemas';
 
-export async function generateResumeWithGemini(data: ResumeRequest): Promise<{
-  success: boolean;
-  formattedResume?: string;
-  matchedKeywords?: string[];
-  suggestions?: string[];
-  improvedResume?: string;
-  error?: string;
-}> {
-  try {
-    const provider = new GeminiResumeProvider();
-    const proposal = await provider.generate(data);
-    const improvedResume = proposal.improvedResume.trim();
+export { sanitizeResumeData } from './application/resume/ResumeInputSanitizer';
 
-    return {
-      success: true,
-      formattedResume: proposal.formattedResume,
-      matchedKeywords: proposal.matchedKeywords,
-      suggestions: proposal.suggestions,
-      improvedResume: improvedResume.length > 100 ? improvedResume : undefined,
-    };
-  } catch (error) {
-    console.error('Gemini API Error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to generate resume',
-    };
-  }
+export const DETERMINISTIC_RESUME_PROVIDER = 'cv-engine-deterministic' as const;
+export const DETERMINISTIC_RESUME_MODEL = 'source-preserving-resume-composer-v2' as const;
+export const DETERMINISTIC_RESUME_CONTRACT_VERSION = 'ats2-evidence-bound-resume-v2' as const;
+
+export interface ResumeDraftResult {
+  readonly success: boolean;
+  readonly formattedResume?: string;
+  readonly matchedKeywords?: string[];
+  readonly improvedResume?: string;
+  /** Compatibility field for the existing route error contract. Deterministic assembly never sets it. */
+  readonly providerFailure?: AIProviderFailure;
+  readonly generation?: {
+    readonly provider: string;
+    readonly model: string;
+    readonly contractVersion: string;
+  };
+  readonly error?: string;
 }
 
 /**
- * Sanitize user input before trusted downstream work. This is transport hygiene,
- * not evidence creation. A structurally valid but identity-only candidate is
- * stopped here as a second server-side defense behind GenerationReadiness.
+ * Final resume assembly is application-owned and deterministic.
+ *
+ * Local models remain useful for bounded import and inline presentation
+ * optimization, but a whole-resume model call is deliberately not part of the
+ * trusted generation critical path. Candidate data has already crossed the
+ * evidence/review boundary; this composer only renders those facts into an
+ * ATS-readable document. Grounding, semantic grounding, claim provenance and
+ * durable ResumeVersion composition still run after this step.
  */
-export function sanitizeResumeData(data: ResumeRequest): ResumeRequest {
-  const sanitizeString = (str: string): string => str
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-    .replace(/javascript:/gi, '')
-    .trim()
-    .slice(0, 50000);
-
-  const sanitized = JSON.parse(
-    JSON.stringify(data, (_key, value) => typeof value === 'string' ? sanitizeString(value) : value),
-  ) as ResumeRequest;
-
-  if (!hasMaterialCareerEvidence(sanitized)) {
-    throw new Error('Candidate data contains no material career evidence.');
+export async function generateResumeDraft(data: ResumeRequest): Promise<ResumeDraftResult> {
+  const formattedResume = formatResumeFromData(data).trim();
+  if (!formattedResume) {
+    return {
+      success: false,
+      error: 'No source-backed candidate content was available for resume assembly.',
+    };
   }
 
-  return sanitized;
+  return {
+    success: true,
+    formattedResume,
+    matchedKeywords: [],
+    generation: {
+      provider: DETERMINISTIC_RESUME_PROVIDER,
+      model: DETERMINISTIC_RESUME_MODEL,
+      contractVersion: DETERMINISTIC_RESUME_CONTRACT_VERSION,
+    },
+  };
 }
+
+/**
+ * Compatibility alias retained while callers migrate from the former
+ * whole-resume model path. It performs no network or model request.
+ */
+export const generateResumeWithAI = generateResumeDraft;
 
 function formatExperiences(experience: ResumeRequest['experience']): string {
   if (experience.length === 0) return '';
@@ -100,8 +102,10 @@ function formatEducation(education: ResumeRequest['education']): string {
   if (education.length === 0) return '';
   let text = 'EDUCATION\n';
   education.forEach((item) => {
-    if (item.institution.trim()) text += `${item.institution}\n`;
-    if (item.degree.trim()) text += `${item.degree}\n`;
+    const identity = [item.institution, item.degree, item.honors ?? '']
+      .filter((value) => value.trim())
+      .join(' — ');
+    if (identity) text += `${identity}\n`;
     const period = [item.startDate, item.endDate].filter((value) => value.trim()).join(' - ');
     if (period) text += `${period}\n`;
     text += '\n';
@@ -148,10 +152,10 @@ export function formatResumeFromData(data: ResumeRequest): string {
 
   if ((data.languages?.length ?? 0) > 0) {
     text += 'LANGUAGES\n';
-    const languages = data.languages!
-      .map((item) => [item.language, item.proficiency].filter((value) => value.trim()).join(': '))
-      .filter(Boolean);
-    if (languages.length > 0) text += `${languages.join(' | ')}\n`;
+    data.languages!.forEach((item) => {
+      const line = [item.language, item.proficiency].filter((value) => value.trim()).join(' — ');
+      if (line) text += `${line}\n`;
+    });
   }
 
   return text.trim();

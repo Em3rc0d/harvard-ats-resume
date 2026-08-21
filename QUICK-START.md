@@ -1,242 +1,248 @@
-# 🚀 QUICK START GUIDE
+# CV Engine — Quick Start
 
-## AI Harvard ATS Resume Builder
+CV Engine runs its model-backed resume workflows on a **local Ollama runtime**. No remote LLM API key is required for the default stack.
 
-**Get up and running in 5 minutes!**
+## Recommended: one-command Docker stack
 
----
+### Prerequisites
 
-## ✅ Prerequisites
+- Docker Desktop / Docker Engine with Docker Compose v2
+- At least ~12 GB free disk for the default application + workload models + container layers
+- Enough host memory for one local model at a time
 
-1. **Node.js 18+** - [Download here](https://nodejs.org/)
-2. **Gemini API Key** - [Get FREE key](https://makersuite.google.com/app/apikey)
+CV Engine intentionally uses workload-specific models instead of forcing the largest model into every operation:
 
----
+- `qwen3:4b-instruct` — resume extraction and inline rewrite
+- `qwen3:8b` — final resume generation
 
-## 📦 Installation Steps
+The Docker Ollama service is limited to one loaded model at a time by default so a developer laptop does not need to retain both models in memory concurrently.
 
-### Step 1: Install Dependencies
-```bash
-cd harvard-ats-resume
-npm install
-```
+### Start everything
 
-### Step 2: Setup Environment
 ```bash
 cp .env.example .env
+docker compose up --build
 ```
 
-Edit `.env` file:
-```env
-GEMINI_API_KEY=your_actual_api_key_here
+The first start downloads the configured workload models into the persistent `ollama-data` volume. Later starts reuse them. The bootstrap also preloads the import model because resume import is normally the first model-backed user action.
+
+Open:
+
+```text
+http://localhost:3000
 ```
 
-### Step 3: Run Development Server
+Runtime health:
+
+```text
+http://localhost:3000/api/health
+```
+
+A healthy stack returns `READY` only when every configured workload model and the durable Redis backend are available.
+
+### NVIDIA GPU acceleration
+
+When Docker can access an NVIDIA GPU:
+
 ```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+```
+
+If GPU passthrough is unavailable, use the normal CPU compose command.
+
+## Local inference policy
+
+Default workload configuration:
+
+```env
+OLLAMA_MODEL=qwen3:8b
+OLLAMA_IMPORT_MODEL=qwen3:4b-instruct
+OLLAMA_RESUME_MODEL=qwen3:8b
+OLLAMA_OPTIMIZE_MODEL=qwen3:4b-instruct
+OLLAMA_NUM_CTX=16384
+```
+
+Execution budgets are also workload-specific:
+
+- import: 180 seconds maximum by default, 3,072 output-token ceiling
+- final resume: 240 seconds maximum by default, 4,096 output-token ceiling
+- inline optimization: 45 seconds maximum, 768 output-token ceiling
+
+These are safety ceilings, not target latencies. A request ends as soon as the model finishes.
+
+All model outputs remain **untrusted proposals**. Changing model size or timeout does not bypass source reconciliation, grounding, semantic grounding, claim provenance, or durable Career Vault integrity.
+
+For a higher-quality final generation model on a stronger host:
+
+```env
+OLLAMA_RESUME_MODEL=qwen3:14b
+```
+
+For a very constrained host, you can also reduce final generation explicitly:
+
+```env
+OLLAMA_RESUME_MODEL=qwen3:4b-instruct
+```
+
+Do not weaken evidence gates to compensate for a smaller model.
+
+## What Docker starts
+
+```text
+Browser
+  ↓
+CV Engine / Next.js :3000
+  ├─→ Ollama :11434
+  │      ├─ qwen3:4b-instruct  extraction / optimize
+  │      └─ qwen3:8b           final resume
+  │
+  └─→ Upstash-compatible Redis HTTP proxy
+            ↓
+          Redis
+            └─ persistent data volume
+```
+
+Services:
+
+- `app` — CV Engine
+- `ollama` — local inference server
+- `ollama-init` — pulls every configured workload model and preloads the import model
+- `redis` — durable local Redis
+- `redis-http` — Upstash-compatible REST facade used by the existing durable repositories
+
+## Useful commands
+
+```bash
+# Start / build
+docker compose up --build
+
+# Follow logs
+docker compose logs -f app ollama
+
+# See installed models
+docker compose exec ollama ollama list
+
+# See the currently loaded model and CPU/GPU placement
+docker compose exec ollama ollama ps
+
+# Stop containers, preserve data/model volumes
+docker compose down
+
+# Stop and also erase local model + Redis volumes
+docker compose down -v
+```
+
+## Host-run development without Docker
+
+If you prefer Next.js on the host, run Ollama separately and configure durable Redis yourself:
+
+```bash
+npm ci
+cp .env.example .env
+ollama pull qwen3:4b-instruct
+ollama pull qwen3:8b
 npm run dev
 ```
 
-### Step 4: Open Browser
-Navigate to: **http://localhost:3000**
+Default host Ollama URL:
 
----
-
-## 🎯 How to Use
-
-### 1. Fill Out the Form
-Progress through 6 sections:
-- **Personal Info**: Name, email, location, LinkedIn, GitHub
-- **Summary**: 2-3 sentence professional summary
-- **Experience**: Work history with achievements
-- **Education**: Degrees and institutions
-- **Skills**: Technical and soft skills
-- **Job Description**: Paste the job posting (optional but recommended)
-
-### 2. Generate Resume
-Click "Generate ATS-Optimized Resume" button
-
-### 3. Review Results
-Get instant:
-- ✅ **Formatted Resume** (Harvard style)
-- ✅ **ATS Score** (0-100%)
-- ✅ **Matched Keywords** (from job description)
-- ✅ **Missing Keywords** (opportunities to improve)
-- ✅ **Suggestions** (actionable improvements)
-
-### 4. Export
-- 📄 Download PDF
-- 🖨️ Print directly
-- 🔄 Create new resume
-
----
-
-## 💡 Pro Tips
-
-### For Maximum ATS Score
-
-1. **Always Include Job Description**
-   - Paste the full job posting
-   - Get keyword analysis
-   - See what keywords you're missing
-
-2. **Use Quantifiable Metrics**
-   - ❌ "Improved performance"
-   - ✅ "Improved performance by 40%"
-   
-3. **Include Relevant Skills**
-   - Match technologies from job description
-   - Add both technical and soft skills
-
-4. **Strong Action Verbs**
-   - Led, Developed, Implemented, Achieved
-   - Not: Worked on, Helped with, Responsible for
-
----
-
-## 📊 Understanding Your ATS Score
-
-| Score | Meaning | Action |
-|-------|---------|--------|
-| 85-100% | **Excellent** | Ready to apply! |
-| 70-84% | **Good** | Minor improvements needed |
-| 50-69% | **Fair** | Add missing keywords |
-| 0-49% | **Needs Work** | Review suggestions |
-
----
-
-## 🔧 API Rate Limits
-
-- **5 resumes per hour** per IP address
-- Resets every 60 minutes
-- Headers show remaining requests
-
----
-
-## 📁 File Structure
-
-```
-harvard-ats-resume/
-├── app/
-│   ├── api/generate-resume/    # API endpoint
-│   ├── page.tsx                # Main page
-│   └── layout.tsx              # SEO & layout
-├── components/
-│   ├── ResumeForm.tsx          # Multi-step form
-│   └── ResumeResults.tsx       # Results display
-├── lib/
-│   ├── schemas.ts              # Validation
-│   ├── gemini.ts               # AI integration
-│   ├── ats-scoring.ts          # Scoring algorithm
-│   └── rate-limit.ts           # Rate limiting
-└── README.md                   # Full documentation
+```env
+OLLAMA_BASE_URL=http://127.0.0.1:11434
 ```
 
----
+You still need `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for trusted durable flows when the application is not using the Docker Compose local Redis stack.
 
-## 🐛 Troubleshooting
+## Trusted flow
 
-### Issue: "GEMINI_API_KEY is not configured"
-**Solution**: Make sure you created `.env` file with your API key
+```text
+Resume PDF/DOCX
+   ↓
+server-side text extraction
+   ↓
+qwen3:4b-instruct structured extraction proposal
+   ↓
+source reconciliation
+   ↓
+Career Evidence review
+   ↓
+optional Job / Career Target
+   ↓
+qwen3:8b constrained resume proposal
+   ↓
+grounding + semantic grounding
+   ↓
+claim provenance
+   ↓
+durable Career Vault
+   ↓
+trusted ResumeVersion
+```
 
-### Issue: Rate limit exceeded
-**Solution**: Wait 60 minutes or use different IP
+If a local model produces unsupported candidate data, CV Engine removes or blocks it rather than treating it as truth.
 
-### Issue: Low ATS score
-**Solution**: 
-1. Add job description
-2. Include more relevant keywords
-3. Use quantifiable achievements
+## Troubleshooting
 
-### Issue: PDF not generating
-**Solution**: Check browser console for errors, try different browser
+### Resume import reaches `RESUME_IMPORT_TIMEOUT`
 
----
+A timeout means the request crossed its bounded inference window. It does **not** mean Ollama is disconnected and it does not authorize accepting a partial extraction.
 
-## 🚀 Deployment to Production
-
-### Deploy to Vercel (Easiest)
+Inspect the current model placement:
 
 ```bash
-# 1. Push to GitHub
-git init
-git add .
-git commit -m "Initial commit"
-git push
-
-# 2. Go to vercel.com
-# 3. Import repository
-# 4. Add environment variable: GEMINI_API_KEY
-# 5. Deploy!
+docker compose exec ollama ollama ps
 ```
 
----
+Then inspect the application/Ollama logs:
 
-## 📚 Additional Resources
-
-- **Full README**: See README.md for complete documentation
-- **API Docs**: See API endpoint structure
-- **Product Spec**: See product requirements
-
----
-
-## ✨ Key Features Summary
-
-1. ✅ **Guided Multi-Step Form**
-2. ✅ **AI Enhancement** (Gemini)
-3. ✅ **ATS Scoring** (Algorithm-based)
-4. ✅ **Keyword Analysis** (Matched/Missing)
-5. ✅ **Harvard Format** (Professional)
-6. ✅ **PDF Export** (ATS-compatible)
-7. ✅ **No Fabrication** (Only enhancement)
-8. ✅ **Security** (Rate limiting, validation)
-
----
-
-## 🎯 What Makes This Different?
-
-### NOT a Generic Resume Builder
-
-**Unique Features:**
-- 🎯 Job description alignment
-- 📊 Real ATS score (algorithmic, not guessed)
-- 🔍 Keyword gap analysis
-- ✅ No hallucinated experience
-- 🎓 Harvard Business School format
-- 💡 Actionable suggestions
-
----
-
-## 💻 Tech Stack
-
-- **Framework**: Next.js 14 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Forms**: React Hook Form
-- **Validation**: Zod
-- **AI**: Google Gemini
-- **PDF**: jsPDF
-
----
-
-## 📞 Need Help?
-
-1. Check README.md for detailed documentation
-2. Review error messages in browser console
-3. Test with sample data first
-4. Verify API key is correct
-
----
-
-**You're all set! 🎉**
-
-Start building your ATS-optimized resume now!
-
----
-
-**Quick Command Reference:**
 ```bash
-npm install          # Install dependencies
-npm run dev          # Start development server
-npm run build        # Build for production
-npm start            # Run production server
+docker compose logs --tail=200 app ollama
 ```
+
+Successful inference logs include model name, prompt/output token counts, load time, total time, and output tokens/second. CV text itself is not logged.
+
+The default Docker stack uses `qwen3:4b-instruct` for import and an independent 180-second Docker budget so an old `.env` containing the previous 90-second setting cannot silently constrain local inference.
+
+### Local AI unavailable
+
+```bash
+docker compose ps
+docker compose logs ollama ollama-init
+```
+
+Verify all configured models:
+
+```bash
+docker compose exec ollama ollama list
+```
+
+### First request is slow
+
+The first model load is slower than a warm request. The bootstrap preloads the import model and API calls keep used models alive for subsequent work.
+
+### Not enough memory
+
+CV Engine defaults to one loaded model at a time. If the host is still constrained, use `qwen3:4b-instruct` for final generation too.
+
+### Durable storage unavailable
+
+Inspect:
+
+```bash
+docker compose logs redis redis-http
+```
+
+The Docker stack intentionally fails closed instead of claiming that Career Vault data was saved when Redis is unavailable.
+
+## Verification before merge
+
+```bash
+npm audit --audit-level=moderate
+npm run lint
+npm run typecheck
+npm test
+npm run build
+node scripts/verify-pdfjs-server-bundle.mjs
+docker compose config
+```
+
+The model itself is never the truth authority. The existing evidence and provenance layers remain the release authority.
