@@ -2,27 +2,71 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { ResumeRequest } from '../../lib/schemas';
 import { normalizeCandidatePresentationText } from '../../lib/application/presentation/InlineCandidateTextCleanup';
 import { normalizeGeneratedResumeText } from '../../lib/application/resume/ResumeTextNormalization';
 import {
-  RESUME_MAX_OUTPUT_TOKENS,
-  resolveResumeGenerationTimeoutMs,
-} from '../../lib/infrastructure/ai/OllamaResumeProvider';
+  DETERMINISTIC_RESUME_CONTRACT_VERSION,
+  DETERMINISTIC_RESUME_MODEL,
+  DETERMINISTIC_RESUME_PROVIDER,
+  generateResumeDraft,
+} from '../../lib/local-ai';
 
 function source(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
 }
 
-test('final resume generation uses a bounded local CPU execution budget', () => {
-  assert.equal(resolveResumeGenerationTimeoutMs(undefined), 240_000);
-  assert.equal(resolveResumeGenerationTimeoutMs('180000'), 180_000);
-  assert.equal(RESUME_MAX_OUTPUT_TOKENS, 4_096);
-});
+function deterministicResumeFixture(): ResumeRequest {
+  return {
+    personalInfo: {
+      fullName: 'Jane Candidate',
+      location: 'Lima, Peru',
+      email: 'jane@example.com',
+      linkedin: '',
+      github: '',
+    },
+    summary: 'Backend engineer focused on TypeScript APIs.',
+    experience: [{
+      company: 'Acme',
+      role: 'Backend Engineer',
+      startDate: '2023',
+      endDate: '2025',
+      description: 'Built TypeScript APIs for internal workflows.',
+      technologies: ['TypeScript'],
+    }],
+    education: [],
+    skills: { hardSkills: ['TypeScript'], softSkills: [] },
+    projects: [],
+    certifications: [],
+    languages: [{ language: 'Spanish', proficiency: 'Native' }],
+    jobDescription: 'Requires Go. This must never become candidate truth.',
+  };
+}
 
-test('final resume generation rejects unsafe timeout configuration', () => {
-  assert.throws(() => resolveResumeGenerationTimeoutMs('1000'), /between 30000 and 360000/);
-  assert.throws(() => resolveResumeGenerationTimeoutMs('400000'), /between 30000 and 360000/);
-  assert.throws(() => resolveResumeGenerationTimeoutMs('invalid'), /between 30000 and 360000/);
+test('final resume assembly is deterministic and never calls the local model', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    throw new Error('Final assembly must not make a model/network request.');
+  }) as typeof fetch;
+
+  try {
+    const first = await generateResumeDraft(deterministicResumeFixture());
+    const second = await generateResumeDraft(deterministicResumeFixture());
+
+    assert.equal(first.success, true);
+    assert.equal(first.formattedResume, second.formattedResume);
+    assert.equal(fetchCalled, false);
+    assert.equal(first.generation?.provider, DETERMINISTIC_RESUME_PROVIDER);
+    assert.equal(first.generation?.model, DETERMINISTIC_RESUME_MODEL);
+    assert.equal(first.generation?.contractVersion, DETERMINISTIC_RESUME_CONTRACT_VERSION);
+    assert.match(first.formattedResume ?? '', /ACME — Backend Engineer/);
+    assert.match(first.formattedResume ?? '', /Built TypeScript APIs for internal workflows\./);
+    assert.doesNotMatch(first.formattedResume ?? '', /Requires Go/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('legacy presentation cleanup remains deterministic and never invents candidate facts', () => {
