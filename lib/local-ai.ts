@@ -1,48 +1,60 @@
 import type { ResumeRequest } from './schemas';
-import { AIProviderFailure, classifyAIProviderError } from './application/ai/AIProviderFailure';
-import {
-  OLLAMA_RESUME_PROVIDER,
-  OllamaResumeProvider,
-} from './infrastructure/ai/OllamaResumeProvider';
 
 export { sanitizeResumeData } from './application/resume/ResumeInputSanitizer';
 
-export async function generateResumeWithAI(data: ResumeRequest): Promise<{
-  success: boolean;
-  formattedResume?: string;
-  matchedKeywords?: string[];
-  improvedResume?: string;
-  providerFailure?: AIProviderFailure;
-  error?: string;
-}> {
-  try {
-    const provider = new OllamaResumeProvider();
-    const proposal = await provider.generate(data);
-    const improvedResume = proposal.improvedResume.trim();
+export const DETERMINISTIC_RESUME_PROVIDER = 'cv-engine-deterministic' as const;
+export const DETERMINISTIC_RESUME_MODEL = 'source-preserving-resume-composer-v2' as const;
+export const DETERMINISTIC_RESUME_CONTRACT_VERSION = 'ats2-evidence-bound-resume-v2' as const;
 
-    return {
-      success: true,
-      formattedResume: proposal.formattedResume,
-      matchedKeywords: proposal.matchedKeywords,
-      improvedResume: improvedResume.length > 100 ? improvedResume : undefined,
-    };
-  } catch (error) {
-    const failure = error instanceof AIProviderFailure
-      ? error
-      : classifyAIProviderError(error, OLLAMA_RESUME_PROVIDER);
-    console.error('Local AI resume provider failure:', {
-      kind: failure.kind,
-      provider: failure.provider,
-      retryable: failure.retryable,
-      statusCode: failure.statusCode,
-    });
+export interface ResumeDraftResult {
+  readonly success: boolean;
+  readonly formattedResume?: string;
+  readonly matchedKeywords?: string[];
+  readonly improvedResume?: string;
+  readonly generation?: {
+    readonly provider: string;
+    readonly model: string;
+    readonly contractVersion: string;
+  };
+  readonly error?: string;
+}
+
+/**
+ * Final resume assembly is application-owned and deterministic.
+ *
+ * Local models remain useful for bounded import and inline presentation
+ * optimization, but a whole-resume model call is deliberately not part of the
+ * trusted generation critical path. Candidate data has already crossed the
+ * evidence/review boundary; this composer only renders those facts into an
+ * ATS-readable document. Grounding, semantic grounding, claim provenance and
+ * durable ResumeVersion composition still run after this step.
+ */
+export async function generateResumeDraft(data: ResumeRequest): Promise<ResumeDraftResult> {
+  const formattedResume = formatResumeFromData(data).trim();
+  if (!formattedResume) {
     return {
       success: false,
-      providerFailure: failure,
-      error: failure.message,
+      error: 'No source-backed candidate content was available for resume assembly.',
     };
   }
+
+  return {
+    success: true,
+    formattedResume,
+    matchedKeywords: [],
+    generation: {
+      provider: DETERMINISTIC_RESUME_PROVIDER,
+      model: DETERMINISTIC_RESUME_MODEL,
+      contractVersion: DETERMINISTIC_RESUME_CONTRACT_VERSION,
+    },
+  };
 }
+
+/**
+ * Compatibility alias retained while callers migrate from the former
+ * whole-resume model path. It performs no network or model request.
+ */
+export const generateResumeWithAI = generateResumeDraft;
 
 function formatExperiences(experience: ResumeRequest['experience']): string {
   if (experience.length === 0) return '';
@@ -87,9 +99,10 @@ function formatEducation(education: ResumeRequest['education']): string {
   if (education.length === 0) return '';
   let text = 'EDUCATION\n';
   education.forEach((item) => {
-    if (item.institution.trim()) text += `${item.institution}\n`;
-    if (item.degree.trim()) text += `${item.degree}\n`;
-    if (item.honors?.trim()) text += `${item.honors}\n`;
+    const identity = [item.institution, item.degree, item.honors ?? '']
+      .filter((value) => value.trim())
+      .join(' — ');
+    if (identity) text += `${identity}\n`;
     const period = [item.startDate, item.endDate].filter((value) => value.trim()).join(' - ');
     if (period) text += `${period}\n`;
     text += '\n';
@@ -136,10 +149,10 @@ export function formatResumeFromData(data: ResumeRequest): string {
 
   if ((data.languages?.length ?? 0) > 0) {
     text += 'LANGUAGES\n';
-    const languages = data.languages!
-      .map((item) => [item.language, item.proficiency].filter((value) => value.trim()).join(': '))
-      .filter(Boolean);
-    if (languages.length > 0) text += `${languages.join(' | ')}\n`;
+    data.languages!.forEach((item) => {
+      const line = [item.language, item.proficiency].filter((value) => value.trim()).join(' — ');
+      if (line) text += `${line}\n`;
+    });
   }
 
   return text.trim();
