@@ -183,12 +183,17 @@ test('ATS-SYS-02 P10 receipts distinguish degraded and unavailable capability ev
   assert.match(source, /faultDetectionLatencyMs/);
 });
 
-test('ATS-SYS-02 reference runner refuses ambiguous source/runtime identity and never destroys persistent volumes', () => {
+test('ATS-SYS-02 reference runner refuses ambiguous source/runtime identity and keeps generated evidence outside the runtime image', () => {
   const source = readFileSync('scripts/system-reference-run.mjs', 'utf8');
+  const dockerIgnore = readFileSync('.dockerignore', 'utf8');
+
   assert.match(source, /REFERENCE-CPU-01/);
-  assert.match(source, /git', \['status', '--porcelain'\]/);
-  assert.match(source, /clean Git worktree/);
+  assert.match(source, /--porcelain=v1/);
+  assert.match(source, /--untracked-files=all/);
+  assert.match(source, /requires committed source/);
+  assert.match(source, /GENERATED_EVIDENCE_PREFIX = 'evidence\/ats-sys-02\/'/);
   assert.match(source, /Refusing to label an undeclared host/);
+  assert.match(dockerIgnore, /^evidence\/ats-sys-02$/m);
   assert.doesNotMatch(source, /down[^\n]*-v/);
   assert.doesNotMatch(source, /docker compose down -v/);
 });
