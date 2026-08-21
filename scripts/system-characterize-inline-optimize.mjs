@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { captureCanonicalRuntimeIdentity } from './system-runtime-identity.mjs';
 
 const BASE_URL = (process.env.CV_ENGINE_E2E_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const MANIFEST_PATH = resolve('tests/system/fixtures/canonical-personas.v0.1.json');
@@ -105,7 +106,7 @@ async function main() {
   const runStartedAt = new Date().toISOString();
   const outputDir = resolve(
     process.env.CVENGINE_OPTIMIZE_EVIDENCE_DIR
-      || `evidence/system/workloads/inline-optimize/${isoSafe(runStartedAt)}`,
+      || `evidence/ats-sys-02/inline-optimize/${isoSafe(runStartedAt)}`,
   );
   await mkdir(outputDir, { recursive: true });
 
@@ -114,6 +115,13 @@ async function main() {
     throw new Error(`System health is not runnable: HTTP ${healthResult.response.status} ${healthResult.body?.status ?? 'UNKNOWN'}`);
   }
   const identity = assertRuntimeIdentity(healthResult.body, expectedBuildSha);
+  const runtimeIdentityRef = process.env.CVENGINE_RUNTIME_IDENTITY_REF?.trim()
+    || (await captureCanonicalRuntimeIdentity({
+      expectedBuildSha,
+      healthStatusCode: healthResult.response.status,
+      healthBody: healthResult.body,
+    })).runtimeIdentityRef;
+  if (!runtimeIdentityRef) throw new Error('Canonical runtime identity evidence ref is required.');
   await persist(resolve(outputDir, '00-health.json'), healthResult.body);
 
   // Prime the import workload first. This deliberately creates the real
@@ -180,10 +188,12 @@ async function main() {
   }
 
   const receipt = {
-    receiptVersion: 'ats-sys-01-inline-optimize-observation-v0.1',
+    receiptVersion: 'ats-sys-02-inline-optimize-observation-v0.1',
     capability: 'inline-optimize',
     personaId: PERSONA_ID,
+    fixtureRef: fixturePath,
     identity,
+    runtimeIdentityRef,
     startedAt: runStartedAt,
     completedAt: new Date().toISOString(),
     workloadSequence: ['resume-import:qwen3:1.7b', 'inline-optimize:qwen3:4b-instruct'],
@@ -204,6 +214,10 @@ async function main() {
       modelSwitchObserved: importModelObserved && optimizeModelObserved,
       modelListAtCompletion: models.trim().split(/\r?\n/).filter(Boolean),
     },
+    provenance: {
+      expectedBuildSha,
+      runtimeIdentityRef,
+    },
     result: 'OBSERVED',
     productCapabilityResult: 'PASS',
     aiWorkloadResult: aiMode ? 'AI_COMPLETED' : 'SAFE_FALLBACK',
@@ -214,6 +228,7 @@ async function main() {
   await persist(resolve(outputDir, 'receipt.json'), receipt);
   process.stdout.write(`Inline Optimize: ${receipt.aiWorkloadResult} (${optimizeResult.latencyMs} ms)\n`);
   process.stdout.write(`Model switch observed: ${receipt.observations.modelSwitchObserved}\n`);
+  process.stdout.write(`Runtime identity: ${runtimeIdentityRef}\n`);
   process.stdout.write(`Evidence: ${outputDir}\n`);
 }
 
