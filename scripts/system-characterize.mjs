@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { performance } from 'node:perf_hooks';
+import { captureCanonicalRuntimeIdentity } from './system-runtime-identity.mjs';
 
 const execFileAsync = promisify(execFile);
 const BASE_URL = (process.env.CV_ENGINE_E2E_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -84,9 +85,9 @@ async function createMemorySampler() {
   timer.unref?.();
   return {
     stop: async () => {
-      stopped = true;
       clearInterval(timer);
       await sample();
+      stopped = true;
       return peakMemoryMiB;
     },
   };
@@ -183,7 +184,7 @@ function readCareerVault(candidateProfileId) {
   return JSON.parse(raw);
 }
 
-async function characterizePersona(personaId, persona, identity, expectedBuildSha, rootOutputDir) {
+async function characterizePersona(personaId, persona, identity, runtimeIdentityRef, expectedBuildSha, rootOutputDir) {
   const startedAt = new Date().toISOString();
   const runStarted = performance.now();
   const outputDir = resolve(rootOutputDir, personaId);
@@ -307,6 +308,9 @@ async function characterizePersona(personaId, persona, identity, expectedBuildSh
       receiptVersion: RECEIPT_VERSION,
       personaId,
       identity,
+      runtimeIdentityRef,
+      fixtureRef: resolve(FIXTURE_DIR, persona.sourceDocument.fileName),
+      capability: 'canonical-persona-e2e',
       startedAt,
       completedAt,
       stages,
@@ -319,6 +323,11 @@ async function characterizePersona(personaId, persona, identity, expectedBuildSh
         totalLatencyMs: Math.round(performance.now() - runStarted),
         ...(Number.isFinite(peakMemoryMiB) ? { peakMemoryMiB: Math.round(peakMemoryMiB * 10) / 10 } : {}),
       },
+      provenance: {
+        expectedBuildSha,
+        runtimeIdentityRef,
+      },
+      observations: [],
       expectedBuildSha,
       accepted: true,
     };
@@ -331,6 +340,9 @@ async function characterizePersona(personaId, persona, identity, expectedBuildSh
       receiptVersion: RECEIPT_VERSION,
       personaId,
       identity,
+      runtimeIdentityRef,
+      fixtureRef: resolve(FIXTURE_DIR, persona.sourceDocument.fileName),
+      capability: 'canonical-persona-e2e',
       startedAt,
       completedAt,
       stages,
@@ -339,6 +351,11 @@ async function characterizePersona(personaId, persona, identity, expectedBuildSh
         totalLatencyMs: Math.round(performance.now() - runStarted),
         ...(Number.isFinite(peakMemoryMiB) ? { peakMemoryMiB: Math.round(peakMemoryMiB * 10) / 10 } : {}),
       },
+      provenance: {
+        expectedBuildSha,
+        runtimeIdentityRef,
+      },
+      observations: [error instanceof Error ? error.message : String(error)],
       expectedBuildSha,
       accepted: false,
       blockingReason: error instanceof Error ? error.message : String(error),
@@ -372,8 +389,16 @@ async function main() {
     throw new Error(`Runtime profile is ${identity.runtimeProfileId ?? 'UNCHARACTERIZED'}; set CVENGINE_RUNTIME_PROFILE_ID for a characterization run.`);
   }
 
+  const runtimeIdentityRef = process.env.CVENGINE_RUNTIME_IDENTITY_REF?.trim()
+    || (await captureCanonicalRuntimeIdentity({
+      expectedBuildSha,
+      healthStatusCode: healthResult.response.status,
+      healthBody: healthResult.body,
+    })).runtimeIdentityRef;
+  if (!runtimeIdentityRef) throw new Error('Canonical runtime identity evidence ref is required.');
+
   const stamp = isoSafe(new Date().toISOString());
-  const rootOutputDir = resolve(process.env.CVENGINE_SYSTEM_EVIDENCE_DIR || `evidence/system/runs/${stamp}`);
+  const rootOutputDir = resolve(process.env.CVENGINE_SYSTEM_EVIDENCE_DIR || `evidence/ats-sys-02/personas/${stamp}`);
   await mkdir(rootOutputDir, { recursive: true });
   await persistJson(resolve(rootOutputDir, '00-health.json'), healthResult.body);
   await persistJson(resolve(rootOutputDir, '00-run-manifest.json'), {
@@ -381,16 +406,24 @@ async function main() {
     synthetic: manifest.synthetic,
     expectedBuildSha,
     runtimeIdentity: identity,
+    runtimeIdentityRef,
     personas: personaIds,
     startedAt: new Date().toISOString(),
-    note: 'No latency budget is applied in ATS-SYS-01 v0.1. Measurements are characterization data only.',
+    note: 'No latency budget is applied in ATS-SYS-02 characterization. Measurements are observations only.',
   });
 
   const receipts = [];
   for (const personaId of personaIds) {
     process.stdout.write(`Characterizing ${personaId}...\n`);
     try {
-      const receipt = await characterizePersona(personaId, manifest.personas[personaId], identity, expectedBuildSha, rootOutputDir);
+      const receipt = await characterizePersona(
+        personaId,
+        manifest.personas[personaId],
+        identity,
+        runtimeIdentityRef,
+        expectedBuildSha,
+        rootOutputDir,
+      );
       receipts.push(receipt);
       process.stdout.write(`${personaId}: PASS (${receipt.measurements.totalLatencyMs} ms)\n`);
     } catch (error) {
@@ -403,14 +436,17 @@ async function main() {
   await persistJson(resolve(rootOutputDir, 'summary.json'), {
     expectedBuildSha,
     identity,
+    runtimeIdentityRef,
     receipts: receipts.map((receipt) => ({
       personaId: receipt.personaId,
       accepted: receipt.accepted,
+      runtimeIdentityRef: receipt.runtimeIdentityRef,
       totalLatencyMs: receipt.measurements.totalLatencyMs,
       peakMemoryMiB: receipt.measurements.peakMemoryMiB,
       aiCalls: receipt.aiCalls,
     })),
   });
+  process.stdout.write(`Runtime identity: ${runtimeIdentityRef}\n`);
   process.stdout.write(`Evidence: ${rootOutputDir}\n`);
 }
 
