@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - develop
+      - agent/ats-sys-01-system-characterization
   workflow_dispatch:
 
 permissions:
