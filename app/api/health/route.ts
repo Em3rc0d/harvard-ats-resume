@@ -5,6 +5,7 @@ import {
 } from '@/lib/infrastructure/persistence/DurableRedisRuntime';
 import { AIProviderFailure } from '@/lib/application/ai/AIProviderFailure';
 import { resolveRuntimeIdentity } from '@/lib/application/system/RuntimeIdentity';
+import { evaluateSystemHealth } from '@/lib/application/system/SystemHealthPolicy';
 import { OllamaStructuredClient, resolveOllamaModel } from '@/lib/infrastructure/ai/OllamaStructuredClient';
 import { DEFAULT_OLLAMA_IMPORT_V3_MODEL } from '@/lib/infrastructure/import/OllamaResumeImportV3Provider';
 import { DEFAULT_OLLAMA_OPTIMIZE_MODEL } from '@/lib/infrastructure/ai/OllamaCandidateTextOptimizer';
@@ -61,18 +62,23 @@ export async function GET() {
     };
   }
 
-  const ready = dependencies.localAI.status === 'READY' && dependencies.durableRedis.status === 'READY';
+  const health = evaluateSystemHealth({
+    localAI: dependencies.localAI.status,
+    durableRedis: dependencies.durableRedis.status,
+  });
   const identity = resolveRuntimeIdentity();
 
   return NextResponse.json(
     {
-      status: ready ? 'READY' : 'DEGRADED',
+      status: health.status,
       runtime: 'LOCAL_AI_WITH_DETERMINISTIC_FINAL_ASSEMBLY',
+      trustedCoreAvailable: health.trustedCoreAvailable,
+      degradedCapabilities: health.degradedCapabilities,
       identity,
       dependencies,
     },
     {
-      status: ready ? 200 : 503,
+      status: health.httpStatus,
       headers: { 'Cache-Control': 'no-store, max-age=0' },
     },
   );
