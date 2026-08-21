@@ -35,8 +35,6 @@ services:
     image: ollama/ollama:0.32.6
     restart: unless-stopped
     environment:
-      # Keep memory behavior predictable on developer machines. CV Engine swaps
-      # workload models instead of trying to retain several local LLMs at once.
       OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
     ports:
@@ -55,18 +53,16 @@ services:
     restart: "no"
     environment:
       OLLAMA_HOST: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
-      # Docker import v3 deliberately ignores the legacy OLLAMA_IMPORT_MODEL
-      # variable so an old qwen3:8b setting cannot resurrect the monolithic
-      # importer. Override only with DOCKER_OLLAMA_IMPORT_MODEL when testing.
+      # Generic local default stays small. Final resume assembly is deterministic
+      # and therefore does not require a whole-resume model.
+      OLLAMA_MODEL: ${DOCKER_OLLAMA_MODEL:-qwen3:1.7b}
       OLLAMA_IMPORT_MODEL: ${DOCKER_OLLAMA_IMPORT_MODEL:-qwen3:1.7b}
-      OLLAMA_RESUME_MODEL: ${OLLAMA_RESUME_MODEL:-qwen3:8b}
-      OLLAMA_OPTIMIZE_MODEL: ${OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct}
+      OLLAMA_OPTIMIZE_MODEL: ${DOCKER_OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         seen=""
-        for model in "$${OLLAMA_MODEL}" "$${OLLAMA_IMPORT_MODEL}" "$${OLLAMA_RESUME_MODEL}" "$${OLLAMA_OPTIMIZE_MODEL}"; do
+        for model in "$${OLLAMA_MODEL}" "$${OLLAMA_IMPORT_MODEL}" "$${OLLAMA_OPTIMIZE_MODEL}"; do
           case "|$${seen}|" in
             *"|$${model}|"*) continue ;;
           esac
@@ -91,15 +87,13 @@ services:
       NODE_ENV: production
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      OLLAMA_MODEL: ${DOCKER_OLLAMA_MODEL:-qwen3:1.7b}
       OLLAMA_IMPORT_MODEL: ${DOCKER_OLLAMA_IMPORT_MODEL:-qwen3:1.7b}
-      OLLAMA_RESUME_MODEL: ${OLLAMA_RESUME_MODEL:-qwen3:8b}
-      OLLAMA_OPTIMIZE_MODEL: ${OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct}
-      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-16384}
-      # Import v3 caps each bounded section request at 90 seconds internally.
-      # This value remains the outer compatibility budget used by the importer.
+      OLLAMA_OPTIMIZE_MODEL: ${DOCKER_OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct}
+      # Docker owns a smaller bounded context so stale host settings cannot
+      # recreate the 16K KV-cache memory pressure seen with the former 8B path.
+      OLLAMA_NUM_CTX: ${DOCKER_OLLAMA_NUM_CTX:-8192}
       RESUME_IMPORT_TIMEOUT_MS: ${DOCKER_RESUME_IMPORT_TIMEOUT_MS:-180000}
-      RESUME_GENERATION_TIMEOUT_MS: ${DOCKER_RESUME_GENERATION_TIMEOUT_MS:-240000}
       RATE_LIMIT_BACKEND: redis
       UPSTASH_REDIS_REST_URL: http://redis-http:80
       UPSTASH_REDIS_REST_TOKEN: ${LOCAL_REDIS_TOKEN:-cv-engine-local-change-me}
