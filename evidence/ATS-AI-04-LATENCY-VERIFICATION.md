@@ -2,7 +2,9 @@
 
 ## Status
 
-Repository gate: **GREEN** on final head `91061755217fbc0d2b59186b41dae9cc8261b5cf`.
+Repository gate: **GREEN**.
+
+Final branch head: `cded9bffefb4d5180af1c5b9d11705cbaf332c54`.
 
 Field acceptance: **PENDING final Docker replay** of the same real resume and target workflow.
 
@@ -68,7 +70,7 @@ Docker no longer requires or pulls `qwen3:8b` for the release path. Docker uses 
 
 ## Regression contract
 
-The behavior suite now explicitly replaces `globalThis.fetch` with a function that throws and then runs final resume assembly twice. The test requires:
+The behavior suite explicitly replaces `globalThis.fetch` with a function that throws and then runs final resume assembly twice. The test requires:
 
 - both assemblies succeed;
 - output is deterministic;
@@ -81,16 +83,27 @@ This prevents a future refactor from silently putting full-resume Ollama inferen
 
 ## Authoritative CI
 
-Head:
+Code-bearing head before this evidence receipt:
 
 `91061755217fbc0d2b59186b41dae9cc8261b5cf`
 
-GitHub Actions:
+Initial complete green run for that code head:
 
 - run: `32438756220`
 - job: `96645068827`
 
-All gates passed:
+The evidence receipt then advanced the branch without modifying runtime code. The resulting final branch head was independently run through the same complete CI gate:
+
+Final branch head:
+
+`cded9bffefb4d5180af1c5b9d11705cbaf332c54`
+
+Final GitHub Actions verification:
+
+- run: `32439009529`
+- job: `96645802965`
+
+All gates passed on the final branch head:
 
 - dependency install
 - dependency audit
@@ -107,7 +120,7 @@ All gates passed:
 
 ## Remaining field acceptance
 
-Replay the same real Docker workflow on the exact green head.
+Replay the same real Docker workflow on the final branch state.
 
 Expected runtime evidence:
 
