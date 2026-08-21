@@ -61,7 +61,7 @@ test('final resume assembly is deterministic and never calls the local model', a
     assert.equal(first.generation?.provider, DETERMINISTIC_RESUME_PROVIDER);
     assert.equal(first.generation?.model, DETERMINISTIC_RESUME_MODEL);
     assert.equal(first.generation?.contractVersion, DETERMINISTIC_RESUME_CONTRACT_VERSION);
-    assert.match(first.formattedResume ?? '', /ACME — Backend Engineer/);
+    assert.match(first.formattedResume ?? '', /Acme — Backend Engineer/);
     assert.match(first.formattedResume ?? '', /Built TypeScript APIs for internal workflows\./);
     assert.doesNotMatch(first.formattedResume ?? '', /Requires Go/);
   } finally {
