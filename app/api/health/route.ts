@@ -5,8 +5,7 @@ import {
 } from '@/lib/infrastructure/persistence/DurableRedisRuntime';
 import { AIProviderFailure } from '@/lib/application/ai/AIProviderFailure';
 import { OllamaStructuredClient, resolveOllamaModel } from '@/lib/infrastructure/ai/OllamaStructuredClient';
-import { DEFAULT_OLLAMA_IMPORT_MODEL } from '@/lib/infrastructure/import/NativeResumeImportProvider';
-import { DEFAULT_OLLAMA_RESUME_MODEL } from '@/lib/infrastructure/ai/OllamaResumeProvider';
+import { DEFAULT_OLLAMA_IMPORT_V3_MODEL } from '@/lib/infrastructure/import/OllamaResumeImportV3Provider';
 import { DEFAULT_OLLAMA_OPTIMIZE_MODEL } from '@/lib/infrastructure/ai/OllamaCandidateTextOptimizer';
 
 export const runtime = 'nodejs';
@@ -19,8 +18,7 @@ interface DependencyStatus {
 
 function requiredLocalModels(): string[] {
   return Array.from(new Set([
-    resolveOllamaModel(process.env.OLLAMA_IMPORT_MODEL?.trim() || DEFAULT_OLLAMA_IMPORT_MODEL),
-    resolveOllamaModel(process.env.OLLAMA_RESUME_MODEL?.trim() || DEFAULT_OLLAMA_RESUME_MODEL),
+    resolveOllamaModel(process.env.OLLAMA_IMPORT_MODEL?.trim() || DEFAULT_OLLAMA_IMPORT_V3_MODEL),
     resolveOllamaModel(process.env.OLLAMA_OPTIMIZE_MODEL?.trim() || DEFAULT_OLLAMA_OPTIMIZE_MODEL),
   ]));
 }
@@ -42,7 +40,7 @@ export async function GET() {
     }
     dependencies.localAI = {
       status: 'READY',
-      detail: `${models.length} workload model${models.length === 1 ? '' : 's'} ready`,
+      detail: `${models.length} bounded workload model${models.length === 1 ? '' : 's'} ready; final resume assembly is deterministic`,
     };
   } catch (error) {
     dependencies.localAI = {
@@ -67,7 +65,7 @@ export async function GET() {
   return NextResponse.json(
     {
       status: ready ? 'READY' : 'DEGRADED',
-      runtime: 'LOCAL_AI',
+      runtime: 'LOCAL_AI_WITH_DETERMINISTIC_FINAL_ASSEMBLY',
       dependencies,
     },
     {
