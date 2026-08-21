@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -6,6 +7,7 @@ import { captureCanonicalRuntimeIdentity } from './system-runtime-identity.mjs';
 
 const BASE_URL = (process.env.CV_ENGINE_E2E_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const MANIFEST_PATH = resolve('tests/system/fixtures/canonical-personas.v0.1.json');
+const FIXTURE_DIR = resolve('tests/system/fixtures/docx');
 
 function isoSafe(value) {
   return value.replace(/[:.]/g, '-');
@@ -15,11 +17,26 @@ function dockerCompose(...args) {
   return execFileSync('docker', ['compose', ...args], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
 }
 
-async function getHealth() {
+async function timedRequest(url, init) {
   const started = performance.now();
-  const response = await fetch(`${BASE_URL}/api/health`, { headers: { 'cache-control': 'no-cache' } });
-  const body = await response.json();
-  return { statusCode: response.status, body, latencyMs: Math.round(performance.now() - started) };
+  const response = await fetch(url, init);
+  const text = await response.text();
+  let body;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = { raw: text };
+  }
+  return {
+    statusCode: response.status,
+    ok: response.ok,
+    body,
+    latencyMs: Math.round(performance.now() - started),
+  };
+}
+
+async function getHealth() {
+  return timedRequest(`${BASE_URL}/api/health`, { headers: { 'cache-control': 'no-cache' } });
 }
 
 async function waitFor(predicate, timeoutMs = 60000) {
@@ -42,13 +59,38 @@ async function persist(path, value) {
   return path;
 }
 
-function assertExpectedHealth(observed, expected, scenarioId) {
+function sameRuntimeIdentity(actual, expected) {
+  return actual?.buildSha === expected?.buildSha
+    && actual?.architectureVersion === expected?.architectureVersion
+    && actual?.runtimeProfileId === expected?.runtimeProfileId
+    && actual?.releaseQualifiableIdentity === true;
+}
+
+function assertExpectedHealth(observed, expected, scenarioId, baselineIdentity) {
   const problems = [];
   if (observed.statusCode !== expected.expectedHttpStatus) problems.push(`HTTP ${observed.statusCode} != ${expected.expectedHttpStatus}`);
   if (observed.body?.status !== expected.expectedHealth) problems.push(`status ${observed.body?.status} != ${expected.expectedHealth}`);
   if (observed.body?.trustedCoreAvailable !== expected.trustedCoreAvailable) {
     problems.push(`trustedCoreAvailable ${observed.body?.trustedCoreAvailable} != ${expected.trustedCoreAvailable}`);
   }
+  if (!sameRuntimeIdentity(observed.body?.identity, baselineIdentity)) {
+    problems.push('runtime identity changed during fault observation');
+  }
+
+  const degraded = observed.body?.degradedCapabilities ?? [];
+  const unavailable = observed.body?.unavailableCapabilities ?? [];
+  if (scenarioId === 'local-ai-down') {
+    if (!degraded.includes('resume-import-ai') || !degraded.includes('inline-optimize')) {
+      problems.push('local AI outage did not mark AI-assisted capabilities degraded');
+    }
+    if (unavailable.length > 0) problems.push(`local AI outage unexpectedly marked unavailable capabilities: ${unavailable.join(', ')}`);
+  }
+  if (scenarioId === 'durable-redis-down') {
+    if (!unavailable.includes('durable-state')) {
+      problems.push('Redis outage did not mark durable-state unavailable');
+    }
+  }
+
   if (problems.length) throw new Error(`${scenarioId}: ${problems.join(' | ')}`);
 }
 
@@ -58,7 +100,135 @@ function faultCapability(scenarioId) {
   return 'UNKNOWN';
 }
 
-async function runScenario(scenario, runtimeIdentityRef, outputDir) {
+async function probeLocalAiFailure(persona, outputDir) {
+  const fileName = persona?.sourceDocument?.fileName;
+  if (!fileName) throw new Error('P10 local-AI probe requires a canonical source document.');
+  const bytes = await readFile(resolve(FIXTURE_DIR, fileName));
+  const form = new FormData();
+  form.append(
+    'file',
+    new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }),
+    fileName,
+  );
+
+  const result = await timedRequest(`${BASE_URL}/api/import-resume`, { method: 'POST', body: form });
+  const evidenceRef = await persist(resolve(outputDir, 'local-ai-down-capability-probe.json'), result);
+  const safeFailure = result.ok === false
+    && result.body?.success === false
+    && result.body?.data === undefined
+    && ['AI_EXTRACTION', 'RUNTIME'].includes(result.body?.stage)
+    && [502, 503, 504].includes(result.statusCode);
+  if (!safeFailure) {
+    throw new Error(`local-ai-down: resume import did not fail safely at the AI boundary. HTTP ${result.statusCode} stage ${result.body?.stage ?? 'UNKNOWN'}.`);
+  }
+
+  return {
+    capability: 'resume-import-ai',
+    expectedBehavior: 'SAFE_FAILURE_NO_CANDIDATE_TRUTH_ACCEPTED',
+    observedBehavior: {
+      httpStatus: result.statusCode,
+      success: result.body?.success,
+      stage: result.body?.stage,
+      errorCode: result.body?.errorCode,
+      providerKind: result.body?.provider?.kind,
+      responseLatencyMs: result.latencyMs,
+    },
+    candidateTruthAccepted: false,
+    evidenceRef,
+    result: 'PASS',
+  };
+}
+
+function durableAssessmentProbeBody() {
+  return {
+    personalInfo: {
+      fullName: 'P10 DURABILITY PROBE',
+      location: 'Lima, Peru',
+      email: 'p10-durability@example.test',
+    },
+    summary: 'Backend developer using Python and SQL for API and data workflows.',
+    experience: [],
+    education: [],
+    skills: {
+      hardSkills: ['Python', 'SQL'],
+      softSkills: [],
+    },
+    projects: [],
+    certifications: [],
+    languages: [],
+    jobDescription: 'Backend Developer required to build Python APIs and work with SQL relational data systems.',
+    careerVaultId: randomUUID(),
+    careerTarget: {
+      roleTitle: 'Backend Developer',
+      jobFamily: 'Software Engineering',
+      preferredSeniority: 'MID',
+      preferredLocations: [],
+      workModels: ['REMOTE'],
+      employmentTypes: ['FULL_TIME'],
+      industries: ['Software'],
+      relocation: 'UNSPECIFIED',
+      priority: 3,
+    },
+  };
+}
+
+async function probeDurableFailure(outputDir) {
+  const result = await timedRequest(`${BASE_URL}/api/assess-opportunity`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(durableAssessmentProbeBody()),
+  });
+  const evidenceRef = await persist(resolve(outputDir, 'durable-redis-down-capability-probe.json'), result);
+  const refusedTrustedSuccess = result.statusCode === 503
+    && result.body?.success === false
+    && result.body?.data === undefined
+    && result.body?.persistence?.status === 'UNAVAILABLE'
+    && result.body?.persistence?.stage === 'PREFLIGHT';
+  if (!refusedTrustedSuccess) {
+    throw new Error(`durable-redis-down: trusted durable assessment was not refused at persistence preflight. HTTP ${result.statusCode}.`);
+  }
+
+  return {
+    capability: 'opportunity-assessment-durability',
+    expectedBehavior: 'FAIL_CLOSED_BEFORE_TRUSTED_DURABLE_SUCCESS',
+    observedBehavior: {
+      httpStatus: result.statusCode,
+      success: result.body?.success,
+      persistenceStatus: result.body?.persistence?.status,
+      persistenceStage: result.body?.persistence?.stage,
+      persistenceReason: result.body?.persistence?.reason,
+      responseLatencyMs: result.latencyMs,
+    },
+    trustedDurableSuccessEmitted: false,
+    evidenceRef,
+    result: 'PASS',
+  };
+}
+
+async function probeFaultBehavior(scenarioId, manifest, outputDir) {
+  if (scenarioId === 'local-ai-down') {
+    return probeLocalAiFailure(manifest.personas?.P01, outputDir);
+  }
+  if (scenarioId === 'durable-redis-down') {
+    return probeDurableFailure(outputDir);
+  }
+  throw new Error(`Unsupported fault behavior probe ${scenarioId}.`);
+}
+
+async function waitForFullRecovery(baselineIdentity) {
+  return waitFor(async () => {
+    const health = await getHealth();
+    const recovered = health.statusCode === 200
+      && health.body?.status === 'READY'
+      && health.body?.trustedCoreAvailable === true
+      && health.body?.dependencies?.localAI?.status === 'READY'
+      && health.body?.dependencies?.durableRedis?.status === 'READY'
+      && sameRuntimeIdentity(health.body?.identity, baselineIdentity);
+    return recovered ? health : false;
+  }, 90000);
+}
+
+async function runScenario(scenario, manifest, baselineIdentity, runtimeIdentityRef, outputDir) {
   const service = scenario.id === 'local-ai-down' ? 'ollama' : scenario.id === 'durable-redis-down' ? 'redis' : null;
   if (!service) throw new Error(`Unsupported fault scenario ${scenario.id}`);
 
@@ -66,6 +236,7 @@ async function runScenario(scenario, runtimeIdentityRef, outputDir) {
   const started = performance.now();
   let observed;
   let recovery;
+  let capabilityProbe;
   let faultDetectionLatencyMs;
   try {
     dockerCompose('stop', service);
@@ -74,19 +245,16 @@ async function runScenario(scenario, runtimeIdentityRef, outputDir) {
       const matches = health.statusCode === scenario.expectedHttpStatus && health.body?.status === scenario.expectedHealth;
       return matches ? health : false;
     }, 45000);
-    assertExpectedHealth(observed, scenario, scenario.id);
+    assertExpectedHealth(observed, scenario, scenario.id, baselineIdentity);
     faultDetectionLatencyMs = Math.round(performance.now() - started);
+    capabilityProbe = await probeFaultBehavior(scenario.id, manifest, outputDir);
   } finally {
     dockerCompose('start', service);
-    recovery = await waitFor(async () => {
-      const health = await getHealth();
-      if (service === 'ollama') return health.body?.dependencies?.localAI?.status === 'READY' ? health : false;
-      return health.body?.dependencies?.durableRedis?.status === 'READY' ? health : false;
-    }, 90000);
+    recovery = await waitForFullRecovery(baselineIdentity);
   }
 
   const receipt = {
-    receiptVersion: 'ats-sys-02-fault-receipt-v0.1',
+    receiptVersion: 'ats-sys-02-fault-receipt-v0.2',
     personaId: 'P10',
     faultId: scenario.id,
     scenarioId: scenario.id,
@@ -110,19 +278,25 @@ async function runScenario(scenario, runtimeIdentityRef, outputDir) {
       dependencies: observed.body.dependencies,
       identity: observed.body.identity,
     },
+    capabilityProbe,
     httpStatus: observed.statusCode,
     trustedCoreAvailable: observed.body.trustedCoreAvailable,
     degradedCapabilities: observed.body.degradedCapabilities ?? [],
     unavailableCapabilities: observed.body.unavailableCapabilities ?? [],
     recoveryObserved: {
-      restored: true,
+      restored: recovery.body?.status === 'READY'
+        && recovery.body?.trustedCoreAvailable === true
+        && sameRuntimeIdentity(recovery.body?.identity, baselineIdentity),
       status: recovery.body?.status ?? 'UNKNOWN',
       httpStatus: recovery.statusCode,
+      trustedCoreAvailable: recovery.body?.trustedCoreAvailable,
       dependencies: recovery.body?.dependencies,
+      identity: recovery.body?.identity,
       observedAt: new Date().toISOString(),
     },
     measurements: {
       faultDetectionLatencyMs,
+      capabilityProbeLatencyMs: capabilityProbe?.observedBehavior?.responseLatencyMs,
       detectionAndRecoveryLatencyMs: Math.round(performance.now() - started),
       finalRecoveryProbeLatencyMs: recovery.latencyMs,
     },
@@ -146,8 +320,12 @@ async function main() {
   if (!initial.body?.identity?.releaseQualifiableIdentity) {
     throw new Error('Fault injection requires identified build and declared runtime profile.');
   }
+  const baselineIdentity = initial.body.identity;
 
   const expectedBuildSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  if (baselineIdentity.buildSha !== expectedBuildSha) {
+    throw new Error(`VERSION_SKEW: runtime ${baselineIdentity.buildSha} != expected ${expectedBuildSha}`);
+  }
   const capturedIdentity = await captureCanonicalRuntimeIdentity({
     expectedBuildSha,
     healthStatusCode: initial.statusCode,
@@ -167,13 +345,14 @@ async function main() {
   const receipts = [];
   for (const scenario of p10.faultScenarios) {
     process.stdout.write(`Injecting ${scenario.id}...\n`);
-    const receipt = await runScenario(scenario, runtimeIdentityRef, outputDir);
+    const receipt = await runScenario(scenario, manifest, baselineIdentity, runtimeIdentityRef, outputDir);
     receipts.push(receipt);
     process.stdout.write(`${scenario.id}: PASS\n`);
   }
   await persist(resolve(outputDir, 'summary.json'), {
     personaId: 'P10',
     runtimeIdentityRef,
+    baselineIdentity,
     receipts,
   });
   process.stdout.write(`Runtime identity: ${runtimeIdentityRef}\n`);
