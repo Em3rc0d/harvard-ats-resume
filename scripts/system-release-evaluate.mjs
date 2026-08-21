@@ -5,6 +5,7 @@ const REQUIRED_PERSONAS = ['P01', 'P03', 'P04', 'P09'];
 const REQUIRED_CRITERIA = [
   'canonical-personas',
   'failure-degradation',
+  'runtime-identity-evidence',
   'runtime-envelope',
   'truth-invariants',
   'durable-readback',
@@ -126,6 +127,54 @@ async function main() {
     ? criterion('PASS', evidenceRefs.personas, `All persona receipts identify build ${[...buildShas][0]} on profile ${[...profiles][0]}.`)
     : criterion('FAIL', evidenceRefs.personas, 'Persona receipts do not share one release-qualifiable build/runtime identity.');
 
+  const personaRuntimeRefs = REQUIRED_PERSONAS
+    .map((personaId) => receipts[personaId]?.runtimeIdentityRef)
+    .filter((value) => typeof value === 'string' && value.trim());
+  const faultRuntimeRefs = [
+    faultSummary.runtimeIdentityRef,
+    ...faultReceipts.map((receipt) => receipt.runtimeIdentityRef),
+  ].filter((value) => typeof value === 'string' && value.trim());
+  const allRuntimeRefs = [...personaRuntimeRefs, ...faultRuntimeRefs];
+  const uniqueRuntimeRefs = new Set(allRuntimeRefs.map((value) => resolve(value)));
+  let canonicalRuntime;
+  let canonicalRuntimeRef;
+  let runtimeEvidenceProblem;
+
+  if (personaRuntimeRefs.length !== REQUIRED_PERSONAS.length) {
+    runtimeEvidenceProblem = 'At least one canonical persona receipt is missing runtimeIdentityRef.';
+  } else if (faultRuntimeRefs.length < requiredFaultIds.length + 1) {
+    runtimeEvidenceProblem = 'P10 fault evidence is missing canonical runtimeIdentityRef binding.';
+  } else if (uniqueRuntimeRefs.size !== 1) {
+    runtimeEvidenceProblem = `Execution evidence references ${uniqueRuntimeRefs.size} different runtime identity artifacts.`;
+  } else {
+    canonicalRuntimeRef = [...uniqueRuntimeRefs][0];
+    try {
+      canonicalRuntime = await readJson(canonicalRuntimeRef);
+    } catch (error) {
+      runtimeEvidenceProblem = `Canonical runtime identity evidence could not be read: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  if (!runtimeEvidenceProblem && canonicalRuntime) {
+    const personaBuildSha = buildShas.size === 1 ? [...buildShas][0] : undefined;
+    const personaProfile = profiles.size === 1 ? [...profiles][0] : undefined;
+    if (canonicalRuntime.buildSha !== personaBuildSha) {
+      runtimeEvidenceProblem = `Canonical runtime build ${canonicalRuntime.buildSha} != persona build ${personaBuildSha}.`;
+    } else if (canonicalRuntime.runtimeProfile !== personaProfile) {
+      runtimeEvidenceProblem = `Canonical runtime profile ${canonicalRuntime.runtimeProfile} != persona profile ${personaProfile}.`;
+    } else if (canonicalRuntime.sourceIdentity?.releaseQualifiableIdentity !== true) {
+      runtimeEvidenceProblem = 'Canonical runtime evidence source identity is not release-qualifiable.';
+    }
+  }
+
+  criteria['runtime-identity-evidence'] = runtimeEvidenceProblem
+    ? criterion('FAIL', allRuntimeRefs, runtimeEvidenceProblem)
+    : criterion(
+        'PASS',
+        [canonicalRuntimeRef],
+        `All execution receipts bind to canonical runtime evidence for build ${canonicalRuntime.buildSha} / ${canonicalRuntime.runtimeProfile}.`,
+      );
+
   criteria['runtime-envelope'] = criterion(
     'UNCHARACTERIZED',
     [],
@@ -143,6 +192,7 @@ async function main() {
     const personaBuildSha = buildShas.size === 1 ? [...buildShas][0] : undefined;
     const personaProfile = profiles.size === 1 ? [...profiles][0] : undefined;
     const attempts = Array.isArray(coldStart.attempts) ? coldStart.attempts : [];
+    const coldRuntimeRef = coldStart.runtimeIdentityRef ? resolve(coldStart.runtimeIdentityRef) : undefined;
     const coldStartPass = coldStart.result === 'PASS'
       && coldStart.semantics === 'CONTAINERS_COLD_VOLUMES_RETAINED'
       && coldStart.destructiveVolumeReset === false
@@ -150,10 +200,12 @@ async function main() {
       && attempts.length === coldStart.repetitions
       && attempts.every((attempt) => attempt.result === 'PASS')
       && (!personaBuildSha || coldStart.expectedBuildSha === personaBuildSha)
-      && (!personaProfile || coldStart.runtimeProfileId === personaProfile);
+      && (!personaProfile || coldStart.runtimeProfileId === personaProfile)
+      && Boolean(canonicalRuntimeRef)
+      && coldRuntimeRef === canonicalRuntimeRef;
     criteria['docker-cold-start'] = coldStartPass
-      ? criterion('PASS', [resolvedColdStart], `${coldStart.repetitions} identified container-cold starts passed with volumes retained.`)
-      : criterion('FAIL', [resolvedColdStart], 'Cold-start receipt does not satisfy the v0.1 reproducibility/identity contract.');
+      ? criterion('PASS', [resolvedColdStart, coldRuntimeRef], `${coldStart.repetitions} identified container-cold starts passed with volumes retained and canonical runtime binding.`)
+      : criterion('FAIL', [resolvedColdStart, ...(coldRuntimeRef ? [coldRuntimeRef] : [])], 'Cold-start receipt does not satisfy the v0.1 reproducibility/identity/runtime-binding contract.');
   } else {
     criteria['docker-cold-start'] = criterion(
       'UNCHARACTERIZED',
@@ -169,6 +221,7 @@ async function main() {
 
   const measurements = REQUIRED_PERSONAS.map((personaId) => ({
     personaId,
+    runtimeIdentityRef: receipts[personaId]?.runtimeIdentityRef,
     totalLatencyMs: receipts[personaId]?.measurements?.totalLatencyMs,
     peakMemoryMiB: receipts[personaId]?.measurements?.peakMemoryMiB,
     aiCalls: receipts[personaId]?.aiCalls,
@@ -176,23 +229,25 @@ async function main() {
   }));
 
   const evaluation = {
-    evaluationVersion: 'ats-sys-01-release-evaluation-v0.1',
+    evaluationVersion: 'ats-sys-02-release-evaluation-v0.1',
     evaluatedAt: new Date().toISOString(),
     personaRun: personaRoot,
     faultRun: faultRoot,
     coldStartReceipt: coldStartPath ? resolve(coldStartPath) : undefined,
+    runtimeIdentityRef: canonicalRuntimeRef,
     criteria,
     measurements,
     ready: missing.length === 0,
     blockingCriteria: missing,
-    policy: 'PASS requires explicit evidence. UNCHARACTERIZED never counts as PASS.',
+    policy: 'PASS requires explicit evidence. UNKNOWN/UNCHARACTERIZED never counts as PASS. Runtime observation does not imply a support envelope.',
   };
 
-  const outputDir = resolve(process.env.CVENGINE_SYSTEM_RELEASE_DIR || `evidence/system/release/${isoSafe(new Date().toISOString())}`);
+  const outputDir = resolve(process.env.CVENGINE_SYSTEM_RELEASE_DIR || `evidence/ats-sys-02/release-evaluation/${isoSafe(new Date().toISOString())}`);
   await mkdir(outputDir, { recursive: true });
   await persistJson(resolve(outputDir, 'release-gate-evaluation.json'), evaluation);
   process.stdout.write(`${evaluation.ready ? 'RELEASE PASS' : 'RELEASE BLOCKED'}\n`);
   process.stdout.write(`Blocking criteria: ${missing.join(', ') || 'none'}\n`);
+  process.stdout.write(`Runtime identity: ${canonicalRuntimeRef ?? 'UNKNOWN'}\n`);
   process.stdout.write(`Evidence: ${outputDir}\n`);
   if (!evaluation.ready) process.exitCode = 2;
 }
