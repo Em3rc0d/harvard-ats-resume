@@ -28,6 +28,11 @@ import {
   DEFAULT_OLLAMA_OPTIMIZE_MODEL,
   INLINE_OPTIMIZER_MAX_OUTPUT_TOKENS,
 } from '../../lib/infrastructure/ai/OllamaCandidateTextOptimizer';
+import {
+  DETERMINISTIC_RESUME_CONTRACT_VERSION,
+  DETERMINISTIC_RESUME_MODEL,
+  DETERMINISTIC_RESUME_PROVIDER,
+} from '../../lib/local-ai';
 
 function source(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
@@ -37,6 +42,7 @@ test('CV Engine source runtime no longer depends on the removed remote model SDK
   const packageJson = JSON.parse(source('package.json')) as { dependencies?: Record<string, string> };
   const env = source('.env.example');
   const generation = source('app/api/generate-resume/route.ts');
+  const localAssembly = source('lib/local-ai.ts');
   const importerRoute = source('app/api/import-resume/route.ts');
   const importer = source('lib/infrastructure/import/OllamaResumeImportV3Provider.ts');
   const optimizer = source('app/api/optimize-content/route.ts');
@@ -47,22 +53,26 @@ test('CV Engine source runtime no longer depends on the removed remote model SDK
   assert.equal(existsSync(join(process.cwd(), 'lib/infrastructure/ai/GeminiCandidateTextOptimizer.ts')), false);
   assert.doesNotMatch(env, /GEMINI_API_KEY/);
   assert.match(generation, /generateResumeWithAI/);
-  assert.match(generation, /OLLAMA_RESUME_PROVIDER/);
+  assert.match(localAssembly, /generateResumeWithAI = generateResumeDraft/);
+  assert.doesNotMatch(localAssembly, /new OllamaResumeProvider|generateStructured\(/);
   assert.match(importerRoute, /OllamaResumeImportV3Provider/);
   assert.match(importer, /OllamaStructuredClient/);
   assert.match(importer, /reconcileCandidateToSource/);
   assert.match(optimizer, /OllamaCandidateTextOptimizer/);
 });
 
-test('local runtime defaults to bounded workload-specific Qwen3 contracts', () => {
+test('local runtime defaults to bounded workload-specific contracts', () => {
   assert.equal(OLLAMA_PROVIDER, 'ollama-local');
   assert.equal(DEFAULT_OLLAMA_MODEL, 'qwen3:8b');
   assert.equal(DEFAULT_OLLAMA_IMPORT_V3_MODEL, 'qwen3:1.7b');
-  assert.equal(DEFAULT_OLLAMA_RESUME_MODEL, 'qwen3:8b');
+  assert.equal(DEFAULT_OLLAMA_RESUME_MODEL, 'qwen3:4b-instruct');
   assert.equal(DEFAULT_OLLAMA_OPTIMIZE_MODEL, 'qwen3:4b-instruct');
   assert.equal(IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS, 1_024);
-  assert.equal(RESUME_MAX_OUTPUT_TOKENS, 4_096);
+  assert.equal(RESUME_MAX_OUTPUT_TOKENS, 2_048);
   assert.equal(INLINE_OPTIMIZER_MAX_OUTPUT_TOKENS, 768);
+  assert.equal(DETERMINISTIC_RESUME_PROVIDER, 'cv-engine-deterministic');
+  assert.equal(DETERMINISTIC_RESUME_MODEL, 'source-preserving-resume-composer-v2');
+  assert.equal(DETERMINISTIC_RESUME_CONTRACT_VERSION, 'ats2-evidence-bound-resume-v2');
   assert.equal(resolveOllamaModel(undefined), 'qwen3:8b');
   assert.equal(resolveOllamaBaseUrl(undefined), 'http://127.0.0.1:11434');
   assert.equal(resolveOllamaContextWindow(undefined), 16_384);
@@ -247,15 +257,18 @@ test('Ollama readiness fails closed when the configured model is not installed',
   }
 });
 
-test('Docker stack owns app, workload models and durable Redis dependencies', () => {
+test('Docker stack owns bounded local models and durable Redis dependencies', () => {
   const compose = source('docker-compose.yml');
   const dockerfile = source('Dockerfile');
   const health = source('app/api/health/route.ts');
 
   assert.match(compose, /ollama\/ollama:0\.32\.6/);
+  assert.match(compose, /OLLAMA_MODEL: \$\{DOCKER_OLLAMA_MODEL:-qwen3:1\.7b\}/);
   assert.match(compose, /OLLAMA_IMPORT_MODEL: \$\{DOCKER_OLLAMA_IMPORT_MODEL:-qwen3:1\.7b\}/);
-  assert.match(compose, /OLLAMA_RESUME_MODEL: \$\{OLLAMA_RESUME_MODEL:-qwen3:8b\}/);
-  assert.match(compose, /OLLAMA_OPTIMIZE_MODEL: \$\{OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct\}/);
+  assert.match(compose, /OLLAMA_OPTIMIZE_MODEL: \$\{DOCKER_OLLAMA_OPTIMIZE_MODEL:-qwen3:4b-instruct\}/);
+  assert.doesNotMatch(compose, /OLLAMA_RESUME_MODEL/);
+  assert.doesNotMatch(compose, /qwen3:8b/);
+  assert.match(compose, /DOCKER_OLLAMA_NUM_CTX:-8192/);
   assert.match(compose, /ollama pull "\$\$\{model\}"/);
   assert.match(compose, /ollama run "\$\$\{OLLAMA_IMPORT_MODEL\}" ""/);
   assert.match(compose, /OLLAMA_MAX_LOADED_MODELS: \$\{OLLAMA_MAX_LOADED_MODELS:-1\}/);
@@ -269,6 +282,8 @@ test('Docker stack owns app, workload models and durable Redis dependencies', ()
   assert.match(compose, /redis-http:\s*\n\s*condition: service_healthy/);
   assert.match(dockerfile, /node:24-bookworm-slim/);
   assert.match(dockerfile, /\/api\/health/);
+  assert.match(health, /DEFAULT_OLLAMA_IMPORT_V3_MODEL/);
+  assert.doesNotMatch(health, /DEFAULT_OLLAMA_RESUME_MODEL|OLLAMA_RESUME_MODEL/);
   assert.match(health, /requiredLocalModels\(\)/);
   assert.match(health, /client\.assertReady\(\)/);
   assert.match(health, /runtime\.assertReady\(\)/);
