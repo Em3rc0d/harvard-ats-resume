@@ -12,6 +12,11 @@ const REQUIRED_CRITERIA = [
   'build-identity',
   'docker-cold-start',
 ];
+const EXPECTED_GENERATION = {
+  provider: 'cv-engine-deterministic',
+  model: 'source-preserving-resume-composer-v2',
+  contractVersion: 'ats2-evidence-bound-resume-v2',
+};
 
 function argValue(name) {
   const index = process.argv.indexOf(name);
@@ -41,23 +46,33 @@ function passStages(receipt, stageIds) {
   });
 }
 
+function sameGenerationMetadata(actual) {
+  return actual?.provider === EXPECTED_GENERATION.provider
+    && actual?.model === EXPECTED_GENERATION.model
+    && actual?.contractVersion === EXPECTED_GENERATION.contractVersion;
+}
+
 async function main() {
   const personaRun = argValue('--persona-run');
   const faultRun = argValue('--fault-run');
+  const coldStartPath = argValue('--cold-start');
   if (!personaRun || !faultRun) {
-    throw new Error('Usage: npm run system:release-evaluate -- --persona-run <dir> --fault-run <dir>');
+    throw new Error('Usage: npm run system:release-evaluate -- --persona-run <dir> --fault-run <dir> [--cold-start <cold-start-receipt.json>]');
   }
 
   const personaRoot = resolve(personaRun);
   const faultRoot = resolve(faultRun);
   const receipts = {};
+  const generationEvaluations = {};
   for (const personaId of REQUIRED_PERSONAS) {
     receipts[personaId] = await readJson(resolve(personaRoot, personaId, 'receipt.json'));
+    generationEvaluations[personaId] = await readJson(resolve(personaRoot, personaId, '05-final-resume-truth-evaluation.json'));
   }
   const faultSummary = await readJson(resolve(faultRoot, 'summary.json'));
 
   const evidenceRefs = {
     personas: REQUIRED_PERSONAS.map((personaId) => resolve(personaRoot, personaId, 'receipt.json')),
+    generation: REQUIRED_PERSONAS.map((personaId) => resolve(personaRoot, personaId, '05-final-resume-truth-evaluation.json')),
     faults: [resolve(faultRoot, 'summary.json')],
   };
 
@@ -77,10 +92,24 @@ async function main() {
     : criterion('FAIL', evidenceRefs.faults, 'P10 fault evidence is incomplete or contradicted the degradation contract.');
 
   const truthStages = ['careerEvidence', 'resumeAssembly', 'grounding', 'semanticGrounding', 'provenance'];
-  const truthPass = REQUIRED_PERSONAS.every((personaId) => passStages(receipts[personaId], truthStages));
+  const truthStagePass = REQUIRED_PERSONAS.every((personaId) => passStages(receipts[personaId], truthStages));
+  const operationalProvenancePass = REQUIRED_PERSONAS.every((personaId) =>
+    sameGenerationMetadata(generationEvaluations[personaId]?.generation),
+  );
+  const truthPass = truthStagePass && operationalProvenancePass;
   criteria['truth-invariants'] = truthPass
-    ? criterion('PASS', evidenceRefs.personas, 'Known-truth, JD-isolation, grounding and provenance stages passed for every promoted persona.')
-    : criterion('FAIL', evidenceRefs.personas, 'One or more truth/provenance stages failed.');
+    ? criterion(
+        'PASS',
+        [...evidenceRefs.personas, ...evidenceRefs.generation],
+        'Known-truth, JD-isolation, grounding, claim provenance and deterministic generation provenance passed for every promoted persona.',
+      )
+    : criterion(
+        'FAIL',
+        [...evidenceRefs.personas, ...evidenceRefs.generation],
+        operationalProvenancePass
+          ? 'One or more truth/provenance stages failed.'
+          : `ResumeVersion generation metadata must equal ${JSON.stringify(EXPECTED_GENERATION)} for every promoted persona.`,
+      );
 
   const durabilityPass = REQUIRED_PERSONAS.every((personaId) => passStages(receipts[personaId], ['persistence', 'readBack']));
   criteria['durable-readback'] = durabilityPass
@@ -107,11 +136,31 @@ async function main() {
     [],
     'Latency is measured but no product budgets are approved yet. Observation is not a budget.',
   );
-  criteria['docker-cold-start'] = criterion(
-    'UNCHARACTERIZED',
-    [],
-    'A dedicated identified cold-start receipt has not been supplied to this evaluator.',
-  );
+
+  if (coldStartPath) {
+    const resolvedColdStart = resolve(coldStartPath);
+    const coldStart = await readJson(resolvedColdStart);
+    const personaBuildSha = buildShas.size === 1 ? [...buildShas][0] : undefined;
+    const personaProfile = profiles.size === 1 ? [...profiles][0] : undefined;
+    const attempts = Array.isArray(coldStart.attempts) ? coldStart.attempts : [];
+    const coldStartPass = coldStart.result === 'PASS'
+      && coldStart.semantics === 'CONTAINERS_COLD_VOLUMES_RETAINED'
+      && coldStart.destructiveVolumeReset === false
+      && coldStart.repetitions >= 3
+      && attempts.length === coldStart.repetitions
+      && attempts.every((attempt) => attempt.result === 'PASS')
+      && (!personaBuildSha || coldStart.expectedBuildSha === personaBuildSha)
+      && (!personaProfile || coldStart.runtimeProfileId === personaProfile);
+    criteria['docker-cold-start'] = coldStartPass
+      ? criterion('PASS', [resolvedColdStart], `${coldStart.repetitions} identified container-cold starts passed with volumes retained.`)
+      : criterion('FAIL', [resolvedColdStart], 'Cold-start receipt does not satisfy the v0.1 reproducibility/identity contract.');
+  } else {
+    criteria['docker-cold-start'] = criterion(
+      'UNCHARACTERIZED',
+      [],
+      'A dedicated identified cold-start receipt has not been supplied to this evaluator.',
+    );
+  }
 
   const missing = REQUIRED_CRITERIA.filter((criterionId) => {
     const value = criteria[criterionId];
@@ -123,6 +172,7 @@ async function main() {
     totalLatencyMs: receipts[personaId]?.measurements?.totalLatencyMs,
     peakMemoryMiB: receipts[personaId]?.measurements?.peakMemoryMiB,
     aiCalls: receipts[personaId]?.aiCalls,
+    generation: generationEvaluations[personaId]?.generation,
   }));
 
   const evaluation = {
@@ -130,6 +180,7 @@ async function main() {
     evaluatedAt: new Date().toISOString(),
     personaRun: personaRoot,
     faultRun: faultRoot,
+    coldStartReceipt: coldStartPath ? resolve(coldStartPath) : undefined,
     criteria,
     measurements,
     ready: missing.length === 0,
