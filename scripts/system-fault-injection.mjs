@@ -66,6 +66,7 @@ async function runScenario(scenario, runtimeIdentityRef, outputDir) {
   const started = performance.now();
   let observed;
   let recovery;
+  let faultDetectionLatencyMs;
   try {
     dockerCompose('stop', service);
     observed = await waitFor(async () => {
@@ -74,6 +75,7 @@ async function runScenario(scenario, runtimeIdentityRef, outputDir) {
       return matches ? health : false;
     }, 45000);
     assertExpectedHealth(observed, scenario, scenario.id);
+    faultDetectionLatencyMs = Math.round(performance.now() - started);
   } finally {
     dockerCompose('start', service);
     recovery = await waitFor(async () => {
@@ -120,8 +122,9 @@ async function runScenario(scenario, runtimeIdentityRef, outputDir) {
       observedAt: new Date().toISOString(),
     },
     measurements: {
+      faultDetectionLatencyMs,
       detectionAndRecoveryLatencyMs: Math.round(performance.now() - started),
-      faultDetectionLatencyMs: observed.latencyMs,
+      finalRecoveryProbeLatencyMs: recovery.latencyMs,
     },
     result: 'PASS',
   };
