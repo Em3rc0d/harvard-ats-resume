@@ -172,15 +172,34 @@ test('ATS-SYS-02 persona and Inline Optimize receipts point to the exact runtime
   assert.match(optimizeSource, /budgetApplied:\s*false/);
 });
 
-test('ATS-SYS-02 P10 receipts distinguish degraded and unavailable capability evidence and record recovery', () => {
+test('ATS-SYS-02 P10 exercises affected capabilities, verifies no trusted success, and requires full runtime recovery', () => {
   const source = readFileSync('scripts/system-fault-injection.mjs', 'utf8');
-  assert.match(source, /runtimeIdentityRef/);
-  assert.match(source, /faultId/);
-  assert.match(source, /injectionMethod/);
+  assert.match(source, /ats-sys-02-fault-receipt-v0\.2/);
+  assert.match(source, /probeLocalAiFailure/);
+  assert.match(source, /SAFE_FAILURE_NO_CANDIDATE_TRUTH_ACCEPTED/);
+  assert.match(source, /candidateTruthAccepted:\s*false/);
+  assert.match(source, /probeDurableFailure/);
+  assert.match(source, /FAIL_CLOSED_BEFORE_TRUSTED_DURABLE_SUCCESS/);
+  assert.match(source, /persistenceStage:\s*result\.body\?\.persistence\?\.stage/);
+  assert.match(source, /trustedDurableSuccessEmitted:\s*false/);
+  assert.match(source, /waitForFullRecovery/);
+  assert.match(source, /sameRuntimeIdentity/);
+  assert.match(source, /health\.body\?\.status === 'READY'/);
+  assert.match(source, /dependencies\?\.localAI\?\.status === 'READY'/);
+  assert.match(source, /dependencies\?\.durableRedis\?\.status === 'READY'/);
   assert.match(source, /degradedCapabilities/);
   assert.match(source, /unavailableCapabilities/);
-  assert.match(source, /recoveryObserved/);
   assert.match(source, /faultDetectionLatencyMs/);
+});
+
+test('ATS-SYS-02 release evaluator refuses legacy health-only P10 PASS receipts', () => {
+  const source = readFileSync('scripts/system-release-evaluate.mjs', 'utf8');
+  assert.match(source, /faultReceiptPasses/);
+  assert.match(source, /ats-sys-02-fault-receipt-v0\.2/);
+  assert.match(source, /capabilityProbe\?\.result === 'PASS'/);
+  assert.match(source, /capabilityProbe\?\.evidenceRef/);
+  assert.match(source, /recoveryObserved\?\.restored === true/);
+  assert.match(source, /behavioral fault receipts/);
 });
 
 test('ATS-SYS-02 reference runner refuses ambiguous source/runtime identity and keeps generated evidence outside the runtime image', () => {
