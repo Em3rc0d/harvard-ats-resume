@@ -76,7 +76,7 @@ function serviceImage(service) {
 function applicationImageIdentity(appContainerId) {
   const image = inspectContainer(appContainerId, '{{.Config.Image}}', 'application image');
   const imageId = inspectContainer(appContainerId, '{{.Image}}', 'application image digest');
-  const repoDigestsRaw = command('docker', ['image', 'inspect', imageId, '--format', '{{json .RepoDigests}}']);
+  const repoDigestsRaw = command('docker', ['image', 'inspect', '--format', '{{json .RepoDigests}}', imageId]);
   let repoDigests = [];
   if (repoDigestsRaw) {
     try {
