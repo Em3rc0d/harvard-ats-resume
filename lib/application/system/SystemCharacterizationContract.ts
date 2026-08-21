@@ -142,11 +142,11 @@ export const CAPABILITY_CONTRACTS: readonly CapabilityContract[] = [
   },
   {
     id: 'provenance',
-    purpose: 'Bind every material resume claim to supporting assertions/evidence.',
+    purpose: 'Bind every material resume claim to supporting assertions/evidence and preserve truthful materialization metadata.',
     truthAuthority: 'APPLICATION_RULES',
     aiDependency: 'NONE',
     criticalPath: true,
-    failurePolicy: 'No complete provenance means no trusted ResumeVersion.',
+    failurePolicy: 'No complete factual and operational provenance means no trusted ResumeVersion.',
   },
   {
     id: 'durability',
@@ -167,7 +167,7 @@ export const FAILURE_CLASS_CONTRACTS: readonly FailureClassContract[] = [
   ['PERSISTENCE', 'Backend readiness and operation errors', 'Stop before false persistence claims', 'Read-only/non-durable UI only when explicitly modeled', 'Restore backend', 'Persistence stage/reason', 'Redis unavailable'],
   ['TRUTH', 'Source/evidence reconciliation', 'Reject unsupported candidate facts', 'Keep supported subset only', 'Add/confirm real evidence', 'Rejected claim/evidence references', 'JD leakage/adversarial claim'],
   ['GROUNDING', 'Grounding and semantic-grounding reports', 'Block ResumeVersion', 'Return review-required state', 'Correct candidate evidence or wording', 'Grounding issue IDs', 'Overstatement fixture'],
-  ['PROVENANCE', 'Claim-to-assertion completeness validation', 'Block trusted materialization', 'No trusted resume version', 'Repair composition mapping', 'Untraceable claim IDs', 'Missing assertion binding'],
+  ['PROVENANCE', 'Claim-to-assertion completeness plus materialization-metadata validation', 'Block trusted materialization', 'No trusted resume version', 'Repair composition mapping or generation metadata', 'Untraceable claim IDs + generation provenance', 'Missing assertion binding or false provider/model metadata'],
   ['DURABILITY', 'Commit plus read-after-write verification', 'Do not emit durability claim', 'Keep operation explicitly uncommitted', 'Retry after backend recovery', 'Revision/commit verification receipt', 'Write succeeds/read-back fails'],
   ['VERSION_SKEW', 'Expose build/runtime identity and compare expected revision', 'Reject misleading diagnostics for unknown runtime', 'Require explicit stale-runtime state', 'Rebuild/recreate correct artifact', 'Build SHA + architecture version', 'Run stale artifact against expected revision'],
   ['UI_STATE', 'Compare UI state with backend failure contract', 'Do not mislabel failure class', 'Render precise recoverability guidance', 'Refresh/retry only when policy allows', 'Failure class + UI surface', 'Provider-vs-non-provider failure rendering'],
@@ -203,13 +203,20 @@ export const SYSTEM_INCIDENTS: readonly SystemIncident[] = [
     symptom: 'Observed runtime behavior did not match the later repository architecture that removed whole-resume model generation.',
     systemLesson: 'Runtime/build identity must be observable before diagnosing application behavior.',
   },
+  {
+    id: 'ATS-SYS-INC-004',
+    status: 'VERIFIED',
+    failureClass: 'PROVENANCE',
+    symptom: 'A deterministic final resume artifact was still being labeled with retired Ollama generation metadata.',
+    systemLesson: 'Trusted provenance must describe both evidence support and the actual materialization mechanism.',
+  },
 ] as const;
 
 export const RELEASE_GATE_CRITERIA: readonly ReleaseCriterion[] = [
   { id: 'canonical-personas', description: 'All required canonical personas complete the end-to-end acceptance path.' },
   { id: 'failure-degradation', description: 'Required injected failure classes degrade or fail according to contract.' },
   { id: 'runtime-envelope', description: 'The declared minimum runtime profile satisfies measured product budgets.' },
-  { id: 'truth-invariants', description: 'Candidate truth, market truth and model proposals remain separated.' },
+  { id: 'truth-invariants', description: 'Candidate truth, market truth, model proposals and operational provenance remain separated and accurate.' },
   { id: 'durable-readback', description: 'Trusted state survives commit verification and read-after-write.' },
   { id: 'latency-budgets', description: 'Measured workloads satisfy approved latency budgets.' },
   { id: 'build-identity', description: 'Runtime exposes exact build SHA and architecture version.' },
