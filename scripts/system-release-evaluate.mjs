@@ -53,6 +53,16 @@ function sameGenerationMetadata(actual) {
     && actual?.contractVersion === EXPECTED_GENERATION.contractVersion;
 }
 
+function faultReceiptPasses(receipt, scenarioId) {
+  return receipt?.receiptVersion === 'ats-sys-02-fault-receipt-v0.2'
+    && receipt?.scenarioId === scenarioId
+    && receipt?.result === 'PASS'
+    && receipt?.capabilityProbe?.result === 'PASS'
+    && typeof receipt?.capabilityProbe?.evidenceRef === 'string'
+    && receipt.capabilityProbe.evidenceRef.trim().length > 0
+    && receipt?.recoveryObserved?.restored === true;
+}
+
 function runtimeFingerprint(runtime) {
   return JSON.stringify({
     buildSha: runtime?.buildSha,
@@ -181,11 +191,19 @@ async function main() {
   const faultReceipts = Array.isArray(faultSummary.receipts) ? faultSummary.receipts : [];
   const requiredFaultIds = ['local-ai-down', 'durable-redis-down'];
   const faultPass = requiredFaultIds.every((scenarioId) =>
-    faultReceipts.some((receipt) => receipt.scenarioId === scenarioId && receipt.result === 'PASS'),
+    faultReceipts.some((receipt) => faultReceiptPasses(receipt, scenarioId)),
   );
   criteria['failure-degradation'] = faultPass
-    ? criterion('PASS', evidenceRefs.faults, 'P10 fault scenarios matched the degradation contract.')
-    : criterion('FAIL', evidenceRefs.faults, 'P10 fault evidence is incomplete or contradicted the degradation contract.');
+    ? criterion(
+        'PASS',
+        evidenceRefs.faults,
+        'P10 fault scenarios matched health/degradation contracts, exercised the affected product capability, failed safely, and returned to the exact READY runtime.',
+      )
+    : criterion(
+        'FAIL',
+        evidenceRefs.faults,
+        'P10 requires v0.2 behavioral fault receipts with PASS capability probes and verified full-runtime recovery for both Ollama and Redis faults.',
+      );
 
   const truthStages = ['careerEvidence', 'resumeAssembly', 'grounding', 'semanticGrounding', 'provenance'];
   const truthStagePass = REQUIRED_PERSONAS.every((personaId) => passStages(receipts[personaId], truthStages));
@@ -310,7 +328,7 @@ async function main() {
   }));
 
   const evaluation = {
-    evaluationVersion: 'ats-sys-02-release-evaluation-v0.1',
+    evaluationVersion: 'ats-sys-02-release-evaluation-v0.2',
     evaluatedAt: new Date().toISOString(),
     personaRun: personaRoot,
     faultRun: faultRoot,
@@ -321,7 +339,7 @@ async function main() {
     measurements,
     ready: missing.length === 0,
     blockingCriteria: missing,
-    policy: 'PASS requires explicit evidence. UNKNOWN/UNCHARACTERIZED never counts as PASS. Equivalent runtime identity artifacts may have different capture timestamps; runtime fingerprints must agree. Runtime observation does not imply a support envelope.',
+    policy: 'PASS requires explicit evidence. UNKNOWN/UNCHARACTERIZED never counts as PASS. P10 requires behavioral fault probes plus full recovery. Equivalent runtime identity artifacts may have different capture timestamps; runtime fingerprints must agree. Runtime observation does not imply a support envelope.',
   };
 
   const outputDir = resolve(process.env.CVENGINE_SYSTEM_RELEASE_DIR || `evidence/ats-sys-02/release-evaluation/${isoSafe(new Date().toISOString())}`);
