@@ -17,7 +17,8 @@
     "system:characterize:runtime": "node scripts/system-characterize-runtime.mjs",
     "system:characterize:inline-optimize": "node scripts/system-characterize-inline-optimize.mjs",
     "system:faults": "node scripts/system-fault-injection.mjs",
-    "system:release-evaluate": "node scripts/system-release-evaluate.mjs"
+    "system:release-evaluate": "node scripts/system-release-evaluate.mjs",
+    "system:reference-run": "node scripts/system-reference-run.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
