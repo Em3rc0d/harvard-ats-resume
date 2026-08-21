@@ -32,6 +32,13 @@ export interface SystemAcceptanceReceipt {
   readonly receiptVersion: typeof SYSTEM_ACCEPTANCE_RECEIPT_VERSION;
   readonly personaId: string;
   readonly identity: RuntimeIdentity;
+  /**
+   * ATS-SYS-02 evidence pointer to the canonical RuntimeIdentityEvidence
+   * artifact captured from the exact running build. Kept optional in the
+   * structural type so historical ATS-SYS-01 receipts remain readable;
+   * current acceptance evaluation fails closed when it is absent.
+   */
+  readonly runtimeIdentityRef?: string;
   readonly startedAt: string;
   readonly completedAt: string;
   readonly stages: Readonly<Partial<Record<SystemStageId, StageReceipt>>>;
@@ -70,6 +77,9 @@ export function evaluateAcceptanceReceipt(
 
   if (!receipt.identity.releaseQualifiableIdentity) {
     blockingReasons.push('runtime-identity');
+  }
+  if (!receipt.runtimeIdentityRef?.trim()) {
+    blockingReasons.push('runtime-identity-ref');
   }
 
   for (const stageId of requiredStages) {
