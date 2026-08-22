@@ -21,6 +21,7 @@ function baseReceipt(): SystemAcceptanceReceipt {
       CVENGINE_BUILD_SHA: 'test-sha',
       CVENGINE_RUNTIME_PROFILE_ID: 'REFERENCE-CPU-01',
     }),
+    runtimeIdentityRef: 'evidence/ats-sys-02/runtime/REFERENCE-CPU-01/test-sha/runtime.json',
     startedAt: '2026-08-21T00:00:00.000Z',
     completedAt: '2026-08-21T00:00:01.000Z',
     stages: Object.fromEntries(
@@ -40,6 +41,17 @@ test('ATS-SYS-01 acceptance receipt fails closed without runtime identity', () =
   const evaluation = evaluateAcceptanceReceipt(receipt);
   assert.equal(evaluation.accepted, false);
   assert.ok(evaluation.blockingReasons.includes('runtime-identity'));
+});
+
+test('ATS-SYS-02 acceptance receipt fails closed without canonical runtime identity evidence ref', () => {
+  const receipt = {
+    ...baseReceipt(),
+    runtimeIdentityRef: '',
+  };
+
+  const evaluation = evaluateAcceptanceReceipt(receipt);
+  assert.equal(evaluation.accepted, false);
+  assert.ok(evaluation.blockingReasons.includes('runtime-identity-ref'));
 });
 
 test('ATS-SYS-01 acceptance receipt requires evidence for every required passing stage', () => {
@@ -67,7 +79,7 @@ test('ATS-SYS-01 acceptance receipt treats expected safe failures as explicit bl
   assert.ok(evaluation.blockingReasons.includes('stage:persistence:fail'));
 });
 
-test('ATS-SYS-01 acceptance receipt accepts only complete evidence-backed core paths', () => {
+test('ATS-SYS-02 acceptance receipt accepts only complete evidence-backed core paths with canonical runtime identity evidence', () => {
   const evaluation = evaluateAcceptanceReceipt(baseReceipt());
   assert.equal(evaluation.accepted, true);
   assert.deepEqual(evaluation.blockingReasons, []);

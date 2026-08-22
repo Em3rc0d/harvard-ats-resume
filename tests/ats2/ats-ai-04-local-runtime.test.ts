@@ -284,7 +284,9 @@ test('Docker stack owns bounded local models and durable Redis dependencies', ()
   assert.match(dockerfile, /\/api\/health/);
   assert.match(health, /DEFAULT_OLLAMA_IMPORT_V3_MODEL/);
   assert.doesNotMatch(health, /DEFAULT_OLLAMA_RESUME_MODEL|OLLAMA_RESUME_MODEL/);
-  assert.match(health, /requiredLocalModels\(\)/);
+  assert.match(health, /resolvedLocalAIModels\(\)/);
+  assert.match(health, /requiredModels:\s*Array\.from\(new Set\(\[importModel, optimizeModel\]\)\)/);
+  assert.match(health, /for \(const model of models\.requiredModels\)/);
   assert.match(health, /client\.assertReady\(\)/);
   assert.match(health, /runtime\.assertReady\(\)/);
 });

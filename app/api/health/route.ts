@@ -129,6 +129,7 @@ export async function GET() {
       runtime: 'LOCAL_AI_WITH_DETERMINISTIC_FINAL_ASSEMBLY',
       trustedCoreAvailable: health.trustedCoreAvailable,
       degradedCapabilities: health.degradedCapabilities,
+      unavailableCapabilities: health.unavailableCapabilities,
       identity,
       configuration,
       dependencies,

@@ -8,6 +8,7 @@ test('ATS-SYS-01 health keeps trusted core available when only local AI is unava
   assert.equal(decision.httpStatus, 200);
   assert.equal(decision.trustedCoreAvailable, true);
   assert.deepEqual(decision.degradedCapabilities, ['resume-import-ai', 'inline-optimize']);
+  assert.deepEqual(decision.unavailableCapabilities, []);
 });
 
 test('ATS-SYS-01 health treats durable-state outage as trusted-core unavailable', () => {
@@ -16,6 +17,7 @@ test('ATS-SYS-01 health treats durable-state outage as trusted-core unavailable'
   assert.equal(decision.httpStatus, 503);
   assert.equal(decision.trustedCoreAvailable, false);
   assert.deepEqual(decision.degradedCapabilities, ['durable-state']);
+  assert.deepEqual(decision.unavailableCapabilities, ['durable-state']);
 });
 
 test('ATS-SYS-01 health reports fully ready only when bounded AI and durable state are ready', () => {
@@ -24,4 +26,5 @@ test('ATS-SYS-01 health reports fully ready only when bounded AI and durable sta
   assert.equal(decision.httpStatus, 200);
   assert.equal(decision.trustedCoreAvailable, true);
   assert.deepEqual(decision.degradedCapabilities, []);
+  assert.deepEqual(decision.unavailableCapabilities, []);
 });

@@ -11,12 +11,14 @@
     "typecheck": "tsc --noEmit",
     "test": "tsc -p tsconfig.behavior.json && node --test .test-dist/tests/ats2/*.test.js",
     "docker:identified": "node scripts/docker-compose-identified.mjs",
+    "system:runtime-identity": "node scripts/system-runtime-identity.mjs",
     "system:cold-start": "node scripts/system-cold-start.mjs",
     "system:characterize": "node scripts/system-characterize.mjs",
     "system:characterize:runtime": "node scripts/system-characterize-runtime.mjs",
     "system:characterize:inline-optimize": "node scripts/system-characterize-inline-optimize.mjs",
     "system:faults": "node scripts/system-fault-injection.mjs",
-    "system:release-evaluate": "node scripts/system-release-evaluate.mjs"
+    "system:release-evaluate": "node scripts/system-release-evaluate.mjs",
+    "system:reference-run": "node scripts/system-reference-run.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
