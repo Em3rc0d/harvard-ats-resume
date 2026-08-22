@@ -18,7 +18,7 @@ import {
 
 export { ResumeImportTimeoutError };
 
-const IMPORTER_VERSION = 'native-text-ollama-v3-sectioned';
+const IMPORTER_VERSION = 'native-text-ollama-v3.1-sectioned-source-recovery';
 export const DEFAULT_OLLAMA_IMPORT_V3_MODEL = 'qwen3:1.7b' as const;
 export const IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS = 1_024;
 const MAX_SECTION_TIMEOUT_MS = 90_000;
@@ -86,6 +86,8 @@ const personalInfoSchema = z.object({
   linkedin: z.string(),
   github: z.string(),
 });
+
+type PersonalInfoExtraction = z.infer<typeof personalInfoSchema>;
 
 const personalInfoJsonSchema = {
   type: 'object',
@@ -292,6 +294,67 @@ function normalizeHeading(value: string): string {
     .toUpperCase();
 }
 
+const GENERIC_PREAMBLE_LABELS = new Set([
+  'CV',
+  'RESUME',
+  'CURRICULUM',
+  'CURRICULUM VITAE',
+]);
+
+function sourceExactNameCandidate(value: string): string | undefined {
+  const candidate = clean(value);
+  if (!candidate || candidate.length > 120) return undefined;
+  if (candidate.includes('@') || candidate.includes('|')) return undefined;
+  if (/https?:\/\/|www\./i.test(candidate) || /\d/.test(candidate)) return undefined;
+  if (GENERIC_PREAMBLE_LABELS.has(normalizeHeading(candidate))) return undefined;
+
+  const words = candidate.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 6) return undefined;
+  if (!words.every((word) => /\p{L}/u.test(word))) return undefined;
+  return candidate;
+}
+
+/**
+ * Recovers only one narrow, source-exact identity pattern when the model omits
+ * a name from an otherwise structured resume preamble:
+ *
+ *   <candidate name>\n
+ *   <contact line containing the already extracted email>
+ *
+ * The function never overwrites a model-proposed name, requires an exact email
+ * anchor from the same preamble, and leaves ambiguous/generic headers empty.
+ * The recovered value still passes through the canonical source reconciler and
+ * evidence mapper before it can become candidate truth.
+ */
+export function recoverSourceExactPreambleIdentity(
+  personalInfo: PersonalInfoExtraction,
+  preamble: string,
+): PersonalInfoExtraction {
+  const current: PersonalInfoExtraction = {
+    fullName: clean(personalInfo.fullName),
+    email: clean(personalInfo.email),
+    location: clean(personalInfo.location),
+    linkedin: clean(personalInfo.linkedin),
+    github: clean(personalInfo.github),
+  };
+  if (current.fullName || !current.email) return current;
+
+  const lines = preamble
+    .split(/\n+/)
+    .map(clean)
+    .filter(Boolean)
+    .filter((line) => !/^\[PAGE \d+\]$/i.test(line));
+  if (lines.length < 2) return current;
+
+  const email = current.email.toLocaleLowerCase('en-US');
+  const emailLineIndex = lines.findIndex((line) =>
+    line.toLocaleLowerCase('en-US').includes(email));
+  if (emailLineIndex !== 1) return current;
+
+  const recoveredName = sourceExactNameCandidate(lines[0]);
+  return recoveredName ? { ...current, fullName: recoveredName } : current;
+}
+
 function sectionForHeading(line: string): ResumeSection | undefined {
   const normalized = normalizeHeading(line);
   if (!normalized) return undefined;
@@ -439,7 +502,7 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
   );
 
   const personalSource = sectioned.preamble || document.text.slice(0, 2_500);
-  const personalInfo = await generateSection({
+  const personalInfoProposal = await generateSection({
     client,
     model,
     label: 'candidate identity/contact details',
@@ -448,6 +511,7 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
     parser: personalInfoSchema,
     maxOutputTokens: 256,
   });
+  const personalInfo = recoverSourceExactPreambleIdentity(personalInfoProposal, personalSource);
 
   const summarySource = sectioned.sections.get('summary');
   const summary = summarySource ? sectionBody(summarySource) : '';
