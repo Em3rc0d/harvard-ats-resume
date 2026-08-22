@@ -227,4 +227,4 @@ export const resumeResponseSchema = z.object({
 });
 
 export type JobMatchResponse = z.infer<typeof jobMatchResponseSchema>;
-export type ResumeResponse = z.infer<typeof resumeResponseSchema;
+export type ResumeResponse = z.infer<typeof resumeResponseSchema>;
