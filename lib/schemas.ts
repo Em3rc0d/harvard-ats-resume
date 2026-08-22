@@ -46,10 +46,18 @@ function profileUrlSchema(expectedHost: string, message: string) {
 }
 
 const optionalEvidenceString = (max: number) => z.string().max(max).default('');
+const optionalLocationEvidence = z.string().trim().max(100).refine(
+  (value) => value.length === 0 || value.length >= 2,
+  'Location must be empty when unknown or at least 2 characters when provided',
+);
 
 export const personalInfoSchema = z.object({
   fullName: z.string().trim().min(2, 'Full name is required').max(100),
-  location: z.string().trim().min(2, 'Location is required').max(100),
+  // Candidate location is evidence, not a prerequisite. If the source does not
+  // state a geographic location, preserve UNKNOWN as an empty string rather
+  // than forcing the importer/user to invent one. Work model (for example,
+  // "Remote") belongs to target/job context and must not be promoted here.
+  location: optionalLocationEvidence,
   email: z.string().trim().email('Invalid email address'),
   linkedin: profileUrlSchema('linkedin.com', 'Invalid LinkedIn URL'),
   github: profileUrlSchema('github.com', 'Invalid GitHub URL'),
@@ -219,4 +227,4 @@ export const resumeResponseSchema = z.object({
 });
 
 export type JobMatchResponse = z.infer<typeof jobMatchResponseSchema>;
-export type ResumeResponse = z.infer<typeof resumeResponseSchema>;
+export type ResumeResponse = z.infer<typeof resumeResponseSchema;
