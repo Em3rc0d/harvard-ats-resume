@@ -5,6 +5,8 @@ import { performance } from 'node:perf_hooks';
 import { captureCanonicalRuntimeIdentity } from './system-runtime-identity.mjs';
 
 const BASE_URL = (process.env.CV_ENGINE_E2E_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+const DEFAULT_IMPORT_MODEL = 'qwen3:1.7b';
+const DEFAULT_OPTIMIZE_MODEL = 'qwen3:4b-instruct';
 
 function argValue(name) {
   const index = process.argv.indexOf(name);
@@ -118,6 +120,50 @@ async function waitForReady(expectedSha, timeoutMs) {
   throw new Error(`Docker stack did not reach identified READY state within ${timeoutMs}ms. Last state: ${JSON.stringify(last)}`);
 }
 
+function requiredModels() {
+  return [...new Set([
+    process.env.DOCKER_OLLAMA_MODEL?.trim() || DEFAULT_IMPORT_MODEL,
+    process.env.DOCKER_OLLAMA_IMPORT_MODEL?.trim() || DEFAULT_IMPORT_MODEL,
+    process.env.DOCKER_OLLAMA_OPTIMIZE_MODEL?.trim() || DEFAULT_OPTIMIZE_MODEL,
+  ])];
+}
+
+function provisionModelsBeforeMeasurement() {
+  const startedAt = new Date().toISOString();
+  const models = requiredModels();
+  let observedModels = '';
+
+  try {
+    // Provision/download/preload is deliberately outside measured attempts.
+    // The following down retains volumes but clears all running containers/model memory.
+    identifiedCompose('up', '-d', 'ollama');
+    identifiedCompose('run', '--rm', 'ollama-init');
+    observedModels = dockerCompose('exec', '-T', 'ollama', 'ollama', 'list');
+
+    const missing = models.filter((model) => !observedModels.includes(model));
+    if (missing.length > 0) {
+      throw new Error(`Pre-measurement Ollama provisioning is missing required model(s): ${missing.join(', ')}`);
+    }
+
+    return {
+      semantics: 'MODELS_PRESENT_IN_RETAINED_VOLUME_BEFORE_MEASUREMENT',
+      measured: false,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      requiredModels: models,
+      observedModels,
+      volumesRetained: true,
+      result: 'PASS',
+    };
+  } finally {
+    try {
+      dockerCompose('down');
+    } catch {
+      // Preserve the original provisioning error when cleanup also fails.
+    }
+  }
+}
+
 function elapsedMs(startIso, endIso) {
   if (!startIso || !endIso) return null;
   const start = Date.parse(startIso);
@@ -140,6 +186,13 @@ async function main() {
   // Build once with exact identity. Repetitions measure container/topology cold start,
   // not build throughput. Volumes are deliberately retained.
   identifiedCompose('build', 'app');
+
+  // A newly isolated reference Compose project may start with empty model volumes.
+  // Provision models before the stopwatch so fresh-install/network download time
+  // cannot masquerade as CONTAINERS_COLD_VOLUMES_RETAINED latency.
+  const preMeasurementProvisioning = provisionModelsBeforeMeasurement();
+  const provisioningRef = resolve(outputDir, 'pre-measurement-provisioning.json');
+  await writeFile(provisioningRef, `${JSON.stringify(preMeasurementProvisioning, null, 2)}\n`, 'utf8');
 
   const attempts = [];
   let runtimeIdentityRef;
@@ -210,13 +263,19 @@ async function main() {
     semantics: 'CONTAINERS_COLD_VOLUMES_RETAINED',
     volumesRetained: true,
     destructiveVolumeReset: false,
+    preMeasurementProvisioning,
+    preMeasurementProvisioningRef: provisioningRef,
     expectedBuildSha: expectedSha,
     runtimeProfileId: process.env.CVENGINE_RUNTIME_PROFILE_ID,
     runtimeIdentityRef: runtimeIdentityRef || null,
     runtimeIdentity: runtimeIdentity || null,
     repetitions,
     attempts,
-    result: attempts.length === repetitions && attempts.every((attempt) => attempt.result === 'PASS') ? 'PASS' : 'FAIL',
+    result: attempts.length === repetitions
+      && attempts.every((attempt) => attempt.result === 'PASS')
+      && preMeasurementProvisioning.result === 'PASS'
+      ? 'PASS'
+      : 'FAIL',
     latencyBudgetApplied: false,
     unknowns: [
       'firstTrustedRequestAt',
@@ -224,7 +283,7 @@ async function main() {
       'firstDeterministicResumeLatency',
       'firstInlineOptimizeLatency',
     ],
-    note: 'Cold-start timing is observational only. No latency budget or hardware support claim is inferred. Fresh-install/model-download cold start remains a separate uncharacterized scenario.',
+    note: 'Cold-start timing is observational only. Required model provisioning is explicitly performed before timing and excluded from measured attempts. Fresh-install/model-download cold start remains a separate uncharacterized scenario.',
   };
   await writeFile(resolve(outputDir, 'cold-start-receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
   process.stdout.write(`Runtime identity: ${receipt.runtimeIdentityRef}\n`);
