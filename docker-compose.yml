@@ -85,7 +85,9 @@ services:
         CVENGINE_ARCHITECTURE_VERSION: ${CVENGINE_ARCHITECTURE_VERSION:-ats-sys-01-v0.1}
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Normal local product use remains on 3000. ATS-SYS-02 overrides
+      # CVENGINE_APP_PORT so reference characterization cannot share the UI port.
+      - "127.0.0.1:${CVENGINE_APP_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_APP_URL: http://localhost:3000
