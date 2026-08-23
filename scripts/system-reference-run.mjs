@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 const REQUIRED_PROFILE = 'REFERENCE-CPU-01';
 const EXPECTED_POLICY_BLOCKERS = ['latency-budgets', 'runtime-envelope'];
 const GENERATED_EVIDENCE_PREFIX = 'evidence/ats-sys-02/';
+const REFERENCE_COMPOSE_PROJECT = 'cv-engine-reference';
 const REFERENCE_APP_PORT = '3100';
 const REFERENCE_OLLAMA_PORT = '31434';
 const REFERENCE_REDIS_HTTP_PORT = '38079';
@@ -143,13 +144,14 @@ async function main() {
     mkdir(releaseRoot, { recursive: true }),
   ]);
 
-  // Reference characterization owns dedicated loopback host ports for the app
-  // and externally published dependencies. Product containers still communicate
-  // over the Compose network (ollama:11434, redis-http:80), so benchmark behavior
-  // is unchanged while unrelated localhost UI/dev traffic cannot contend for
-  // the same Ollama or Redis HTTP endpoint by accident.
+  // Reference characterization owns a dedicated Compose project plus dedicated
+  // loopback host ports for the app and externally published dependencies.
+  // Product containers still communicate over their canonical internal Compose
+  // addresses (ollama:11434, redis-http:80). Normal product/dev traffic therefore
+  // cannot stop, recreate, share volumes with, or consume the benchmark stack.
   const sharedEnv = {
     ...process.env,
+    COMPOSE_PROJECT_NAME: REFERENCE_COMPOSE_PROJECT,
     CVENGINE_RUNTIME_PROFILE_ID: runtimeProfileId,
     CVENGINE_EXPECTED_BUILD_SHA: buildSha,
     CVENGINE_RUNTIME_IDENTITY_DIR: runtimeIdentityRoot,
@@ -177,13 +179,14 @@ async function main() {
     },
     runtimeProfileId,
     isolation: {
-      mode: 'DEDICATED_LOOPBACK_RUNTIME_PORTS',
+      mode: 'DEDICATED_COMPOSE_PROJECT_AND_LOOPBACK_RUNTIME_PORTS',
+      composeProject: REFERENCE_COMPOSE_PROJECT,
       appPort: Number(REFERENCE_APP_PORT),
       ollamaHostPort: Number(REFERENCE_OLLAMA_PORT),
       redisHttpHostPort: Number(REFERENCE_REDIS_HTTP_PORT),
       baseUrl: REFERENCE_BASE_URL,
       normalHostPortsExcluded: [3000, 11434, 8079],
-      note: 'Internal Compose service addresses remain unchanged; only host-published ports are isolated for characterization.',
+      note: 'Reference containers/network/volumes are project-isolated; internal trusted dependency addresses remain canonical.',
     },
     repetitions: {
       coldStart: coldStartRepetitions,
