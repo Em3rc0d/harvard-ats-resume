@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 
 const read = (path: string) => readFileSync(resolve(path), 'utf8');
 
-test('REFERENCE-CPU-01 isolates app, Ollama, and Redis HTTP host ports from normal local product traffic', () => {
+test('REFERENCE-CPU-01 isolates Compose project and host ports from normal local product traffic', () => {
   const compose = read('docker-compose.yml');
   const runner = read('scripts/system-reference-run.mjs');
 
@@ -25,14 +25,17 @@ test('REFERENCE-CPU-01 isolates app, Ollama, and Redis HTTP host ports from norm
     'Compose must preserve normal local Redis HTTP port 8079 while allowing reference runs to isolate durable-state traffic.',
   );
 
+  assert.match(runner, /const REFERENCE_COMPOSE_PROJECT = 'cv-engine-reference'/);
   assert.match(runner, /const REFERENCE_APP_PORT = '3100'/);
   assert.match(runner, /const REFERENCE_OLLAMA_PORT = '31434'/);
   assert.match(runner, /const REFERENCE_REDIS_HTTP_PORT = '38079'/);
+  assert.match(runner, /COMPOSE_PROJECT_NAME: REFERENCE_COMPOSE_PROJECT/);
   assert.match(runner, /CVENGINE_APP_PORT: REFERENCE_APP_PORT/);
   assert.match(runner, /CVENGINE_OLLAMA_PORT: REFERENCE_OLLAMA_PORT/);
   assert.match(runner, /CVENGINE_REDIS_HTTP_PORT: REFERENCE_REDIS_HTTP_PORT/);
   assert.match(runner, /CV_ENGINE_E2E_BASE_URL: REFERENCE_BASE_URL/);
-  assert.match(runner, /mode: 'DEDICATED_LOOPBACK_RUNTIME_PORTS'/);
+  assert.match(runner, /mode: 'DEDICATED_COMPOSE_PROJECT_AND_LOOPBACK_RUNTIME_PORTS'/);
+  assert.match(runner, /composeProject: REFERENCE_COMPOSE_PROJECT/);
   assert.match(runner, /normalHostPortsExcluded: \[3000, 11434, 8079\]/);
 });
 
@@ -54,10 +57,16 @@ test('all runtime characterization clients honor the injected reference base URL
   }
 });
 
-test('reference port isolation changes only host publication; internal trusted dependency addresses stay canonical', () => {
+test('reference isolation changes only host/project boundaries; internal trusted dependency addresses stay canonical', () => {
   const compose = read('docker-compose.yml');
+  const identifiedCompose = read('scripts/docker-compose-identified.mjs');
 
   assert.match(compose, /OLLAMA_BASE_URL: http:\/\/ollama:11434/);
   assert.match(compose, /UPSTASH_REDIS_REST_URL: http:\/\/redis-http:80/);
   assert.match(compose, /OLLAMA_HOST: http:\/\/ollama:11434/);
+  assert.match(
+    identifiedCompose,
+    /env:\s*\{[\s\S]*\.\.\.process\.env/,
+    'Identified Compose must inherit COMPOSE_PROJECT_NAME and isolated host-port environment from the reference runner.',
+  );
 });
