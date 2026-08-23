@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 const REQUIRED_PROFILE = 'REFERENCE-CPU-01';
 const EXPECTED_POLICY_BLOCKERS = ['latency-budgets', 'runtime-envelope'];
 const GENERATED_EVIDENCE_PREFIX = 'evidence/ats-sys-02/';
+const REFERENCE_APP_PORT = '3100';
+const REFERENCE_BASE_URL = `http://127.0.0.1:${REFERENCE_APP_PORT}`;
 
 function argValue(name) {
   const index = process.argv.indexOf(name);
@@ -139,11 +141,16 @@ async function main() {
     mkdir(releaseRoot, { recursive: true }),
   ]);
 
+  // Reference characterization owns a dedicated loopback port. This prevents
+  // the normal localhost:3000 UI from competing with the same CPU/Ollama stack
+  // and contaminating runtime latency evidence while the campaign is active.
   const sharedEnv = {
     ...process.env,
     CVENGINE_RUNTIME_PROFILE_ID: runtimeProfileId,
     CVENGINE_EXPECTED_BUILD_SHA: buildSha,
     CVENGINE_RUNTIME_IDENTITY_DIR: runtimeIdentityRoot,
+    CVENGINE_APP_PORT: REFERENCE_APP_PORT,
+    CV_ENGINE_E2E_BASE_URL: REFERENCE_BASE_URL,
   };
 
   const manifest = {
@@ -163,6 +170,12 @@ async function main() {
       dockerVersion,
     },
     runtimeProfileId,
+    isolation: {
+      mode: 'DEDICATED_LOOPBACK_APP_PORT',
+      appPort: Number(REFERENCE_APP_PORT),
+      baseUrl: REFERENCE_BASE_URL,
+      normalUiPortExcluded: 3000,
+    },
     repetitions: {
       coldStart: coldStartRepetitions,
       canonicalPersonas: personaRepetitions,
@@ -179,7 +192,7 @@ async function main() {
       releaseRoot,
     },
     steps: [],
-    policy: 'Instrumentation and execution evidence only. EVIDENCE_CAPTURED != supported runtime; observed latency != approved budget; UNKNOWN/UNCHARACTERIZED != PASS. Generated ATS-SYS-02 evidence is excluded from the Docker image context.',
+    policy: 'Instrumentation and execution evidence only. EVIDENCE_CAPTURED != supported runtime; observed latency != approved budget; UNKNOWN/UNCHARACTERIZED != PASS. Generated ATS-SYS-02 evidence is excluded from the Docker image context. Reference characterization uses a dedicated loopback app port so normal UI traffic cannot share the measured application endpoint.',
   };
   const manifestPath = resolve(root, 'reference-run-manifest.json');
   await persistJson(manifestPath, manifest);
