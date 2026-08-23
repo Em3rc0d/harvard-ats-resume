@@ -149,6 +149,20 @@ test('ATS-SYS-02 cold-start receipt is runtime-bound and records readiness event
   assert.match(source, /latencyBudgetApplied:\s*false/);
 });
 
+test('ATS-SYS-02 cold-start provisions required Ollama models before timing while retaining volumes', () => {
+  const source = readFileSync('scripts/system-cold-start.mjs', 'utf8');
+
+  assert.match(source, /provisionModelsBeforeMeasurement/);
+  assert.match(source, /identifiedCompose\('up', '-d', 'ollama'\)/);
+  assert.match(source, /identifiedCompose\('run', '--rm', 'ollama-init'\)/);
+  assert.match(source, /MODELS_PRESENT_IN_RETAINED_VOLUME_BEFORE_MEASUREMENT/);
+  assert.match(source, /measured:\s*false/);
+  assert.match(source, /pre-measurement-provisioning\.json/);
+  assert.match(source, /preMeasurementProvisioningRef/);
+  assert.match(source, /Required model provisioning is explicitly performed before timing/i);
+  assert.doesNotMatch(source, /down[^\n]*-v/);
+});
+
 test('ATS-SYS-02 normal runtime characterization persists raw samples bound to the canonical runtime', () => {
   const source = readFileSync('scripts/system-characterize-runtime.mjs', 'utf8');
   assert.match(source, /captureCanonicalRuntimeIdentity/);
