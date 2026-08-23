@@ -6,6 +6,8 @@ const REQUIRED_PROFILE = 'REFERENCE-CPU-01';
 const EXPECTED_POLICY_BLOCKERS = ['latency-budgets', 'runtime-envelope'];
 const GENERATED_EVIDENCE_PREFIX = 'evidence/ats-sys-02/';
 const REFERENCE_APP_PORT = '3100';
+const REFERENCE_OLLAMA_PORT = '31434';
+const REFERENCE_REDIS_HTTP_PORT = '38079';
 const REFERENCE_BASE_URL = `http://127.0.0.1:${REFERENCE_APP_PORT}`;
 
 function argValue(name) {
@@ -141,15 +143,19 @@ async function main() {
     mkdir(releaseRoot, { recursive: true }),
   ]);
 
-  // Reference characterization owns a dedicated loopback port. This prevents
-  // the normal localhost:3000 UI from competing with the same CPU/Ollama stack
-  // and contaminating runtime latency evidence while the campaign is active.
+  // Reference characterization owns dedicated loopback host ports for the app
+  // and externally published dependencies. Product containers still communicate
+  // over the Compose network (ollama:11434, redis-http:80), so benchmark behavior
+  // is unchanged while unrelated localhost UI/dev traffic cannot contend for
+  // the same Ollama or Redis HTTP endpoint by accident.
   const sharedEnv = {
     ...process.env,
     CVENGINE_RUNTIME_PROFILE_ID: runtimeProfileId,
     CVENGINE_EXPECTED_BUILD_SHA: buildSha,
     CVENGINE_RUNTIME_IDENTITY_DIR: runtimeIdentityRoot,
     CVENGINE_APP_PORT: REFERENCE_APP_PORT,
+    CVENGINE_OLLAMA_PORT: REFERENCE_OLLAMA_PORT,
+    CVENGINE_REDIS_HTTP_PORT: REFERENCE_REDIS_HTTP_PORT,
     CV_ENGINE_E2E_BASE_URL: REFERENCE_BASE_URL,
   };
 
@@ -171,10 +177,13 @@ async function main() {
     },
     runtimeProfileId,
     isolation: {
-      mode: 'DEDICATED_LOOPBACK_APP_PORT',
+      mode: 'DEDICATED_LOOPBACK_RUNTIME_PORTS',
       appPort: Number(REFERENCE_APP_PORT),
+      ollamaHostPort: Number(REFERENCE_OLLAMA_PORT),
+      redisHttpHostPort: Number(REFERENCE_REDIS_HTTP_PORT),
       baseUrl: REFERENCE_BASE_URL,
-      normalUiPortExcluded: 3000,
+      normalHostPortsExcluded: [3000, 11434, 8079],
+      note: 'Internal Compose service addresses remain unchanged; only host-published ports are isolated for characterization.',
     },
     repetitions: {
       coldStart: coldStartRepetitions,
@@ -192,7 +201,7 @@ async function main() {
       releaseRoot,
     },
     steps: [],
-    policy: 'Instrumentation and execution evidence only. EVIDENCE_CAPTURED != supported runtime; observed latency != approved budget; UNKNOWN/UNCHARACTERIZED != PASS. Generated ATS-SYS-02 evidence is excluded from the Docker image context. Reference characterization uses a dedicated loopback app port so normal UI traffic cannot share the measured application endpoint.',
+    policy: 'Instrumentation and execution evidence only. EVIDENCE_CAPTURED != supported runtime; observed latency != approved budget; UNKNOWN/UNCHARACTERIZED != PASS. Generated ATS-SYS-02 evidence is excluded from the Docker image context.',
   };
   const manifestPath = resolve(root, 'reference-run-manifest.json');
   await persistJson(manifestPath, manifest);
