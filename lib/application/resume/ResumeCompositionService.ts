@@ -189,10 +189,71 @@ function materialClaimLines(formattedResume: string): string[] {
     .filter((line) => line.length >= 2);
 }
 
+function structuredListItems(claim: string): readonly string[] | undefined {
+  const match = claim.match(/^(?:technical skills?|soft skills?|technologies):\s*(.+)$/i);
+  if (!match) return undefined;
+
+  const items = match[1]
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return items.length > 0 ? items : undefined;
+}
+
+function supportingAssertionsForStructuredList(
+  claim: string,
+  assertions: readonly CareerAssertion[],
+): readonly CareerAssertion[] | undefined {
+  const items = structuredListItems(claim);
+  if (!items) return undefined;
+
+  const selected = new Map<string, CareerAssertion>();
+
+  for (const item of items) {
+    const itemTokens = meaningfulTokens(item);
+    if (itemTokens.size === 0) return [];
+
+    const candidates = assertions
+      .map((assertion) => {
+        const assertionTokens = meaningfulTokens(assertion.statement);
+        const result = overlap(itemTokens, assertionTokens);
+        return {
+          assertion,
+          assertionTokenCount: assertionTokens.size,
+          ...result,
+        };
+      })
+      .filter((candidate) => candidate.count === itemTokens.size)
+      .sort((left, right) =>
+        left.assertionTokenCount - right.assertionTokenCount ||
+        right.score - left.score ||
+        left.assertion.id.localeCompare(right.assertion.id),
+      );
+
+    if (candidates.length === 0) return [];
+
+    // Prefer the tightest evidence-backed assertion for each rendered list
+    // item. This lets an application-owned formatter serialize several atomic
+    // facts on one line without lowering the provenance bar for prose claims.
+    // Every rendered item must still be fully supported or the entire claim
+    // fails closed.
+    const tightestSize = candidates[0].assertionTokenCount;
+    candidates
+      .filter((candidate) => candidate.assertionTokenCount === tightestSize)
+      .forEach((candidate) => selected.set(candidate.assertion.id, candidate.assertion));
+  }
+
+  return Array.from(selected.values());
+}
+
 function supportingAssertions(
   claim: string,
   assertions: readonly CareerAssertion[],
 ): readonly CareerAssertion[] {
+  const structuredListSupport = supportingAssertionsForStructuredList(claim, assertions);
+  if (structuredListSupport !== undefined) return structuredListSupport;
+
   const claimTokens = meaningfulTokens(claim);
 
   const ranked = assertions
