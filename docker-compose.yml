@@ -21,7 +21,9 @@ services:
       SRH_TOKEN: ${LOCAL_REDIS_TOKEN:-cv-engine-local-change-me}
       SRH_CONNECTION_STRING: redis://redis:6379
     ports:
-      - "8079:80"
+      # Normal local product use remains on 8079. ATS-SYS-02 overrides the
+      # loopback host port so unrelated host processes cannot share benchmark Redis HTTP traffic.
+      - "127.0.0.1:${CVENGINE_REDIS_HTTP_PORT:-8079}:80"
     depends_on:
       redis:
         condition: service_healthy
@@ -38,7 +40,9 @@ services:
       OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
     ports:
-      - "11434:11434"
+      # Normal local product use remains on 11434. ATS-SYS-02 overrides the
+      # loopback host port so UI/dev traffic cannot contend with benchmark inference.
+      - "127.0.0.1:${CVENGINE_OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama-data:/root/.ollama
     healthcheck:
