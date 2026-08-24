@@ -7,6 +7,7 @@ import {
 import {
   OllamaResumeImportV3Provider,
   ResumeExtractionIncompleteError,
+  ResumeImportSectionTimeoutError,
   ResumeImportTimeoutError,
 } from '@/lib/infrastructure/import/OllamaResumeImportV3Provider';
 import {
@@ -34,6 +35,7 @@ type ImportFailure = {
   readonly canRetry: boolean;
   readonly error: string;
   readonly provider?: AIProviderFailureView;
+  readonly section?: string;
 };
 
 function classifyImportFailure(error: unknown): ImportFailure {
@@ -48,6 +50,7 @@ function classifyImportFailure(error: unknown): ImportFailure {
       canRetry: providerFailure.retryable,
       error: aiProviderFailureMessage(providerFailure, 'resume import'),
       provider: providerFailure.toView(),
+      ...(error instanceof ResumeImportSectionTimeoutError ? { section: error.section } : {}),
     };
   }
 
@@ -226,6 +229,7 @@ export async function POST(request: NextRequest) {
     console.error('Resume import boundary failure', {
       errorCode: failure.errorCode,
       stage: failure.stage,
+      section: failure.section,
       providerKind: failure.provider?.kind,
       cause: error instanceof Error ? error.message : String(error),
     });
@@ -237,6 +241,7 @@ export async function POST(request: NextRequest) {
         errorCode: failure.errorCode,
         stage: failure.stage,
         canRetry: failure.canRetry,
+        ...(failure.section ? { section: failure.section } : {}),
         ...(failure.provider ? { provider: failure.provider } : {}),
       },
       { status: failure.status, headers: { 'Cache-Control': 'no-store, max-age=0' } },
