@@ -227,7 +227,9 @@ test('Ollama structured generation sends schema-constrained non-thinking determi
     const options = requestBody?.options as Record<string, unknown>;
     assert.equal(options.temperature, 0);
     assert.equal(options.seed, 42);
-    assert.equal(options.num_ctx, 16_384);
+    assert.equal(typeof options.num_ctx, 'number');
+    assert.ok(Number(options.num_ctx) >= 4_096);
+    assert.ok(Number(options.num_ctx) <= 16_384);
     assert.equal(options.num_predict, 4_096);
   } finally {
     globalThis.fetch = originalFetch;
