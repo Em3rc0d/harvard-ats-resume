@@ -18,6 +18,8 @@
     "system:characterize:inline-optimize": "node scripts/system-characterize-inline-optimize.mjs",
     "system:faults": "node scripts/system-fault-injection.mjs",
     "system:release-evaluate": "node scripts/system-release-evaluate.mjs",
+    "system:interpret-reference": "node scripts/system-interpret-reference.mjs",
+    "system:release-qualify": "node scripts/system-release-qualify.mjs",
     "system:reference-run": "node scripts/system-reference-run.mjs"
   },
   "dependencies": {
