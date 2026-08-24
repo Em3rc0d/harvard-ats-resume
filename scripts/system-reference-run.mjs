@@ -147,9 +147,6 @@ async function main() {
   const runtimeProfileId = ensureReferenceProfile();
   const sourceStatus = ensureSourceIdentifiableRepository();
 
-  // Only committed source may affect the application image. Prior untracked
-  // ATS-SYS-02 evidence is permitted because .dockerignore excludes it from the
-  // image context and it cannot alter the runtime being characterized.
   const buildSha = command('git', ['rev-parse', 'HEAD']);
   const branch = command('git', ['branch', '--show-current']) || 'DETACHED';
   const nodeVersion = process.version;
@@ -169,6 +166,8 @@ async function main() {
   const optimizeRoot = resolve(root, 'inline-optimize-runs');
   const faultDir = resolve(root, 'faults');
   const releaseRoot = resolve(root, 'release-evaluations');
+  const interpretationDir = resolve(root, 'interpretation');
+  const qualificationRoot = resolve(root, 'release-qualifications');
   await Promise.all([
     mkdir(runtimeIdentityRoot, { recursive: true }),
     mkdir(coldStartDir, { recursive: true }),
@@ -176,13 +175,10 @@ async function main() {
     mkdir(optimizeRoot, { recursive: true }),
     mkdir(faultDir, { recursive: true }),
     mkdir(releaseRoot, { recursive: true }),
+    mkdir(interpretationDir, { recursive: true }),
+    mkdir(qualificationRoot, { recursive: true }),
   ]);
 
-  // Reference characterization owns a dedicated Compose project plus dedicated
-  // loopback host ports for the app and externally published dependencies.
-  // Product containers still communicate over their canonical internal Compose
-  // addresses (ollama:11434, redis-http:80). Normal product/dev traffic therefore
-  // cannot stop, recreate, share volumes with, or consume the benchmark stack.
   const sharedEnv = {
     ...process.env,
     COMPOSE_PROJECT_NAME: REFERENCE_COMPOSE_PROJECT,
@@ -196,7 +192,7 @@ async function main() {
   };
 
   const manifest = {
-    manifestVersion: 'ats-sys-02-reference-run-v0.1',
+    manifestVersion: 'ats-sys-02-reference-run-v0.2',
     startedAt,
     completedAt: null,
     executionStatus: 'RUNNING',
@@ -241,9 +237,11 @@ async function main() {
       optimizeRoot,
       faultDir,
       releaseRoot,
+      interpretationDir,
+      qualificationRoot,
     },
     steps: [],
-    policy: 'Instrumentation and execution evidence only. EVIDENCE_CAPTURED != supported runtime; observed latency != approved budget; UNKNOWN/UNCHARACTERIZED != PASS. Generated ATS-SYS-02 evidence is excluded from the Docker image context.',
+    policy: 'Evidence capture, interpretation, then qualification. UNKNOWN/UNCHARACTERIZED never counts as PASS. Support scope remains exact-observed-runtime only unless separately characterized.',
   };
   const manifestPath = resolve(root, 'reference-run-manifest.json');
   await persistJson(manifestPath, manifest);
@@ -254,15 +252,9 @@ async function main() {
   };
 
   try {
-    // Clean only the benchmark-owned project, retaining its named volumes. This
-    // removes stale reference containers from a prior interrupted/failed run
-    // without ever terminating unrelated product/dev workloads.
     cleanupOwnedReferenceProject(sharedEnv);
     manifest.preflight.ownedProjectCleanup = 'PASS';
 
-    // Port ownership must be resolved before build/model provisioning. The
-    // runner reports the owning Docker container but deliberately refuses to
-    // kill unrelated workloads just to make the benchmark green.
     const portConflicts = inspectReferencePortConflicts();
     manifest.preflight.conflicts = portConflicts;
     manifest.preflight.hostPortAvailability = portConflicts.length === 0 ? 'PASS' : 'FAIL';
@@ -346,9 +338,6 @@ async function main() {
           ...sharedEnv,
           CVENGINE_SYSTEM_RELEASE_DIR: outputDir,
         },
-        // Exit 2 means the evaluator was able to execute but release remains
-        // blocked. We inspect the receipt below and accept only the explicit
-        // characterization-policy blockers.
         acceptedExitCodes: [0, 2],
       });
       await record({ ...step, evidenceDir: outputDir });
@@ -359,9 +348,8 @@ async function main() {
       const blockers = Array.isArray(evaluation.blockingCriteria) ? evaluation.blockingCriteria : [];
       const expectedBlocked = evaluation.ready === false
         && sameStringSet(blockers, EXPECTED_POLICY_BLOCKERS);
-      const fullyReady = evaluation.ready === true && blockers.length === 0;
-      if (!expectedBlocked && !fullyReady) {
-        throw new Error(`${personaRun.runId} release evaluation has unexpected blockers: ${blockers.join(', ') || 'none'}.`);
+      if (!expectedBlocked) {
+        throw new Error(`${personaRun.runId} pre-interpretation evaluation must be blocked only by policy criteria; got: ${blockers.join(', ') || 'none'}.`);
       }
       releaseEvaluations.push({
         runId: personaRun.runId,
@@ -377,32 +365,88 @@ async function main() {
       throw new Error(`Repeated characterization produced ${runtimeFingerprints.length} distinct runtime fingerprints.`);
     }
 
-    const everyReady = releaseEvaluations.every((item) => item.ready === true);
-    const everyExpectedBlocked = releaseEvaluations.every((item) =>
-      item.ready === false && sameStringSet(item.blockingCriteria, EXPECTED_POLICY_BLOCKERS),
-    );
-    if (!everyReady && !everyExpectedBlocked) {
-      throw new Error('Repeated runs disagree on release-evaluation state.');
+    manifest.executionStatus = 'EVIDENCE_CAPTURED';
+    manifest.releaseStatus = 'BLOCKED_PENDING_INTERPRETATION';
+    manifest.runtimeFingerprint = runtimeFingerprints[0];
+    manifest.releaseEvaluations = releaseEvaluations;
+    await persistJson(manifestPath, manifest);
+
+    const interpretationStep = runNodeStep({
+      id: 'interpret-reference',
+      script: 'scripts/system-interpret-reference.mjs',
+      args: ['--reference-run', root],
+      env: sharedEnv,
+      acceptedExitCodes: [0, 2],
+    });
+    await record({ ...interpretationStep, evidenceDir: interpretationDir });
+    assertStep(interpretationStep, [0, 2]);
+
+    const interpretationPath = resolve(interpretationDir, 'reference-interpretation.json');
+    const interpretation = await readJson(interpretationPath);
+    manifest.interpretationRef = interpretationPath;
+    manifest.runtimeEnvelopeStatus = interpretation.runtimeEnvelope?.status ?? 'UNKNOWN';
+    manifest.latencyBudgetStatus = interpretation.latencyBudgets?.status ?? 'UNKNOWN';
+    if (interpretationStep.exitCode === 2 || interpretation.qualifiesForReleaseEvaluation !== true) {
+      manifest.completedAt = new Date().toISOString();
+      manifest.releaseStatus = 'BLOCKED_POLICY_VIOLATION';
+      manifest.note = 'Execution evidence was captured successfully, but the approved runtime/latency policy was not satisfied. No release qualification was manufactured.';
+      await persistJson(manifestPath, manifest);
+      process.stdout.write(`\nATS-SYS-02 reference execution: ${manifest.executionStatus}\n`);
+      process.stdout.write(`Release: ${manifest.releaseStatus}\n`);
+      process.stdout.write(`Evidence: ${root}\n`);
+      return;
+    }
+
+    const qualifications = [];
+    for (const evaluation of releaseEvaluations) {
+      const outputDir = resolve(qualificationRoot, evaluation.runId);
+      const step = runNodeStep({
+        id: `release-qualify:${evaluation.runId}`,
+        script: 'scripts/system-release-qualify.mjs',
+        args: [
+          '--evaluation', evaluation.evaluationPath,
+          '--interpretation', interpretationPath,
+        ],
+        env: {
+          ...sharedEnv,
+          CVENGINE_SYSTEM_QUALIFICATION_DIR: outputDir,
+        },
+        acceptedExitCodes: [0, 2],
+      });
+      await record({ ...step, evidenceDir: outputDir });
+      assertStep(step, [0, 2]);
+      const qualificationPath = resolve(outputDir, 'release-qualification.json');
+      const qualification = await readJson(qualificationPath);
+      if (qualification.ready !== true || (qualification.blockingCriteria || []).length !== 0) {
+        throw new Error(`${evaluation.runId} final qualification is blocked: ${(qualification.blockingCriteria || []).join(', ') || 'unknown'}.`);
+      }
+      if (qualification.runtimeFingerprint !== runtimeFingerprints[0]) {
+        throw new Error(`${evaluation.runId} qualification runtime fingerprint changed after interpretation.`);
+      }
+      qualifications.push({
+        runId: evaluation.runId,
+        qualificationPath,
+        ready: qualification.ready,
+        blockingCriteria: qualification.blockingCriteria,
+      });
     }
 
     manifest.completedAt = new Date().toISOString();
-    manifest.executionStatus = 'EVIDENCE_CAPTURED';
-    manifest.releaseStatus = everyReady ? 'PASS' : 'BLOCKED_PENDING_INTERPRETATION';
-    manifest.runtimeEnvelopeStatus = everyReady ? 'PASS' : 'UNCHARACTERIZED';
-    manifest.latencyBudgetStatus = everyReady ? 'PASS' : 'UNCHARACTERIZED';
-    manifest.runtimeFingerprint = runtimeFingerprints[0];
-    manifest.releaseEvaluations = releaseEvaluations;
-    manifest.note = everyReady
-      ? 'All current release criteria passed. This runner does not itself define a support envelope; use the evaluator policy that produced the PASS.'
-      : 'All executed evidence gates passed; release remains blocked only because runtime envelope and latency budgets have not been approved from the observations.';
+    manifest.releaseStatus = 'QUALIFIED';
+    manifest.runtimeEnvelopeStatus = 'PASS';
+    manifest.latencyBudgetStatus = 'PASS';
+    manifest.qualifications = qualifications;
+    manifest.note = 'Repeated runtime evidence satisfied the approved exact-fingerprint support envelope and latency policy. Lower-spec/cross-host support remains explicitly uncharacterized.';
     await persistJson(manifestPath, manifest);
 
     process.stdout.write(`\nATS-SYS-02 reference execution: ${manifest.executionStatus}\n`);
     process.stdout.write(`Release: ${manifest.releaseStatus}\n`);
+    process.stdout.write(`Runtime envelope: ${manifest.runtimeEnvelopeStatus}\n`);
+    process.stdout.write(`Latency budgets: ${manifest.latencyBudgetStatus}\n`);
     process.stdout.write(`Evidence: ${root}\n`);
   } catch (error) {
     manifest.completedAt = new Date().toISOString();
-    manifest.executionStatus = 'FAILED';
+    manifest.executionStatus = manifest.executionStatus === 'EVIDENCE_CAPTURED' ? 'EVIDENCE_CAPTURED' : 'FAILED';
     manifest.releaseStatus = 'BLOCKED';
     manifest.blockingReason = error instanceof Error ? error.message : String(error);
     await persistJson(manifestPath, manifest);
