@@ -55,7 +55,7 @@ test('REFERENCE-CPU-01 cleans only its owned project and fails preflight before 
   assert.match(runner, /manifest\.preflight\.hostPortAvailability = portConflicts\.length === 0 \? 'PASS' : 'FAIL'/);
 
   const cleanupIndex = runner.indexOf('cleanupOwnedReferenceProject(sharedEnv)');
-  const portCheckIndex = runner.indexOf('inspectReferencePortConflicts()');
+  const portCheckIndex = runner.indexOf('const portConflicts = inspectReferencePortConflicts();');
   const coldStartIndex = runner.indexOf("id: 'cold-start'");
   assert.ok(cleanupIndex >= 0 && portCheckIndex > cleanupIndex && coldStartIndex > portCheckIndex,
     'Owned-project cleanup and host-port availability must be checked before cold-start build/model provisioning begins.');
