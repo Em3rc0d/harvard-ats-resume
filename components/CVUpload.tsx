@@ -20,6 +20,7 @@ interface ImportResponse {
   error?: string;
   errorCode?: string;
   stage?: string;
+  section?: string;
   canRetry?: boolean;
 }
 
@@ -35,6 +36,7 @@ const PROCESS_COPY = {
     network: 'CV Engine could not reach the resume import service. Check your connection and try again.',
     retry: 'Choose another file',
     stage: 'Import stage',
+    section: 'Section',
     cancel: 'Cancel',
   },
   es: {
@@ -45,6 +47,7 @@ const PROCESS_COPY = {
     network: 'CV Engine no pudo comunicarse con el servicio de importación. Verifica tu conexión e inténtalo nuevamente.',
     retry: 'Elegir otro archivo',
     stage: 'Etapa de importación',
+    section: 'Sección',
     cancel: 'Cancelar',
   },
   fr: {
@@ -55,6 +58,7 @@ const PROCESS_COPY = {
     network: "CV Engine n'a pas pu joindre le service d'importation. Vérifiez votre connexion et réessayez.",
     retry: 'Choisir un autre fichier',
     stage: "Étape d'importation",
+    section: 'Section',
     cancel: 'Annuler',
   },
   pt: {
@@ -65,6 +69,7 @@ const PROCESS_COPY = {
     network: 'O CV Engine não conseguiu acessar o serviço de importação. Verifique sua conexão e tente novamente.',
     retry: 'Escolher outro arquivo',
     stage: 'Etapa de importação',
+    section: 'Seção',
     cancel: 'Cancelar',
   },
 } as const;
@@ -80,7 +85,7 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [errorMeta, setErrorMeta] = useState<{ code?: string; stage?: string } | null>(null);
+  const [errorMeta, setErrorMeta] = useState<{ code?: string; stage?: string; section?: string } | null>(null);
 
   const rejectLocally = (message: string) => {
     setIsDragging(false);
@@ -123,12 +128,9 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
         return;
       }
 
-      // Expected API failures are product states, not thrown browser errors.
-      // Rendering them inline prevents Next's development overlay from turning a
-      // handled import failure into what looks like an application crash.
       if (!response.ok || !result.success || !result.data) {
         setError(result.error || t.upload.error);
-        setErrorMeta({ code: result.errorCode, stage: result.stage });
+        setErrorMeta({ code: result.errorCode, stage: result.stage, section: result.section });
         return;
       }
 
@@ -234,9 +236,11 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-red-800">{error}</p>
-                {(errorMeta?.code || errorMeta?.stage) && (
+                {(errorMeta?.code || errorMeta?.stage || errorMeta?.section) && (
                   <p className="mt-2 font-mono text-[10px] text-red-500">
-                    {errorMeta.code ?? 'IMPORT_FAILURE'}{errorMeta.stage ? ` · ${processCopy.stage}: ${errorMeta.stage}` : ''}
+                    {errorMeta.code ?? 'IMPORT_FAILURE'}
+                    {errorMeta.stage ? ` · ${processCopy.stage}: ${errorMeta.stage}` : ''}
+                    {errorMeta.section ? ` · ${processCopy.section}: ${errorMeta.section}` : ''}
                   </p>
                 )}
                 <label htmlFor="cv-upload" className="mt-3 inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-red-700 hover:underline">
