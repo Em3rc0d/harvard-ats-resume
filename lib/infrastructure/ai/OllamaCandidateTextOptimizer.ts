@@ -2,7 +2,7 @@ import type { CandidateTextOptimizationProvider } from '../../application/presen
 import { AIProviderFailure } from '../../application/ai/AIProviderFailure';
 import { OllamaStructuredClient, OLLAMA_PROVIDER, resolveOllamaModel } from './OllamaStructuredClient';
 
-const INLINE_OPTIMIZER_TIMEOUT_MS = 45_000;
+export const INLINE_OPTIMIZER_TIMEOUT_MS = 15_000;
 export const DEFAULT_OLLAMA_OPTIMIZE_MODEL = 'qwen3:4b-instruct' as const;
 export const INLINE_OPTIMIZER_MAX_OUTPUT_TOKENS = 768;
 
