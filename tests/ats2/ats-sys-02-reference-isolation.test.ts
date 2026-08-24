@@ -39,6 +39,28 @@ test('REFERENCE-CPU-01 isolates Compose project and host ports from normal local
   assert.match(runner, /normalHostPortsExcluded: \[3000, 11434, 8079\]/);
 });
 
+test('REFERENCE-CPU-01 cleans only its owned project and fails preflight before provisioning when a dedicated host port is occupied', () => {
+  const runner = read('scripts/system-reference-run.mjs');
+
+  assert.match(runner, /function cleanupOwnedReferenceProject/);
+  assert.match(runner, /spawnSync\('docker', \['compose', 'down'\]/);
+  assert.match(runner, /COMPOSE_PROJECT_NAME: REFERENCE_COMPOSE_PROJECT/);
+  assert.match(runner, /function inspectReferencePortConflicts/);
+  assert.match(runner, /--filter', `publish=\$\{target\.port\}`/);
+  assert.match(runner, /host port preflight failed before build\/provisioning/);
+  assert.match(runner, /benchmark will not terminate unrelated containers/);
+  assert.match(runner, /ownedProjectCleanup: 'PENDING'/);
+  assert.match(runner, /hostPortAvailability: 'PENDING'/);
+  assert.match(runner, /manifest\.preflight\.ownedProjectCleanup = 'PASS'/);
+  assert.match(runner, /manifest\.preflight\.hostPortAvailability = portConflicts\.length === 0 \? 'PASS' : 'FAIL'/);
+
+  const cleanupIndex = runner.indexOf('cleanupOwnedReferenceProject(sharedEnv)');
+  const portCheckIndex = runner.indexOf('inspectReferencePortConflicts()');
+  const coldStartIndex = runner.indexOf("id: 'cold-start'");
+  assert.ok(cleanupIndex >= 0 && portCheckIndex > cleanupIndex && coldStartIndex > portCheckIndex,
+    'Owned-project cleanup and host-port availability must be checked before cold-start build/model provisioning begins.');
+});
+
 test('all runtime characterization clients honor the injected reference base URL', () => {
   const scripts = [
     'scripts/system-cold-start.mjs',
