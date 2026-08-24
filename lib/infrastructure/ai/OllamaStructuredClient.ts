@@ -6,6 +6,9 @@ const DEFAULT_OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
 const DEFAULT_OLLAMA_CONTEXT_WINDOW = 16_384;
 const MIN_OLLAMA_CONTEXT_WINDOW = 4_096;
 const MAX_OLLAMA_CONTEXT_WINDOW = 65_536;
+const CONTEXT_SAFETY_TOKENS = 1_024;
+const APPROX_CHARS_PER_TOKEN = 3;
+const CONTEXT_STEP = 1_024;
 
 export interface OllamaStructuredRequest {
   readonly system: string;
@@ -94,6 +97,27 @@ export function resolveOllamaContextWindow(
     });
   }
   return parsed;
+}
+
+/**
+ * Ollama's structured-output schema is supplied through the native `format`
+ * field, so the schema does not need to be repeated in the chat prompt. For
+ * small structured requests we can also avoid allocating/evaluating the full
+ * configured context window. The estimate is deliberately conservative and
+ * never exceeds the caller's configured ceiling.
+ */
+export function resolveStructuredContextWindow(options: {
+  readonly configuredContextWindow: number;
+  readonly system: string;
+  readonly prompt: string;
+  readonly maxOutputTokens: number;
+}): number {
+  const inputChars = options.system.length + options.prompt.length;
+  const approximateInputTokens = Math.ceil(inputChars / APPROX_CHARS_PER_TOKEN);
+  const requiredTokens = approximateInputTokens + options.maxOutputTokens + CONTEXT_SAFETY_TOKENS;
+  const stepped = Math.ceil(requiredTokens / CONTEXT_STEP) * CONTEXT_STEP;
+  const bounded = Math.max(MIN_OLLAMA_CONTEXT_WINDOW, stepped);
+  return Math.min(options.configuredContextWindow, bounded);
 }
 
 async function safeResponseText(response: Response): Promise<string> {
@@ -204,6 +228,12 @@ export class OllamaStructuredClient {
     const timeout = setTimeout(() => controller.abort(), request.timeoutMs);
     const model = request.model ? resolveOllamaModel(request.model) : this.model;
     const maxOutputTokens = request.maxOutputTokens ?? 4_096;
+    const effectiveContextWindow = resolveStructuredContextWindow({
+      configuredContextWindow: this.contextWindow,
+      system: request.system,
+      prompt: request.prompt,
+      maxOutputTokens,
+    });
 
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
@@ -219,12 +249,12 @@ export class OllamaStructuredClient {
           format: request.schema,
           messages: [
             { role: 'system', content: request.system },
-            { role: 'user', content: `${request.prompt}\n\nJSON SCHEMA — obey exactly:\n${JSON.stringify(request.schema)}` },
+            { role: 'user', content: request.prompt },
           ],
           options: {
             temperature: request.temperature ?? 0,
             seed: 42,
-            num_ctx: this.contextWindow,
+            num_ctx: effectiveContextWindow,
             num_predict: maxOutputTokens,
           },
         }),
@@ -245,7 +275,8 @@ export class OllamaStructuredClient {
         outputEvalMs: nanosToMilliseconds(payload.eval_duration),
         outputTokensPerSecond: tokensPerSecond(payload.eval_count, payload.eval_duration),
         doneReason: payload.done_reason,
-        contextWindow: this.contextWindow,
+        configuredContextWindow: this.contextWindow,
+        effectiveContextWindow,
         maxOutputTokens,
       });
 
@@ -274,7 +305,8 @@ export class OllamaStructuredClient {
         console.warn('Local Ollama inference budget exhausted:', {
           model,
           timeoutMs: request.timeoutMs,
-          contextWindow: this.contextWindow,
+          configuredContextWindow: this.contextWindow,
+          effectiveContextWindow,
           maxOutputTokens,
         });
         throw new AIProviderFailure({
