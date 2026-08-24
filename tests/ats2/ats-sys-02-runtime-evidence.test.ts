@@ -231,7 +231,7 @@ test('ATS-SYS-02 reference runner refuses ambiguous source/runtime identity and 
   assert.doesNotMatch(source, /docker compose down -v/);
 });
 
-test('ATS-SYS-02 reference runner repeats canonical personas and preserves policy blockers instead of manufacturing support', () => {
+test('ATS-SYS-02 reference runner preserves pre-interpretation blockers, then qualifies only through interpreted policy evidence', () => {
   const source = readFileSync('scripts/system-reference-run.mjs', 'utf8');
   assert.match(source, /personaRepetitions.*3/);
   assert.match(source, /optimizeRepetitions/);
@@ -242,7 +242,11 @@ test('ATS-SYS-02 reference runner repeats canonical personas and preserves polic
   assert.match(source, /system-release-evaluate\.mjs/);
   assert.match(source, /EXPECTED_POLICY_BLOCKERS = \['latency-budgets', 'runtime-envelope'\]/);
   assert.match(source, /BLOCKED_PENDING_INTERPRETATION/);
-  assert.match(source, /runtimeEnvelopeStatus = everyReady \? 'PASS' : 'UNCHARACTERIZED'/);
-  assert.match(source, /latencyBudgetStatus = everyReady \? 'PASS' : 'UNCHARACTERIZED'/);
-  assert.match(source, /EVIDENCE_CAPTURED != supported runtime/);
+  assert.match(source, /system-interpret-reference\.mjs/);
+  assert.match(source, /BLOCKED_POLICY_VIOLATION/);
+  assert.match(source, /system-release-qualify\.mjs/);
+  assert.match(source, /releaseStatus = 'QUALIFIED'/);
+  assert.match(source, /runtimeEnvelopeStatus = 'PASS'/);
+  assert.match(source, /latencyBudgetStatus = 'PASS'/);
+  assert.match(source, /lower-spec\/cross-host support remains explicitly uncharacterized/i);
 });
