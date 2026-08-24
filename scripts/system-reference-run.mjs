@@ -10,6 +10,11 @@ const REFERENCE_APP_PORT = '3100';
 const REFERENCE_OLLAMA_PORT = '31434';
 const REFERENCE_REDIS_HTTP_PORT = '38079';
 const REFERENCE_BASE_URL = `http://127.0.0.1:${REFERENCE_APP_PORT}`;
+const REFERENCE_HOST_PORTS = [
+  { capability: 'app', port: REFERENCE_APP_PORT },
+  { capability: 'ollama', port: REFERENCE_OLLAMA_PORT },
+  { capability: 'redis-http', port: REFERENCE_REDIS_HTTP_PORT },
+];
 
 function argValue(name) {
   const index = process.argv.indexOf(name);
@@ -109,6 +114,35 @@ function sameStringSet(actual, expected) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function cleanupOwnedReferenceProject(env) {
+  const result = spawnSync('docker', ['compose', 'down'], {
+    stdio: 'inherit',
+    env,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`Unable to clean the owned ${REFERENCE_COMPOSE_PROJECT} project before reference preflight.`);
+  }
+}
+
+function inspectReferencePortConflicts() {
+  const conflicts = [];
+  for (const target of REFERENCE_HOST_PORTS) {
+    const owner = command(
+      'docker',
+      ['ps', '--filter', `publish=${target.port}`, '--format', '{{.ID}}\t{{.Names}}\t{{.Ports}}'],
+    );
+    if (owner) {
+      conflicts.push({
+        capability: target.capability,
+        port: Number(target.port),
+        owner,
+      });
+    }
+  }
+  return conflicts;
+}
+
 async function main() {
   const runtimeProfileId = ensureReferenceProfile();
   const sourceStatus = ensureSourceIdentifiableRepository();
@@ -188,6 +222,11 @@ async function main() {
       normalHostPortsExcluded: [3000, 11434, 8079],
       note: 'Reference containers/network/volumes are project-isolated; internal trusted dependency addresses remain canonical.',
     },
+    preflight: {
+      ownedProjectCleanup: 'PENDING',
+      hostPortAvailability: 'PENDING',
+      conflicts: [],
+    },
     repetitions: {
       coldStart: coldStartRepetitions,
       canonicalPersonas: personaRepetitions,
@@ -215,6 +254,27 @@ async function main() {
   };
 
   try {
+    // Clean only the benchmark-owned project, retaining its named volumes. This
+    // removes stale reference containers from a prior interrupted/failed run
+    // without ever terminating unrelated product/dev workloads.
+    cleanupOwnedReferenceProject(sharedEnv);
+    manifest.preflight.ownedProjectCleanup = 'PASS';
+
+    // Port ownership must be resolved before build/model provisioning. The
+    // runner reports the owning Docker container but deliberately refuses to
+    // kill unrelated workloads just to make the benchmark green.
+    const portConflicts = inspectReferencePortConflicts();
+    manifest.preflight.conflicts = portConflicts;
+    manifest.preflight.hostPortAvailability = portConflicts.length === 0 ? 'PASS' : 'FAIL';
+    await persistJson(manifestPath, manifest);
+    if (portConflicts.length > 0) {
+      throw new Error(
+        `REFERENCE-CPU-01 host port preflight failed before build/provisioning: ${portConflicts
+          .map((conflict) => `${conflict.capability} port ${conflict.port} owned by ${conflict.owner}`)
+          .join(' | ')}. Stop or reconfigure only the owning workload; the benchmark will not terminate unrelated containers.`,
+      );
+    }
+
     const coldStep = runNodeStep({
       id: 'cold-start',
       script: 'scripts/system-cold-start.mjs',
