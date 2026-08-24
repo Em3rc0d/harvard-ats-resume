@@ -96,6 +96,15 @@ test('remaining AI timeouts retain the exact section boundary for runtime diagno
   assert.match(error.message, /work experience records/);
 });
 
+test('import API persists section-specific timeout evidence without changing the safe user-facing contract', () => {
+  const route = readFileSync('app/api/import-resume/route.ts', 'utf8');
+  assert.match(route, /ResumeImportSectionTimeoutError/);
+  assert.match(route, /section: error\.section/);
+  assert.match(route, /section: failure\.section/);
+  assert.match(route, /failure\.section \? \{ section: failure\.section \} : \{\}/);
+  assert.match(route, /errorCode: 'RESUME_IMPORT_TIMEOUT'/);
+});
+
 test('hybrid importer still requires bounded AI for ambiguity-heavy records so P10 local-AI fault proof remains meaningful', () => {
   const source = readFileSync('lib/infrastructure/import/OllamaResumeImportV3Provider.ts', 'utf8');
   assert.match(source, /label: 'work experience records'/);
