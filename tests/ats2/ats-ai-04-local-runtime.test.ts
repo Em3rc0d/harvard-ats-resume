@@ -27,6 +27,7 @@ import {
 import {
   DEFAULT_OLLAMA_OPTIMIZE_MODEL,
   INLINE_OPTIMIZER_MAX_OUTPUT_TOKENS,
+  INLINE_OPTIMIZER_TIMEOUT_MS,
 } from '../../lib/infrastructure/ai/OllamaCandidateTextOptimizer';
 import {
   DETERMINISTIC_RESUME_CONTRACT_VERSION,
@@ -70,6 +71,7 @@ test('local runtime defaults to bounded workload-specific contracts', () => {
   assert.equal(IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS, 1_024);
   assert.equal(RESUME_MAX_OUTPUT_TOKENS, 2_048);
   assert.equal(INLINE_OPTIMIZER_MAX_OUTPUT_TOKENS, 768);
+  assert.equal(INLINE_OPTIMIZER_TIMEOUT_MS, 15_000);
   assert.equal(DETERMINISTIC_RESUME_PROVIDER, 'cv-engine-deterministic');
   assert.equal(DETERMINISTIC_RESUME_MODEL, 'source-preserving-resume-composer-v2');
   assert.equal(DETERMINISTIC_RESUME_CONTRACT_VERSION, 'ats2-evidence-bound-resume-v2');
@@ -227,9 +229,7 @@ test('Ollama structured generation sends schema-constrained non-thinking determi
     const options = requestBody?.options as Record<string, unknown>;
     assert.equal(options.temperature, 0);
     assert.equal(options.seed, 42);
-    assert.equal(typeof options.num_ctx, 'number');
-    assert.ok(Number(options.num_ctx) >= 4_096);
-    assert.ok(Number(options.num_ctx) <= 16_384);
+    assert.equal(options.num_ctx, 6_144);
     assert.equal(options.num_predict, 4_096);
   } finally {
     globalThis.fetch = originalFetch;
