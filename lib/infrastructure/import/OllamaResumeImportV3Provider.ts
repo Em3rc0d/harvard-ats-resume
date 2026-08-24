@@ -18,7 +18,7 @@ import {
 
 export { ResumeImportTimeoutError };
 
-const IMPORTER_VERSION = 'native-text-ollama-v3.1-sectioned-source-recovery';
+const IMPORTER_VERSION = 'native-text-ollama-v3.2-hybrid-source-fastpath';
 export const DEFAULT_OLLAMA_IMPORT_V3_MODEL = 'qwen3:1.7b' as const;
 export const IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS = 1_024;
 const MAX_SECTION_TIMEOUT_MS = 90_000;
@@ -50,6 +50,17 @@ export class ResumeExtractionIncompleteError extends Error {
     super(`Resume extraction omitted explicit source sections: ${missingSections.join(', ')}`);
     this.name = 'ResumeExtractionIncompleteError';
     this.missingSections = missingSections;
+  }
+}
+
+export class ResumeImportSectionTimeoutError extends ResumeImportTimeoutError {
+  readonly section: string;
+
+  constructor(timeoutMs: number, section: string) {
+    super(timeoutMs);
+    this.name = 'ResumeImportSectionTimeoutError';
+    this.section = section;
+    this.message = `Resume extraction timed out while processing ${section} after ${Math.round(timeoutMs / 1000)} seconds.`;
   }
 }
 
@@ -301,6 +312,24 @@ const GENERIC_PREAMBLE_LABELS = new Set([
   'CURRICULUM VITAE',
 ]);
 
+const WORK_MODEL_CONTACT_TOKENS = new Set([
+  'REMOTE',
+  'REMOTO',
+  'HYBRID',
+  'HIBRIDO',
+  'ONSITE',
+  'ON SITE',
+  'PRESENCIAL',
+  'FLEXIBLE',
+]);
+
+const TECHNICAL_SKILL_HEADINGS = new Set([
+  'TECHNICAL SKILLS',
+  'HARD SKILLS',
+  'HABILIDADES TECNICAS',
+  'COMPETENCIAS TECNICAS',
+]);
+
 function sourceExactNameCandidate(value: string): string | undefined {
   const candidate = clean(value);
   if (!candidate || candidate.length > 120) return undefined;
@@ -312,6 +341,69 @@ function sourceExactNameCandidate(value: string): string | undefined {
   if (words.length < 2 || words.length > 6) return undefined;
   if (!words.every((word) => /\p{L}/u.test(word))) return undefined;
   return candidate;
+}
+
+function sourceLines(source: string): string[] {
+  return source
+    .split(/\n+/)
+    .map(clean)
+    .filter(Boolean)
+    .filter((line) => !/^\[PAGE \d+\]$/i.test(line));
+}
+
+function firstSourceMatch(source: string, pattern: RegExp): string {
+  return source.match(pattern)?.[0]?.trim() ?? '';
+}
+
+function isSourceExactLocationSegment(value: string): boolean {
+  const candidate = clean(value);
+  if (!candidate || /\d/.test(candidate) || !candidate.includes(',')) return false;
+  if (candidate.includes('@') || /https?:\/\/|www\./i.test(candidate)) return false;
+  return /\p{L}/u.test(candidate);
+}
+
+/**
+ * Deterministic fast path for the narrow, source-explicit preamble shape used by
+ * many conventional resumes: one name line followed by one pipe-delimited
+ * contact line. Every accepted scalar is copied verbatim from that preamble.
+ * Work-model words such as Remote are deliberately not promoted into location.
+ * Any unclassified contact segment makes the fast path decline and fall back to
+ * bounded AI extraction rather than guessing.
+ */
+export function extractSourceExactPersonalInfo(preamble: string): PersonalInfoExtraction | undefined {
+  const lines = sourceLines(preamble);
+  if (lines.length !== 2) return undefined;
+
+  const fullName = sourceExactNameCandidate(lines[0]);
+  const contactLine = lines[1];
+  const email = firstSourceMatch(contactLine, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  if (!fullName || !email) return undefined;
+
+  const linkedin = firstSourceMatch(
+    contactLine,
+    /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[^\s|]+/i,
+  );
+  const github = firstSourceMatch(
+    contactLine,
+    /(?:https?:\/\/)?(?:www\.)?github\.com\/[^\s|]+/i,
+  );
+
+  let location = '';
+  const segments = contactLine.split('|').map(clean).filter(Boolean);
+  for (const segment of segments) {
+    const normalized = normalizeHeading(segment);
+    if (segment.toLocaleLowerCase('en-US').includes(email.toLocaleLowerCase('en-US'))) continue;
+    if (linkedin && segment.toLocaleLowerCase('en-US').includes(linkedin.toLocaleLowerCase('en-US'))) continue;
+    if (github && segment.toLocaleLowerCase('en-US').includes(github.toLocaleLowerCase('en-US'))) continue;
+    if (WORK_MODEL_CONTACT_TOKENS.has(normalized)) continue;
+    if (!location && isSourceExactLocationSegment(segment)) {
+      location = segment;
+      continue;
+    }
+    return undefined;
+  }
+
+  return { fullName, email, location, linkedin, github };
 }
 
 /**
@@ -339,11 +431,7 @@ export function recoverSourceExactPreambleIdentity(
   };
   if (current.fullName || !current.email) return current;
 
-  const lines = preamble
-    .split(/\n+/)
-    .map(clean)
-    .filter(Boolean)
-    .filter((line) => !/^\[PAGE \d+\]$/i.test(line));
+  const lines = sourceLines(preamble);
   if (lines.length < 2) return current;
 
   const email = current.email.toLocaleLowerCase('en-US');
@@ -438,6 +526,65 @@ function meaningful(values: readonly string[]): boolean {
   return values.some((value) => clean(value).length > 0);
 }
 
+export function extractSourceExactEducation(source: string): z.infer<typeof educationSchema> | undefined {
+  const lines = sourceLines(sectionBody(source));
+  if (lines.length !== 2) return undefined;
+
+  const identityParts = lines[0].split(/\s+[—–]\s+/).map(clean);
+  const dateParts = lines[1].split(/\s+-\s+/).map(clean);
+  if (identityParts.length !== 2 || dateParts.length !== 2) return undefined;
+  const [institution, degree] = identityParts;
+  const [startDate, endDate] = dateParts;
+  if (!institution || !degree || !startDate || !endDate) return undefined;
+  if (!/\d{4}/.test(startDate)) return undefined;
+  if (!/\d{4}|present|current|actualidad|presente/i.test(endDate)) return undefined;
+
+  return {
+    items: [{ institution, degree, startDate, endDate, honors: '' }],
+  };
+}
+
+export function extractSourceExactTechnicalSkills(source: string): z.infer<typeof skillsSchema> | undefined {
+  const lines = sourceLines(source);
+  if (lines.length < 2) return undefined;
+  if (!TECHNICAL_SKILL_HEADINGS.has(normalizeHeading(lines[0]))) return undefined;
+
+  const items: string[] = [];
+  for (const rawLine of lines.slice(1)) {
+    const line = rawLine.replace(/^[•*-]\s*/, '').trim();
+    if (!line || line.length > 240 || /[.!?]$/.test(line)) return undefined;
+    const parts = line.split(/\s*[,;]\s*/).map(clean).filter(Boolean);
+    if (parts.length === 0 || parts.some((part) => part.length > 80)) return undefined;
+    items.push(...parts);
+  }
+  if (items.length === 0) return undefined;
+
+  const seen = new Set<string>();
+  const hardSkills = items.filter((item) => {
+    const key = item.toLocaleLowerCase('en-US');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { hardSkills, softSkills: [] };
+}
+
+export function extractSourceExactLanguages(source: string): z.infer<typeof languagesSchema> | undefined {
+  const lines = sourceLines(sectionBody(source));
+  if (lines.length === 0) return undefined;
+
+  const items = [] as Array<{ language: string; proficiency: string }>;
+  for (const line of lines) {
+    const match = line.match(/^(.+?)\s+(?:—|–|-)\s+(.+)$/) || line.match(/^(.+?):\s+(.+)$/);
+    if (!match) return undefined;
+    const language = clean(match[1]);
+    const proficiency = clean(match[2]);
+    if (!language || !proficiency || language.length > 80 || proficiency.length > 80) return undefined;
+    items.push({ language, proficiency });
+  }
+  return { items };
+}
+
 function sectionTimeoutMs(): number {
   return Math.min(resolveResumeImportTimeoutMs(), MAX_SECTION_TIMEOUT_MS);
 }
@@ -480,7 +627,7 @@ async function generateSection<T>(options: {
     }
   } catch (error) {
     if (error instanceof AIProviderFailure && error.kind === 'REQUEST_TIMEOUT') {
-      throw new ResumeImportTimeoutError(sectionTimeoutMs());
+      throw new ResumeImportSectionTimeoutError(sectionTimeoutMs(), options.label);
     }
     throw error;
   }
@@ -502,7 +649,8 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
   );
 
   const personalSource = sectioned.preamble || document.text.slice(0, 2_500);
-  const personalInfoProposal = await generateSection({
+  const sourceExactPersonalInfo = extractSourceExactPersonalInfo(personalSource);
+  const personalInfoProposal = sourceExactPersonalInfo ?? await generateSection({
     client,
     model,
     label: 'candidate identity/contact details',
@@ -530,8 +678,11 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
     : [];
 
   const educationSource = sectioned.sections.get('education');
+  const sourceExactEducation = educationSource
+    ? extractSourceExactEducation(educationSource)
+    : undefined;
   const education = educationSource
-    ? (await generateSection({
+    ? (sourceExactEducation ?? await generateSection({
         client,
         model,
         label: 'education records',
@@ -543,8 +694,11 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
     : [];
 
   const skillsSource = sectioned.sections.get('skills');
+  const sourceExactSkills = skillsSource
+    ? extractSourceExactTechnicalSkills(skillsSource)
+    : undefined;
   const skills = skillsSource
-    ? await generateSection({
+    ? sourceExactSkills ?? await generateSection({
         client,
         model,
         label: 'skills',
@@ -582,8 +736,11 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
     : [];
 
   const languagesSource = sectioned.sections.get('languages');
+  const sourceExactLanguages = languagesSource
+    ? extractSourceExactLanguages(languagesSource)
+    : undefined;
   const languages = languagesSource
-    ? (await generateSection({
+    ? (sourceExactLanguages ?? await generateSection({
         client,
         model,
         label: 'language records',
@@ -593,6 +750,17 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
         maxOutputTokens: 384,
       })).items
     : [];
+
+  console.info('Resume import v3 extraction paths:', {
+    model,
+    personalInfo: sourceExactPersonalInfo ? 'SOURCE_EXACT' : 'AI',
+    experience: experienceSource ? 'AI' : 'ABSENT',
+    education: educationSource ? (sourceExactEducation ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
+    skills: skillsSource ? (sourceExactSkills ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
+    projects: projectsSource ? 'AI' : 'ABSENT',
+    certifications: certificationsSource ? 'AI' : 'ABSENT',
+    languages: languagesSource ? (sourceExactLanguages ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
+  });
 
   const candidate: ImportedCandidateDraft = {
     personalInfo: {
