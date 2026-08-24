@@ -1,0 +1,28 @@
+{
+  "policyVersion": "ats-sys-02-runtime-policy-v0.1",
+  "status": "APPROVED",
+  "supportScope": "EXACT_OBSERVED_RUNTIME_FINGERPRINT_ONLY",
+  "runtimeProfileId": "REFERENCE-CPU-01",
+  "minimumRepeatedRuns": {
+    "containerColdStart": 3,
+    "canonicalPersonas": 3,
+    "inlineOptimize": 3
+  },
+  "latencyBudgets": {
+    "containerColdStartReadyMs": 45000,
+    "canonicalPersonaEndToEndMs": 90000,
+    "inlineOptimizeProductResponseMs": 20000
+  },
+  "capabilityPolicy": {
+    "inlineOptimize": "OPTIONAL_ENHANCEMENT",
+    "inlineOptimizeAiCompletionRequired": false,
+    "inlineOptimizeSafeFallbackAccepted": true
+  },
+  "uncharacterizedClaims": [
+    "lower-spec hardware support",
+    "cross-host equivalence",
+    "fresh-install model-download cold start",
+    "successful inline-optimize AI completion on REFERENCE-CPU-01"
+  ],
+  "policy": "The first release may claim support only for the exact observed REFERENCE-CPU-01 runtime fingerprint that produced repeated passing characterization receipts. It may not infer support for weaker or merely similar hardware. Canonical trusted-core flows must complete within 90 seconds. Container-cold startup with retained volumes must reach READY within 45 seconds. Inline Optimize is optional and must return either a fact-preserving AI result or its deterministic safe fallback within 20 seconds; AI completion itself is not a release requirement on this profile."
+}
