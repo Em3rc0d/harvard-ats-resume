@@ -18,7 +18,7 @@ import {
 
 export { ResumeImportTimeoutError };
 
-const IMPORTER_VERSION = 'native-text-ollama-v3.2-hybrid-source-fastpath';
+const IMPORTER_VERSION = 'native-text-ollama-v3.3-hybrid-record-fastpath';
 export const DEFAULT_OLLAMA_IMPORT_V3_MODEL = 'qwen3:1.7b' as const;
 export const IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS = 1_024;
 const MAX_SECTION_TIMEOUT_MS = 90_000;
@@ -330,6 +330,9 @@ const TECHNICAL_SKILL_HEADINGS = new Set([
   'COMPETENCIAS TECNICAS',
 ]);
 
+const DATE_LIKE_TOKEN = /\d{4}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|ene|abr|ago|dic|present|current|actualidad|presente/i;
+const TECHNOLOGY_LINE = /^(?:Technologies|Technology|Tecnologías|Tecnologias|Tecnología|Tecnologia)\s*:\s*(.+)$/iu;
+
 function sourceExactNameCandidate(value: string): string | undefined {
   const candidate = clean(value);
   if (!candidate || candidate.length > 120) return undefined;
@@ -360,6 +363,24 @@ function isSourceExactLocationSegment(value: string): boolean {
   if (!candidate || /\d/.test(candidate) || !candidate.includes(',')) return false;
   if (candidate.includes('@') || /https?:\/\/|www\./i.test(candidate)) return false;
   return /\p{L}/u.test(candidate);
+}
+
+function sourceExactTechnologies(line: string): string[] | undefined {
+  const match = line.match(TECHNOLOGY_LINE);
+  if (!match) return undefined;
+  const technologies = match[1]
+    .split(/\s*[,;]\s*/)
+    .map(clean)
+    .filter(Boolean);
+  if (technologies.length === 0 || technologies.some((item) => item.length > 80)) return undefined;
+  return technologies;
+}
+
+function sourceExactDateRange(line: string): readonly [string, string] | undefined {
+  const parts = line.split(/\s+-\s+/).map(clean);
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return undefined;
+  if (!DATE_LIKE_TOKEN.test(parts[0]) || !DATE_LIKE_TOKEN.test(parts[1])) return undefined;
+  return [parts[0], parts[1]] as const;
 }
 
 /**
@@ -526,6 +547,25 @@ function meaningful(values: readonly string[]): boolean {
   return values.some((value) => clean(value).length > 0);
 }
 
+export function extractSourceExactExperience(source: string): z.infer<typeof experienceSchema> | undefined {
+  const lines = sourceLines(sectionBody(source));
+  if (lines.length !== 4) return undefined;
+
+  const identityParts = lines[0].split(/\s+[—–]\s+/).map(clean);
+  const dateRange = sourceExactDateRange(lines[1]);
+  const technologies = sourceExactTechnologies(lines[3]);
+  if (identityParts.length !== 2 || !dateRange || !technologies) return undefined;
+
+  const [company, role] = identityParts;
+  const [startDate, endDate] = dateRange;
+  const description = clean(lines[2]);
+  if (!company || !role || !description || description.length > 2_000) return undefined;
+
+  return {
+    items: [{ company, role, startDate, endDate, description, technologies }],
+  };
+}
+
 export function extractSourceExactEducation(source: string): z.infer<typeof educationSchema> | undefined {
   const lines = sourceLines(sectionBody(source));
   if (lines.length !== 2) return undefined;
@@ -552,7 +592,7 @@ export function extractSourceExactTechnicalSkills(source: string): z.infer<typeo
   const items: string[] = [];
   for (const rawLine of lines.slice(1)) {
     const line = rawLine.replace(/^[•*-]\s*/, '').trim();
-    if (!line || line.length > 240 || /[.!?]$/.test(line)) return undefined;
+    if (!line || line.length > 240 || /[!?]$/.test(line)) return undefined;
     const parts = line.split(/\s*[,;]\s*/).map(clean).filter(Boolean);
     if (parts.length === 0 || parts.some((part) => part.length > 80)) return undefined;
     items.push(...parts);
@@ -567,6 +607,27 @@ export function extractSourceExactTechnicalSkills(source: string): z.infer<typeo
     return true;
   });
   return { hardSkills, softSkills: [] };
+}
+
+export function extractSourceExactProjects(source: string): z.infer<typeof projectsSchema> | undefined {
+  const lines = sourceLines(sectionBody(source));
+  if (lines.length !== 3 && lines.length !== 4) return undefined;
+
+  const name = clean(lines[0]);
+  const description = clean(lines[1]);
+  const technologies = sourceExactTechnologies(lines[2]);
+  if (!name || !description || !technologies || name.length > 200 || description.length > 2_000) {
+    return undefined;
+  }
+
+  let link = '';
+  if (lines.length === 4) {
+    const candidateLink = clean(lines[3]);
+    if (!/^(?:https?:\/\/|www\.)\S+$/i.test(candidateLink)) return undefined;
+    link = candidateLink;
+  }
+
+  return { items: [{ name, description, technologies, link }] };
 }
 
 export function extractSourceExactLanguages(source: string): z.infer<typeof languagesSchema> | undefined {
@@ -665,8 +726,11 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
   const summary = summarySource ? sectionBody(summarySource) : '';
 
   const experienceSource = sectioned.sections.get('experience');
+  const sourceExactExperience = experienceSource
+    ? extractSourceExactExperience(experienceSource)
+    : undefined;
   const experience = experienceSource
-    ? (await generateSection({
+    ? (sourceExactExperience ?? await generateSection({
         client,
         model,
         label: 'work experience records',
@@ -710,8 +774,11 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
     : { hardSkills: [], softSkills: [] };
 
   const projectsSource = sectioned.sections.get('projects');
+  const sourceExactProjects = projectsSource
+    ? extractSourceExactProjects(projectsSource)
+    : undefined;
   const projects = projectsSource
-    ? (await generateSection({
+    ? (sourceExactProjects ?? await generateSection({
         client,
         model,
         label: 'project records',
@@ -754,10 +821,10 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
   console.info('Resume import v3 extraction paths:', {
     model,
     personalInfo: sourceExactPersonalInfo ? 'SOURCE_EXACT' : 'AI',
-    experience: experienceSource ? 'AI' : 'ABSENT',
+    experience: experienceSource ? (sourceExactExperience ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
     education: educationSource ? (sourceExactEducation ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
     skills: skillsSource ? (sourceExactSkills ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
-    projects: projectsSource ? 'AI' : 'ABSENT',
+    projects: projectsSource ? (sourceExactProjects ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
     certifications: certificationsSource ? 'AI' : 'ABSENT',
     languages: languagesSource ? (sourceExactLanguages ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
   });
