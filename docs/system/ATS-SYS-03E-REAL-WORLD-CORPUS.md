@@ -18,6 +18,7 @@ OBSERVED != SUPPORTED
 SAFE REFUSAL != CORRUPTED TRUTH
 REAL-WORLD != SYNTHETIC
 RAW CV / PII != GIT ARTIFACT
+PII != EVIDENCE IDENTIFIER
 ```
 
 Every accepted fact must remain source-backed. A safe refusal is a robustness failure when success was expected, but it is preferable to accepting unsupported Career Evidence.
@@ -40,7 +41,8 @@ Do not commit:
 
 ATS-SYS-03E evidence receipts persist only:
 
-- document ID;
+- opaque corpus ID (`CORPUS-YYYYMMDD[-SUFFIX]`);
+- opaque document ID (`RW-###`);
 - source SHA-256;
 - format;
 - source class;
@@ -54,7 +56,7 @@ ATS-SYS-03E evidence receipts persist only:
 - importer version;
 - rejected-field count.
 
-The raw document, source path and ground-truth strings are intentionally excluded from the receipt.
+Names and other PII are forbidden in `corpusId` and document `id`; the harness rejects identifiers outside the opaque formats above. The raw document, source path, private manifest filename and ground-truth strings are intentionally excluded from the receipt.
 
 ## Source classes
 
@@ -80,6 +82,16 @@ PDF
 PDF evidence is currently scoped to machine-readable text unless the expected outcome is an explicit safe refusal. OCR/image-only support must not be inferred from this phase.
 
 ## Ground-truth contract
+
+The external manifest uses an opaque corpus ID, for example:
+
+```json
+{
+  "manifestVersion": "ats-sys-03e-real-world-corpus-manifest-v0.1",
+  "corpusId": "CORPUS-20260825",
+  "documents": []
+}
+```
 
 A success-expected document uses:
 
@@ -137,9 +149,10 @@ The helper:
 
 1. discovers PDF/DOCX files;
 2. assigns privacy-safe `RW-###` IDs;
-3. calculates SHA-256;
-4. records format;
-5. writes `ats-sys-03e-manifest.inventory.json` beside the source files.
+3. generates an opaque `CORPUS-YYYYMMDD` ID;
+4. calculates SHA-256;
+5. records format;
+6. writes `ats-sys-03e-manifest.inventory.json` beside the source files.
 
 The inventory is deliberately **not executable**. Every `REVIEW_REQUIRED` field must be manually classified and ground-truthed before evidence collection.
 
@@ -150,10 +163,10 @@ One ATS-SYS-03E run accepts at most **40 documents**.
 This is intentional: the public `/api/import-resume` rate limiter remains enabled at the real product boundary. Larger corpora must be split into cohorts, for example:
 
 ```text
-CORPUS-A  25 documents
-CORPUS-B  25 documents
-CORPUS-C  25 documents
-CORPUS-D  25 documents
+CORPUS-20260825-A  25 documents
+CORPUS-20260825-B  25 documents
+CORPUS-20260825-C  25 documents
+CORPUS-20260825-D  25 documents
 ```
 
 A cohort is evidence for its exact documents only. Cohort aggregation is interpretation; it does not create population-wide success-rate claims automatically.
