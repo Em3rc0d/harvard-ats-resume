@@ -56,6 +56,20 @@ function inspectPort(port) {
   return command('docker', ['ps', '--filter', `publish=${port}`, '--format', '{{.ID}}\t{{.Names}}\t{{.Ports}}']);
 }
 
+function resetBenchmarkRateLimitWindow(env) {
+  // ATS-SYS-03 reuses the qualified reference Redis volume so model/Career Vault
+  // state is retained. Clear only Upstash rate-limit keys from prior campaigns;
+  // the limiter itself remains enabled for every measured request.
+  run(
+    'docker',
+    [
+      'compose', 'exec', '-T', 'redis', 'sh', '-lc',
+      `keys="$(redis-cli --scan --pattern '@upstash/ratelimit*')"; if [ -n "$keys" ]; then printf '%s\\n' "$keys" | xargs redis-cli del >/dev/null; fi`,
+    ],
+    env,
+  );
+}
+
 async function waitForReady(expectedBuildSha, timeoutMs = 120000) {
   const deadline = Date.now() + timeoutMs;
   let last = 'no response';
@@ -116,6 +130,11 @@ async function main() {
       ollama: Number(OLLAMA_PORT),
       redisHttp: Number(REDIS_HTTP_PORT),
     },
+    preflight: {
+      committedSource: true,
+      dedicatedPorts: 'PENDING',
+      rateLimitWindowReset: 'PENDING',
+    },
     result: 'RUNNING',
     evidenceDir: capacityDir,
   };
@@ -129,10 +148,16 @@ async function main() {
       const owner = inspectPort(port);
       if (owner) throw new Error(`ATS-SYS-03 reference port ${port} is occupied by ${owner}.`);
     }
+    manifest.preflight.dedicatedPorts = 'PASS';
+    await persistManifest();
 
     run(process.execPath, ['scripts/docker-compose-identified.mjs', 'build', 'app'], env);
     run(process.execPath, ['scripts/docker-compose-identified.mjs', 'up', '-d'], env);
     await waitForReady(buildSha);
+
+    resetBenchmarkRateLimitWindow(env);
+    manifest.preflight.rateLimitWindowReset = 'PASS';
+    await persistManifest();
 
     const harnessArgs = ['scripts/system-import-robustness-capacity.mjs', ...process.argv.slice(2)];
     run(process.execPath, harnessArgs, env);
