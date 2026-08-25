@@ -61,7 +61,8 @@ test('ATS-SYS-03 explicitly refuses to generalize four synthetic DOCX files into
   assert.match(harness, /INITIAL_SYNTHETIC_CORPUS_ONLY/);
   assert.match(harness, /Four synthetic DOCX fixtures are insufficient/);
   assert.match(docs, /synthetic DOCX seed corpus only/i);
-  assert.match(docs, /may not establish arbitrary CV robustness/i);
+  assert.match(docs, /does not prove arbitrary real-world resumes/i);
+  assert.match(docs, /arbitrary CV robustness or a production concurrency SLA/i);
 });
 
 test('ATS-SYS-03 reference runner owns the qualified isolated runtime boundary', () => {
