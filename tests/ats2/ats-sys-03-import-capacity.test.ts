@@ -71,7 +71,7 @@ test('ATS-SYS-03 reference runner owns the qualified isolated runtime boundary',
   assert.match(runner, /APP_PORT = '3100'/);
   assert.match(runner, /OLLAMA_PORT = '31434'/);
   assert.match(runner, /REDIS_HTTP_PORT = '38079'/);
-  assert.match(runner, /docker.*compose.*down/s);
+  assert.match(runner, /\['compose', 'down'\]/);
   assert.doesNotMatch(runner, /down[^\n]*-v/);
   assert.match(runner, /docker-compose-identified\.mjs/);
   assert.match(runner, /waitForReady/);
