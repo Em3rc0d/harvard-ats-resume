@@ -73,7 +73,7 @@ test('ATS-SYS-03E reference runner owns the same isolated identified runtime top
   assert.match(reference, /CV_ENGINE_E2E_BASE_URL: BASE_URL/);
   assert.match(reference, /docker-compose-identified\.mjs', 'build', 'app'/);
   assert.match(reference, /releaseQualifiableIdentity === true/);
-  assert.match(reference, /body\.identity\.buildSha === expectedBuildSha/);
+  assert.match(reference, /body\?\.identity\?\.buildSha === expectedBuildSha/);
 });
 
 test('ATS-SYS-03E keeps synthetic stress documents separate from real-world evidence', () => {
