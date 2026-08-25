@@ -5,6 +5,7 @@ on:
     branches:
       - agent/ats-sys-03-import-robustness-capacity
       - agent/ats-sys-03e-real-world-corpus
+      - agent/ats-sys-03e-incident-01-segmentation
   workflow_dispatch:
 
 permissions:
