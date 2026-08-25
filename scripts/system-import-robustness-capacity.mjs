@@ -338,7 +338,7 @@ async function main() {
     robustness,
     capacity: {
       levels,
-      waves: capacityWaves.map(({ requests, ...wave }) => wave),
+      waves: capacityWaves.map(({ requests: _requests, ...wave }) => wave),
       maxZeroFailureConcurrency,
       result: capacityWaves.every((wave) => wave.summary.unsafeAcceptedTruth === 0 && wave.summary.rateLimited === 0)
         ? 'OBSERVED_SAFE'
