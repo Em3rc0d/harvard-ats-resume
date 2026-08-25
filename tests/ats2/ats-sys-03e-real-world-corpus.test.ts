@@ -92,3 +92,28 @@ test('ATS-SYS-03E keeps synthetic stress documents separate from real-world evid
   assert.match(harness, /REAL_USER_PROVIDED and PUBLIC_SANITIZED documents are real-world evidence; SYNTHETIC_STRESS documents remain synthetic/);
   assert.match(docs, /Only `REAL_USER_PROVIDED` and `PUBLIC_SANITIZED` contribute real-world evidence/);
 });
+
+test('ATS-SYS-03E review oracle is source-only and never uses model/import output', () => {
+  const review = read('scripts/system-real-world-corpus-review.mjs');
+
+  assert.match(review, /oraclePolicy: 'HUMAN_AUTHORED_FROM_SOURCE_ONLY'/);
+  assert.match(review, /modelUsed: false/);
+  assert.match(review, /importApiUsed: false/);
+  assert.match(review, /ground-truth\.template\.json/);
+  assert.match(review, /source\.txt/);
+  assert.doesNotMatch(review, /api\/import-resume/);
+  assert.doesNotMatch(review, /OllamaStructuredClient/);
+});
+
+test('ATS-SYS-03E finalizer refuses incomplete or source-inconsistent ground truth', () => {
+  const finalizer = read('scripts/system-real-world-corpus-finalize.mjs');
+
+  assert.match(finalizer, /cannot remain REVIEW_REQUIRED/);
+  assert.match(finalizer, /requiredStrings contains a value not present in source\.txt/);
+  assert.match(finalizer, /forbiddenStrings contains a value that is actually present in source\.txt/);
+  assert.match(finalizer, /template\/source sha256 does not match inventory/);
+  assert.match(finalizer, /HUMAN_AUTHORED_FROM_SOURCE_ONLY/);
+  assert.match(finalizer, /READY_FOR_EVIDENCE_CAMPAIGN/);
+  assert.doesNotMatch(finalizer, /api\/import-resume/);
+  assert.doesNotMatch(finalizer, /Ollama/);
+});
