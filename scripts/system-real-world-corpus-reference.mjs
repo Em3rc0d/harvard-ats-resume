@@ -9,6 +9,7 @@ const OLLAMA_PORT = '31434';
 const REDIS_HTTP_PORT = '38079';
 const BASE_URL = `http://127.0.0.1:${APP_PORT}`;
 const GENERATED_EVIDENCE_PREFIXES = ['evidence/ats-sys-02/', 'evidence/ats-sys-03/'];
+const OPAQUE_CORPUS_ID = /^CORPUS-\d{8}(?:-[A-Z0-9]{1,8})?$/;
 
 function isoSafe(value) {
   return value.replace(/[:.]/g, '-');
@@ -95,9 +96,10 @@ async function main() {
   }
   const corpusManifestPath = resolve(realCorpusManifest);
   const manifestPreview = JSON.parse(await readFile(corpusManifestPath, 'utf8'));
-  const corpusId = typeof manifestPreview?.corpusId === 'string' && manifestPreview.corpusId.trim()
-    ? manifestPreview.corpusId.trim()
-    : 'UNIDENTIFIED_CORPUS';
+  const corpusId = typeof manifestPreview?.corpusId === 'string' ? manifestPreview.corpusId.trim() : '';
+  if (!OPAQUE_CORPUS_ID.test(corpusId)) {
+    throw new Error('ATS-SYS-03E corpusId must use the privacy-safe CORPUS-YYYYMMDD[-SUFFIX] form before any evidence manifest is written.');
+  }
 
   const buildSha = command('git', ['rev-parse', 'HEAD']);
   const startedAt = new Date().toISOString();
@@ -136,7 +138,7 @@ async function main() {
       committedSource: true,
       dedicatedPorts: 'PENDING',
       rateLimitWindowReset: 'PENDING',
-      externalCorpusPrivacyBoundary: 'PENDING',
+      externalCorpusPrivacyBoundary: 'PASS',
     },
     result: 'RUNNING',
     evidenceDir: corpusDir,
@@ -160,7 +162,6 @@ async function main() {
 
     resetBenchmarkRateLimitWindow(env);
     manifest.preflight.rateLimitWindowReset = 'PASS';
-    manifest.preflight.externalCorpusPrivacyBoundary = 'PASS';
     await persistManifest();
 
     run(process.execPath, ['scripts/system-real-world-corpus.mjs'], env);
