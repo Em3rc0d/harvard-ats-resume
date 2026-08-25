@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 const REQUIRED_PROFILE = 'REFERENCE-CPU-01';
 const COMPOSE_PROJECT = 'cv-engine-reference';
@@ -128,7 +128,7 @@ async function main() {
     ports: { app: Number(APP_PORT), ollama: Number(OLLAMA_PORT), redisHttp: Number(REDIS_HTTP_PORT) },
     corpus: {
       corpusId,
-      externalManifestFile: basename(corpusManifestPath),
+      externalManifestFilenamePersisted: false,
       rawManifestPathPersisted: false,
       rawDocumentsPersisted: false,
     },
