@@ -24,7 +24,10 @@
     "system:import-capacity": "node scripts/system-import-robustness-capacity.mjs",
     "system:import-capacity:reference": "node scripts/system-import-capacity-reference.mjs",
     "system:import-model-capacity": "node scripts/system-import-model-capacity.mjs",
-    "system:import-model-capacity:reference": "node scripts/system-import-model-capacity-reference.mjs"
+    "system:import-model-capacity:reference": "node scripts/system-import-model-capacity-reference.mjs",
+    "system:real-corpus:inventory": "node scripts/system-real-world-corpus-inventory.mjs",
+    "system:real-corpus": "node scripts/system-real-world-corpus.mjs",
+    "system:real-corpus:reference": "node scripts/system-real-world-corpus-reference.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -47,7 +50,7 @@
   "devDependencies": {
     "@types/node": "24.13.3",
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.4",
+    "@types/react-dom": "19.2.8",
     "autoprefixer": "^10.4.20",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.0",
