@@ -35,6 +35,8 @@ const PROCESS_COPY = {
     tooLarge: 'This file is larger than 10 MB.',
     network: 'CV Engine could not reach the resume import service. Check your connection and try again.',
     retry: 'Choose another file',
+    manualFallback: 'Use manual career evidence instead',
+    manualFallbackHint: 'Automatic import stopped before CV Engine could safely accept the extracted facts. Your resume was not promoted to career truth. Return to the start screen and choose Build my evidence to continue manually.',
     stage: 'Import stage',
     section: 'Section',
     cancel: 'Cancel',
@@ -46,6 +48,8 @@ const PROCESS_COPY = {
     tooLarge: 'Este archivo supera los 10 MB.',
     network: 'CV Engine no pudo comunicarse con el servicio de importación. Verifica tu conexión e inténtalo nuevamente.',
     retry: 'Elegir otro archivo',
+    manualFallback: 'Usar evidencia profesional manual',
+    manualFallbackHint: 'La importación automática se detuvo antes de que CV Engine pudiera aceptar los datos de forma segura. Tu CV no se convirtió en verdad profesional. Vuelve al inicio y elige Construir mi evidencia para continuar manualmente.',
     stage: 'Etapa de importación',
     section: 'Sección',
     cancel: 'Cancelar',
@@ -57,6 +61,8 @@ const PROCESS_COPY = {
     tooLarge: 'Ce fichier dépasse 10 Mo.',
     network: "CV Engine n'a pas pu joindre le service d'importation. Vérifiez votre connexion et réessayez.",
     retry: 'Choisir un autre fichier',
+    manualFallback: 'Utiliser les preuves de carrière manuelles',
+    manualFallbackHint: "L'importation automatique s'est arrêtée avant que CV Engine puisse accepter les faits en toute sécurité. Le CV n'a pas été promu en vérité de carrière. Revenez à l'accueil et choisissez la saisie manuelle des preuves.",
     stage: "Étape d'importation",
     section: 'Section',
     cancel: 'Annuler',
@@ -68,6 +74,8 @@ const PROCESS_COPY = {
     tooLarge: 'Este arquivo excede 10 MB.',
     network: 'O CV Engine não conseguiu acessar o serviço de importação. Verifique sua conexão e tente novamente.',
     retry: 'Escolher outro arquivo',
+    manualFallback: 'Usar evidências profissionais manuais',
+    manualFallbackHint: 'A importação automática parou antes que o CV Engine pudesse aceitar os dados com segurança. O currículo não foi promovido a verdade profissional. Volte ao início e escolha a entrada manual de evidências.',
     stage: 'Etapa de importação',
     section: 'Seção',
     cancel: 'Cancelar',
@@ -172,6 +180,12 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
     if (file) await processFile(file);
   };
 
+  const canUseManualFallback = Boolean(
+    error &&
+    errorMeta?.stage &&
+    !['VALIDATION', 'REQUEST', 'RESPONSE'].includes(errorMeta.stage),
+  );
+
   return (
     <div className="mx-auto max-w-2xl rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
       <div className="mb-8">
@@ -243,9 +257,25 @@ export default function CVUpload({ onDataExtracted, onCancel }: Readonly<CVUploa
                     {errorMeta.section ? ` · ${processCopy.section}: ${errorMeta.section}` : ''}
                   </p>
                 )}
-                <label htmlFor="cv-upload" className="mt-3 inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-red-700 hover:underline">
-                  <RotateCcw className="h-3.5 w-3.5" /> {processCopy.retry}
-                </label>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <label htmlFor="cv-upload" className="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-red-700 hover:underline">
+                    <RotateCcw className="h-3.5 w-3.5" /> {processCopy.retry}
+                  </label>
+                  {canUseManualFallback ? (
+                    <button
+                      type="button"
+                      onClick={onCancel}
+                      className="inline-flex items-center rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-800 shadow-sm hover:bg-red-100"
+                    >
+                      {processCopy.manualFallback}
+                    </button>
+                  ) : null}
+                </div>
+                {canUseManualFallback ? (
+                  <p className="mt-3 text-xs leading-5 text-red-700">
+                    {processCopy.manualFallbackHint}
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>
