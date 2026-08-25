@@ -64,7 +64,23 @@ test('ATS-SYS-03 explicitly refuses to generalize four synthetic DOCX files into
   assert.match(docs, /may not establish arbitrary CV robustness/i);
 });
 
-test('ATS-SYS-03 is exposed as a single package command', () => {
+test('ATS-SYS-03 reference runner owns the qualified isolated runtime boundary', () => {
+  const runner = source('scripts/system-import-capacity-reference.mjs');
+  assert.match(runner, /REFERENCE-CPU-01/);
+  assert.match(runner, /COMPOSE_PROJECT = 'cv-engine-reference'/);
+  assert.match(runner, /APP_PORT = '3100'/);
+  assert.match(runner, /OLLAMA_PORT = '31434'/);
+  assert.match(runner, /REDIS_HTTP_PORT = '38079'/);
+  assert.match(runner, /docker.*compose.*down/s);
+  assert.doesNotMatch(runner, /down[^\n]*-v/);
+  assert.match(runner, /docker-compose-identified\.mjs/);
+  assert.match(runner, /waitForReady/);
+  assert.match(runner, /releaseQualifiableIdentity/);
+  assert.match(runner, /system-import-robustness-capacity\.mjs/);
+});
+
+test('ATS-SYS-03 exposes raw and isolated-reference package commands', () => {
   const packageJson = JSON.parse(source('package.json')) as { scripts?: Record<string, string> };
   assert.equal(packageJson.scripts?.['system:import-capacity'], 'node scripts/system-import-robustness-capacity.mjs');
+  assert.equal(packageJson.scripts?.['system:import-capacity:reference'], 'node scripts/system-import-capacity-reference.mjs');
 });
