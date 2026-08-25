@@ -52,13 +52,15 @@ async function main() {
     });
   }
 
+  const compactDate = new Date().toISOString().slice(0, 10).replaceAll('-', '');
   const manifest = {
     manifestVersion: MANIFEST_VERSION,
-    corpusId: `private-corpus-${new Date().toISOString().slice(0, 10)}`,
+    corpusId: `CORPUS-${compactDate}`,
     inventoryOnly: true,
     generatedAt: new Date().toISOString(),
     instructions: [
       'This inventory is intentionally not executable until every document is manually ground-truthed.',
+      'Keep corpusId in the opaque CORPUS-YYYYMMDD[-SUFFIX] form and document ids in the RW-### form; do not put names or other PII in evidence identifiers.',
       'Replace REVIEW_REQUIRED metadata and expectedOutcome for every document.',
       'For SUCCESS_TRUTH_SAFE add expectedTruth.requiredStrings and expectedTruth.forbiddenStrings; optional summary/experience/education counts are recommended.',
       'For SAFE_REFUSAL add allowedErrorCodes.',
