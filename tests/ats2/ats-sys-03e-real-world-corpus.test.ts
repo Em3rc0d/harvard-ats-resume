@@ -27,13 +27,19 @@ test('ATS-SYS-03E pins every source by sha256 and rejects source drift', () => {
   assert.match(inventory, /ats-sys-03e-manifest\.inventory\.json/);
 });
 
-test('ATS-SYS-03E receipt excludes raw PII-bearing truth and source paths', () => {
+test('ATS-SYS-03E receipt excludes raw PII-bearing truth, source paths, and named identifiers', () => {
   const harness = read('scripts/system-real-world-corpus.mjs');
+  const inventory = read('scripts/system-real-world-corpus-inventory.mjs');
 
   assert.match(harness, /rawDocumentsPersistedInEvidence: false/);
   assert.match(harness, /groundTruthStringsPersistedInEvidence: false/);
   assert.match(harness, /sourcePathsPersistedInEvidence: false/);
-  assert.match(harness, /documentIdentity: 'documentId \+ sha256 only'/);
+  assert.match(harness, /const OPAQUE_CORPUS_ID = \/\^CORPUS-/);
+  assert.match(harness, /const OPAQUE_DOCUMENT_ID = \/\^RW-/);
+  assert.match(harness, /PII are forbidden in evidence identifiers/);
+  assert.match(harness, /documentIdentity: 'opaque RW-### id \+ sha256 only'/);
+  assert.match(inventory, /corpusId: `CORPUS-\$\{compactDate\}`/);
+  assert.match(inventory, /id: `RW-\$\{String\(index \+ 1\)\.padStart\(3, '0'\)\}`/);
   assert.match(harness, /truthIssueKinds/);
   assert.doesNotMatch(harness, /expectedTruth:\s*document\.expectedTruth/);
 });
