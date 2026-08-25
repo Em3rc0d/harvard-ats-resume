@@ -141,6 +141,16 @@ test('resume upload implements actual drag and drop instead of copy-only afforda
   assert.match(upload, /event\.dataTransfer\.files/);
 });
 
+test('safe resume import refusal exposes a manual evidence continuation instead of dead-ending the product', () => {
+  const upload = readFileSync(join(process.cwd(), 'components/CVUpload.tsx'), 'utf8');
+  assert.match(upload, /manualFallback/);
+  assert.match(upload, /manualFallbackHint/);
+  assert.match(upload, /canUseManualFallback/);
+  assert.match(upload, /!\['VALIDATION', 'REQUEST', 'RESPONSE'\]\.includes\(errorMeta\.stage\)/);
+  assert.match(upload, /onClick=\{onCancel\}/);
+  assert.match(upload, /Your resume was not promoted to career truth/i);
+});
+
 test('grounding and semantic grounding failures are surfaced as actionable evidence review', () => {
   const guardrail = readFileSync(join(process.cwd(), 'components/GenerationGuardrailPanel.tsx'), 'utf8');
   assert.match(guardrail, /factsToConfirm/);
