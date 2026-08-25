@@ -26,6 +26,7 @@
     "system:import-model-capacity": "node scripts/system-import-model-capacity.mjs",
     "system:import-model-capacity:reference": "node scripts/system-import-model-capacity-reference.mjs",
     "system:real-corpus:inventory": "node scripts/system-real-world-corpus-inventory.mjs",
+    "system:real-corpus:review": "node scripts/system-real-world-corpus-review.mjs",
     "system:real-corpus": "node scripts/system-real-world-corpus.mjs",
     "system:real-corpus:reference": "node scripts/system-real-world-corpus-reference.mjs"
   },
