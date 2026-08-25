@@ -22,7 +22,9 @@
     "system:release-qualify": "node scripts/system-release-qualify.mjs",
     "system:reference-run": "node scripts/system-reference-run.mjs",
     "system:import-capacity": "node scripts/system-import-robustness-capacity.mjs",
-    "system:import-capacity:reference": "node scripts/system-import-capacity-reference.mjs"
+    "system:import-capacity:reference": "node scripts/system-import-capacity-reference.mjs",
+    "system:import-model-capacity": "node scripts/system-import-model-capacity.mjs",
+    "system:import-model-capacity:reference": "node scripts/system-import-model-capacity-reference.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
