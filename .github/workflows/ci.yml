@@ -11,6 +11,7 @@ on:
       - main
       - develop
       - agent/ats-sys-01-system-characterization
+      - agent/ats-sys-02-real-runtime-evidence
   workflow_dispatch:
 
 permissions:
