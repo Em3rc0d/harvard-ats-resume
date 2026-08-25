@@ -9,6 +9,8 @@ const BASE_URL = (process.env.CV_ENGINE_E2E_BASE_URL || 'http://localhost:3000')
 const MANIFEST_VERSION = 'ats-sys-03e-real-world-corpus-manifest-v0.1';
 const RECEIPT_VERSION = 'ats-sys-03e-real-world-corpus-v0.1';
 const MAX_DOCUMENTS_PER_RUN = 40;
+const OPAQUE_CORPUS_ID = /^CORPUS-\d{8}(?:-[A-Z0-9]{1,8})?$/;
+const OPAQUE_DOCUMENT_ID = /^RW-\d{3,6}$/;
 const SAFE_ERROR_CODES = new Set([
   'RESUME_IMPORT_TIMEOUT',
   'RESUME_EXTRACTION_INCOMPLETE',
@@ -65,7 +67,10 @@ function validateManifest(manifest) {
   if (manifest?.manifestVersion !== MANIFEST_VERSION) {
     throw new Error(`Expected manifestVersion ${MANIFEST_VERSION}.`);
   }
-  assertString(manifest.corpusId, 'corpusId');
+  const corpusId = assertString(manifest.corpusId, 'corpusId');
+  if (!OPAQUE_CORPUS_ID.test(corpusId)) {
+    throw new Error('corpusId must be an opaque identifier like CORPUS-20260825 or CORPUS-20260825-A; names and other PII are forbidden in evidence identifiers.');
+  }
   if (!Array.isArray(manifest.documents) || manifest.documents.length === 0) {
     throw new Error('ATS-SYS-03E manifest must contain at least one document.');
   }
@@ -76,6 +81,9 @@ function validateManifest(manifest) {
   for (const [index, document] of manifest.documents.entries()) {
     const prefix = `documents[${index}]`;
     const id = assertString(document.id, `${prefix}.id`);
+    if (!OPAQUE_DOCUMENT_ID.test(id)) {
+      throw new Error(`${prefix}.id must use the privacy-safe RW-### form; names and other PII are forbidden in evidence identifiers.`);
+    }
     if (ids.has(id)) throw new Error(`Duplicate corpus document id: ${id}.`);
     ids.add(id);
     assertString(document.file, `${prefix}.file`);
@@ -365,7 +373,7 @@ async function main() {
       rawDocumentsPersistedInEvidence: false,
       groundTruthStringsPersistedInEvidence: false,
       sourcePathsPersistedInEvidence: false,
-      documentIdentity: 'documentId + sha256 only',
+      documentIdentity: 'opaque RW-### id + sha256 only',
     },
     coverage,
     documents: requests,
