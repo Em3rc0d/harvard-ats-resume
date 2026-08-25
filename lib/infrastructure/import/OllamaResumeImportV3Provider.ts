@@ -18,7 +18,7 @@ import {
 
 export { ResumeImportTimeoutError };
 
-const IMPORTER_VERSION = 'native-text-ollama-v3.4-structure-preserving-segmentation';
+const IMPORTER_VERSION = 'native-text-ollama-v3.5-composite-record-reconstruction';
 export const DEFAULT_OLLAMA_IMPORT_V3_MODEL = 'qwen3:1.7b' as const;
 export const IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS = 1_024;
 const MAX_SECTION_TIMEOUT_MS = 90_000;
@@ -95,6 +95,19 @@ const SECTION_HEADINGS: Readonly<Record<ResumeSection, readonly string[]>> = {
   ],
   languages: ['LANGUAGES', 'IDIOMAS'],
 };
+
+const COMPOSITE_SECTION_HEADINGS: readonly {
+  readonly headings: readonly string[];
+  readonly sections: readonly ResumeSection[];
+}[] = [
+  {
+    headings: [
+      'EDUCATION & CERTIFICATES',
+      'EDUCATION AND CERTIFICATES',
+    ],
+    sections: ['education', 'certifications'],
+  },
+];
 
 const personalInfoSchema = z.object({
   fullName: z.string(),
@@ -470,46 +483,78 @@ export function recoverSourceExactPreambleIdentity(
   return recoveredName ? { ...current, fullName: recoveredName } : current;
 }
 
-function sectionForHeading(line: string): ResumeSection | undefined {
+function sectionsForHeading(line: string): readonly ResumeSection[] {
   const normalized = normalizeHeading(line);
-  if (!normalized) return undefined;
-  return (Object.keys(SECTION_HEADINGS) as ResumeSection[]).find((section) =>
-    SECTION_HEADINGS[section].some((heading) => normalizeHeading(heading) === normalized));
+  if (!normalized) return [];
+
+  const composite = COMPOSITE_SECTION_HEADINGS.find((entry) =>
+    entry.headings.some((heading) => normalizeHeading(heading) === normalized));
+
+  if (composite) return composite.sections;
+
+  const section = (Object.keys(SECTION_HEADINGS) as ResumeSection[]).find(
+    (candidate) =>
+      SECTION_HEADINGS[candidate].some(
+        (heading) => normalizeHeading(heading) === normalized,
+      ),
+  );
+
+  return section ? [section] : [];
 }
 
 export function splitResumeIntoSections(document: ExtractedResumeTextDocument): SectionedResumeDocument {
   const preamble: string[] = [];
   const segments: ResumeSectionSegment[] = [];
-  let current: { section: ResumeSection; heading: string; lines: string[] } | undefined;
+  let current: {
+    sections: readonly ResumeSection[];
+    heading: string;
+    lines: string[];
+  } | undefined;
 
   const flush = () => {
     if (!current) return;
-    segments.push({
-      section: current.section,
-      heading: current.heading,
-      body: current.lines.join('\n').trim(),
-    });
+
+    for (const section of current.sections) {
+      segments.push({
+        section,
+        heading: current.heading,
+        body: current.lines.join('\n').trim(),
+      });
+    }
   };
 
   for (const rawLine of document.text.split(/\n+/)) {
     const line = rawLine.trim();
     if (!line) continue;
-    const section = sectionForHeading(line);
-    if (section) {
+
+    const sections = sectionsForHeading(line);
+
+    if (sections.length > 0) {
       flush();
-      current = { section, heading: line, lines: [] };
+      current = {
+        sections,
+        heading: line,
+        lines: [],
+      };
       continue;
     }
+
     if (current) current.lines.push(line);
     else preamble.push(line);
   }
+
   flush();
 
   const grouped = new Map<ResumeSection, string>();
+
   for (const segment of segments) {
     const existing = grouped.get(segment.section);
     const source = `${segment.heading}\n${segment.body}`.trim();
-    grouped.set(segment.section, existing ? `${existing}\n\n${source}` : source);
+
+    grouped.set(
+      segment.section,
+      existing ? `${existing}\n\n${source}` : source,
+    );
   }
 
   return {
@@ -551,6 +596,157 @@ function sectionBody(source: string): string {
 
 function meaningful(values: readonly string[]): boolean {
   return values.some((value) => clean(value).length > 0);
+}
+
+function sourceScalarEquals(left: string, right: string): boolean {
+  return clean(left)
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US') === clean(right)
+      .normalize('NFKC')
+      .toLocaleLowerCase('en-US');
+}
+
+function identityParts(line: string): string[] {
+  return line
+    .split(/\s+[—–]\s+/)
+    .map(clean)
+    .filter(Boolean);
+}
+
+function stripExactTrailingSourceScalar(
+  line: string,
+  suffix: string,
+): string | undefined {
+  const source = line.trimEnd();
+  const exactSuffix = clean(suffix);
+
+  if (!source || !exactSuffix) return undefined;
+
+  const lowerSource = source.toLocaleLowerCase('en-US');
+  const lowerSuffix = exactSuffix.toLocaleLowerCase('en-US');
+
+  if (!lowerSource.endsWith(lowerSuffix)) return undefined;
+
+  const prefix = clean(
+    source.slice(0, source.length - exactSuffix.length),
+  );
+
+  return prefix || undefined;
+}
+
+function sourceExactRoleFromIdentityLine(
+  line: string,
+  company: string,
+  personalLocation: string,
+): string | undefined {
+  const parts = identityParts(line);
+
+  if (
+    parts.length < 2
+    || !sourceScalarEquals(parts[0], company)
+  ) {
+    return undefined;
+  }
+
+  if (parts.length === 2) {
+    const candidate = parts[1];
+
+    if (
+      !DATE_LIKE_TOKEN.test(candidate)
+      && !isSourceExactLocationSegment(candidate)
+      && !sourceScalarEquals(candidate, personalLocation)
+    ) {
+      return candidate;
+    }
+
+    return undefined;
+  }
+
+  const candidate = parts[parts.length - 1];
+
+  if (
+    !candidate
+    || DATE_LIKE_TOKEN.test(candidate)
+    || isSourceExactLocationSegment(candidate)
+    || sourceScalarEquals(candidate, personalLocation)
+  ) {
+    return undefined;
+  }
+
+  return candidate;
+}
+
+/**
+ * Repairs only one narrow, structurally explicit experience identity.
+ *
+ * No semantic title inference is performed:
+ * - company must already be present in the proposal,
+ * - the company must anchor an em/en-dash identity line,
+ * - the recovered role is copied verbatim from the source, or
+ * - it is the exact prefix before the already extracted location.
+ *
+ * The result still passes through reconcileCandidateToSource afterwards.
+ */
+export function recoverSourceExactSingleExperienceRole(
+  extraction: z.infer<typeof experienceSchema>,
+  source: string,
+  personalLocation: string,
+): z.infer<typeof experienceSchema> {
+  if (extraction.items.length !== 1) return extraction;
+
+  const item = extraction.items[0];
+  const company = clean(item.company);
+
+  if (!company) return extraction;
+
+  const lines = sourceLines(sectionBody(source));
+
+  const companyLineIndex = lines.findIndex((line) => {
+    const parts = identityParts(line);
+    return (
+      parts.length >= 2
+      && sourceScalarEquals(parts[0], company)
+    );
+  });
+
+  if (companyLineIndex < 0) return extraction;
+
+  const companyLine = lines[companyLineIndex];
+
+  let role = sourceExactRoleFromIdentityLine(
+    companyLine,
+    company,
+    personalLocation,
+  );
+
+  if (!role && personalLocation) {
+    const followingLine = lines[companyLineIndex + 1];
+
+    if (followingLine) {
+      const beforeLocation = stripExactTrailingSourceScalar(
+        followingLine,
+        personalLocation,
+      );
+
+      if (
+        beforeLocation
+        && !DATE_LIKE_TOKEN.test(beforeLocation)
+      ) {
+        role = beforeLocation;
+      }
+    }
+  }
+
+  if (!role || sourceScalarEquals(role, item.role)) {
+    return extraction;
+  }
+
+  return {
+    items: [{
+      ...item,
+      role,
+    }],
+  };
 }
 
 export function extractSourceExactExperience(source: string): z.infer<typeof experienceSchema> | undefined {
@@ -735,7 +931,7 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
   const sourceExactExperience = experienceSource
     ? extractSourceExactExperience(experienceSource)
     : undefined;
-  const experience = experienceSource
+  const experienceProposal = experienceSource
     ? (sourceExactExperience ?? await generateSection({
         client,
         model,
@@ -744,7 +940,14 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
         schema: experienceJsonSchema,
         parser: experienceSchema,
         maxOutputTokens: IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS,
-      })).items
+      }))
+    : { items: [] };
+  const experience = experienceSource
+    ? recoverSourceExactSingleExperienceRole(
+        experienceProposal,
+        experienceSource,
+        personalInfo.location,
+      ).items
     : [];
 
   const educationSource = sectioned.sections.get('education');

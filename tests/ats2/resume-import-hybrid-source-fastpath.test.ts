@@ -239,5 +239,5 @@ test('hybrid importer keeps bounded AI for ambiguous skills so P10 local-AI faul
   assert.match(source, /sourceExactExperience \? 'SOURCE_EXACT' : 'AI'/);
   assert.match(source, /sourceExactProjects \? 'SOURCE_EXACT' : 'AI'/);
   assert.match(source, /sourceExactPersonalInfo \? 'SOURCE_EXACT' : 'AI'/);
-  assert.match(source, /native-text-ollama-v3\.4-structure-preserving-segmentation/);
+  assert.match(source, /native-text-ollama-v3\.5-composite-record-reconstruction/);
 });

@@ -6,6 +6,7 @@ on:
       - agent/ats-sys-03-import-robustness-capacity
       - agent/ats-sys-03e-real-world-corpus
       - agent/ats-sys-03e-incident-01-segmentation
+      - agent/ats-sys-03e-incident-02-pdf-record-reconstruction
   workflow_dispatch:
 
 permissions:
