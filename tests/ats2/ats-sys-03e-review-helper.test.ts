@@ -35,7 +35,8 @@ test('ATS-SYS-03E review helper mirrors the product mechanical text extraction p
   for (const expected of [
     /pdfjs-dist\/legacy\/build\/pdf\.mjs/,
     /getTextContent\(\)/,
-    /\.join\(' '\)/,
+    /hasEOL/,
+    /join\('\\n'\)/,
     /mammoth\.extractRawText/,
   ]) {
     assert.match(review, expected);

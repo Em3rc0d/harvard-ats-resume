@@ -627,6 +627,31 @@ export function reconcileCandidateToSource(
   };
 }
 
+export function assemblePdfTextItems(items: readonly unknown[]): string {
+  const lines: string[] = [];
+  let current = '';
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object' || !('str' in item)) continue;
+
+    const textItem = item as { str?: unknown; hasEOL?: unknown };
+    const token = typeof textItem.str === 'string'
+      ? textItem.str.replace(/\s+/g, ' ').trim()
+      : '';
+
+    if (token) current = current ? `${current} ${token}` : token;
+
+    if (textItem.hasEOL === true) {
+      if (current) lines.push(current.trim());
+      current = '';
+    }
+  }
+
+  if (current) lines.push(current.trim());
+
+  return lines.filter(Boolean).join('\n').trim();
+}
+
 async function extractPdfText(file: ResumeImportFile): Promise<ExtractedResumeTextDocument> {
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const loadingTask = getDocument({ data: new Uint8Array(file.bytes) });
@@ -638,12 +663,7 @@ async function extractPdfText(file: ResumeImportFile): Promise<ExtractedResumeTe
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
-      const text = content.items
-        .map((item) => ('str' in item ? item.str : ''))
-        .filter(Boolean)
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const text = assemblePdfTextItems(content.items);
       pages.push({ page: pageNumber, text });
       page.cleanup();
     }

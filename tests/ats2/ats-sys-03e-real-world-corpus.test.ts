@@ -51,7 +51,9 @@ test('ATS-SYS-03E distinguishes truth corruption from safe robustness failure', 
   assert.match(harness, /SAFE_REFUSAL_EXPECTED/);
   assert.match(harness, /ROBUSTNESS_FAILURE_SAFE/);
   assert.match(harness, /ROBUSTNESS_FAILURE_UNEXPECTED_ACCEPTANCE/);
-  assert.match(harness, /UNSAFE_SUCCESS/);
+  assert.match(harness, /acceptedStructuralTruthMismatches/);
+  assert.match(harness, /acceptedIncompleteTruth/);
+  assert.match(harness, /unsupportedTruthAccepted/);
   assert.match(harness, /UNSAFE_FAILURE_WITH_ACCEPTED_DATA/);
   assert.match(harness, /unsafeAcceptedTruth/);
   assert.match(harness, /expectedPasses === requests\.length/);

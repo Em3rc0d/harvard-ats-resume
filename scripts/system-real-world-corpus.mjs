@@ -4,6 +4,10 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { captureCanonicalRuntimeIdentity } from './system-runtime-identity.mjs';
+import {
+  classifyAcceptedTruthIssues,
+  isUnsafeAcceptedTruthClassification,
+} from './system-real-world-corpus-classification.mjs';
 
 const BASE_URL = (process.env.CV_ENGINE_E2E_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const MANIFEST_VERSION = 'ats-sys-03e-real-world-corpus-manifest-v0.1';
@@ -227,7 +231,7 @@ async function importDocument(document, corpusRoot) {
       sourceSha256: document.sha256,
       expectedOutcome: document.expectedOutcome,
       latencyMs,
-      classification: truthIssueKinds.length === 0 ? 'SUCCESS_TRUTH_SAFE' : 'UNSAFE_SUCCESS',
+      classification: classifyAcceptedTruthIssues(truthIssueKinds),
       httpStatus: response.status,
       errorCode: null,
       section: null,
@@ -283,7 +287,11 @@ function summarize(requests) {
     expectedSafeRefusals: counts.SAFE_REFUSAL_EXPECTED ?? 0,
     robustnessFailuresSafe: (counts.ROBUSTNESS_FAILURE_SAFE ?? 0) + (counts.ROBUSTNESS_FAILURE_TRANSPORT ?? 0) + (counts.ROBUSTNESS_FAILURE_OTHER ?? 0),
     unexpectedAcceptedUnsupportedDocuments: counts.ROBUSTNESS_FAILURE_UNEXPECTED_ACCEPTANCE ?? 0,
-    unsafeAcceptedTruth: (counts.UNSAFE_SUCCESS ?? 0) + (counts.UNSAFE_FAILURE_WITH_ACCEPTED_DATA ?? 0),
+    acceptedStructuralTruthMismatches: counts.STRUCTURAL_TRUTH_MISMATCH ?? 0,
+    acceptedIncompleteTruth: counts.ROBUSTNESS_FAILURE_INCOMPLETE_ACCEPTANCE ?? 0,
+    unsupportedTruthAccepted: counts.UNSUPPORTED_TRUTH_ACCEPTED ?? 0,
+    unsafeAcceptedTruth: requests.filter((request) =>
+      isUnsafeAcceptedTruthClassification(request.classification)).length,
     rateLimited: counts.CONTROL_PLANE_RATE_LIMIT ?? 0,
     latencyMs: {
       p50: percentile(latencies, 50),

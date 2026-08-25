@@ -31,12 +31,27 @@ async function extractPdfText(bytes) {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
-      const text = content.items
-        .map((item) => ('str' in item ? item.str : ''))
-        .filter(Boolean)
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const lines = [];
+      let current = '';
+
+      for (const item of content.items) {
+        if (!item || typeof item !== 'object' || !('str' in item)) continue;
+
+        const token = typeof item.str === 'string'
+          ? item.str.replace(/\s+/g, ' ').trim()
+          : '';
+
+        if (token) current = current ? `${current} ${token}` : token;
+
+        if (item.hasEOL === true) {
+          if (current) lines.push(current.trim());
+          current = '';
+        }
+      }
+
+      if (current) lines.push(current.trim());
+
+      const text = lines.filter(Boolean).join('\n').trim();
       pages.push({ page: pageNumber, text });
       page.cleanup();
     }
