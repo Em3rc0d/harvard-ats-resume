@@ -18,7 +18,7 @@ import {
 
 export { ResumeImportTimeoutError };
 
-const IMPORTER_VERSION = 'native-text-ollama-v3.5-composite-record-reconstruction';
+const IMPORTER_VERSION = 'native-text-ollama-v3.6-bounded-multirecord-experience';
 export const DEFAULT_OLLAMA_IMPORT_V3_MODEL = 'qwen3:1.7b' as const;
 export const IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS = 1_024;
 const MAX_SECTION_TIMEOUT_MS = 90_000;
@@ -351,6 +351,7 @@ const TECHNICAL_SKILL_HEADINGS = new Set([
 
 const DATE_LIKE_TOKEN = /\d{4}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|ene|abr|ago|dic|present|current|actualidad|presente/i;
 const TECHNOLOGY_LINE = /^(?:Technologies|Technology|Tecnologías|Tecnologias|Tecnología|Tecnologia)\s*:\s*(.+)$/iu;
+const MAX_BOUNDED_EXPERIENCE_SEGMENTS = 12;
 
 function sourceExactNameCandidate(value: string): string | undefined {
   const candidate = clean(value);
@@ -611,6 +612,81 @@ function identityParts(line: string): string[] {
     .split(/\s+[—–]\s+/)
     .map(clean)
     .filter(Boolean);
+}
+
+function isBoundedExperienceAnchor(line: string): boolean {
+  const parts = identityParts(line);
+
+  if (parts.length < 2) return false;
+
+  const identityPrefix = parts[0];
+
+  if (!/\p{L}/u.test(identityPrefix)) return false;
+
+  // A bare "2021 – 2023" line is a date range, not a record anchor.
+  if (DATE_LIKE_TOKEN.test(identityPrefix)) return false;
+
+  return DATE_LIKE_TOKEN.test(line);
+}
+
+/**
+ * Decomposes only structurally explicit multi-record experience sections.
+ *
+ * An anchor identifies a bounded source region, NOT necessarily one record.
+ * Therefore one segment may legitimately produce multiple source-backed
+ * experience records.
+ *
+ * Every original body line is retained exactly once and source order is
+ * preserved. Excessive anchor counts decline decomposition instead of
+ * creating unbounded model work.
+ */
+export function splitSourceExactExperienceSegments(
+  source: string,
+): string[] {
+  const lines = sourceLines(source);
+
+  if (lines.length < 3) return [source.trim()];
+
+  const heading = lines[0];
+  const body = lines.slice(1);
+
+  const anchors = body
+    .map((line, index) => ({
+      index,
+      anchor: isBoundedExperienceAnchor(line),
+    }))
+    .filter((entry) => entry.anchor)
+    .map((entry) => entry.index);
+
+  if (
+    anchors.length < 2
+    || anchors.length > MAX_BOUNDED_EXPERIENCE_SEGMENTS
+  ) {
+    return [source.trim()];
+  }
+
+  const segments: string[] = [];
+
+  for (let i = 0; i < anchors.length; i += 1) {
+    // Preserve any source material preceding the first strong anchor.
+    const start = i === 0 ? 0 : anchors[i];
+    const end =
+      i + 1 < anchors.length
+        ? anchors[i + 1]
+        : body.length;
+
+    const segmentBody = body.slice(start, end);
+
+    if (segmentBody.length === 0) continue;
+
+    segments.push(
+      [heading, ...segmentBody].join('\n').trim(),
+    );
+  }
+
+  return segments.length > 1
+    ? segments
+    : [source.trim()];
 }
 
 function stripExactTrailingSourceScalar(
@@ -931,8 +1007,54 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
   const sourceExactExperience = experienceSource
     ? extractSourceExactExperience(experienceSource)
     : undefined;
-  const experienceProposal = experienceSource
-    ? (sourceExactExperience ?? await generateSection({
+  const experienceSegments = experienceSource
+    ? splitSourceExactExperienceSegments(experienceSource)
+    : [];
+
+  let experience: z.infer<typeof experienceSchema>['items'] = [];
+
+  if (experienceSource) {
+    if (sourceExactExperience) {
+      experience = sourceExactExperience.items;
+    } else if (experienceSegments.length > 1) {
+      const boundedItems: z.infer<typeof experienceSchema>['items'] = [];
+
+      for (
+        let index = 0;
+        index < experienceSegments.length;
+        index += 1
+      ) {
+        const segmentSource = experienceSegments[index];
+
+        console.info('Resume import v3 bounded experience segment:', {
+          model,
+          segment: index + 1,
+          segments: experienceSegments.length,
+        });
+
+        const segmentProposal = await generateSection({
+          client,
+          model,
+          label: 'work experience records',
+          source: segmentSource,
+          schema: experienceJsonSchema,
+          parser: experienceSchema,
+          maxOutputTokens: IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS,
+        });
+
+        const recovered =
+          recoverSourceExactSingleExperienceRole(
+            segmentProposal,
+            segmentSource,
+            personalInfo.location,
+          );
+
+        boundedItems.push(...recovered.items);
+      }
+
+      experience = boundedItems;
+    } else {
+      const experienceProposal = await generateSection({
         client,
         model,
         label: 'work experience records',
@@ -940,15 +1062,15 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
         schema: experienceJsonSchema,
         parser: experienceSchema,
         maxOutputTokens: IMPORT_V3_MAX_SECTION_OUTPUT_TOKENS,
-      }))
-    : { items: [] };
-  const experience = experienceSource
-    ? recoverSourceExactSingleExperienceRole(
+      });
+
+      experience = recoverSourceExactSingleExperienceRole(
         experienceProposal,
         experienceSource,
         personalInfo.location,
-      ).items
-    : [];
+      ).items;
+    }
+  }
 
   const educationSource = sectioned.sections.get('education');
   const sourceExactEducation = educationSource
@@ -1030,7 +1152,15 @@ async function extractSectionedCandidate(document: ExtractedResumeTextDocument):
   console.info('Resume import v3 extraction paths:', {
     model,
     personalInfo: sourceExactPersonalInfo ? 'SOURCE_EXACT' : 'AI',
-    experience: experienceSource ? (sourceExactExperience ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
+    experience: experienceSource
+      ? (
+          sourceExactExperience
+            ? 'SOURCE_EXACT'
+            : experienceSegments.length > 1
+              ? 'AI_BOUNDED_SEGMENTS'
+              : 'AI'
+        )
+      : 'ABSENT',
     education: educationSource ? (sourceExactEducation ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
     skills: skillsSource ? (sourceExactSkills ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',
     projects: projectsSource ? (sourceExactProjects ? 'SOURCE_EXACT' : 'AI') : 'ABSENT',

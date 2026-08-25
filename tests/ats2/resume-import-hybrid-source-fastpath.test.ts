@@ -236,8 +236,9 @@ test('import API persists section-specific timeout evidence without changing the
 test('hybrid importer keeps bounded AI for ambiguous skills so P10 local-AI fault proof remains meaningful', () => {
   const source = readFileSync('lib/infrastructure/import/OllamaResumeImportV3Provider.ts', 'utf8');
   assert.match(source, /label: 'skills'/);
-  assert.match(source, /sourceExactExperience \? 'SOURCE_EXACT' : 'AI'/);
+  assert.match(source, /AI_BOUNDED_SEGMENTS/);
+  assert.match(source, /splitSourceExactExperienceSegments/);
   assert.match(source, /sourceExactProjects \? 'SOURCE_EXACT' : 'AI'/);
   assert.match(source, /sourceExactPersonalInfo \? 'SOURCE_EXACT' : 'AI'/);
-  assert.match(source, /native-text-ollama-v3\.5-composite-record-reconstruction/);
+  assert.match(source, /native-text-ollama-v3\.6-bounded-multirecord-experience/);
 });

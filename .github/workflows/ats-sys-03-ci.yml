@@ -7,6 +7,7 @@ on:
       - agent/ats-sys-03e-real-world-corpus
       - agent/ats-sys-03e-incident-01-segmentation
       - agent/ats-sys-03e-incident-02-pdf-record-reconstruction
+      - agent/ats-sys-03e-incident-03-multirecord-experience-decomposition
   workflow_dispatch:
 
 permissions:
