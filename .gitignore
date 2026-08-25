@@ -39,7 +39,10 @@ certificates
 .scannerwork
 audit/
 
-
+# ATS-SYS-03E safety: real CV corpora and PII-bearing truth manifests belong outside Git.
+/private-corpus/
+/real-corpus-private/
+/.real-corpus/
 
 run-pipeline.bat
 sonar-pipeline.ps1
