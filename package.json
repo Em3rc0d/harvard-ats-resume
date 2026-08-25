@@ -20,7 +20,8 @@
     "system:release-evaluate": "node scripts/system-release-evaluate.mjs",
     "system:interpret-reference": "node scripts/system-interpret-reference.mjs",
     "system:release-qualify": "node scripts/system-release-qualify.mjs",
-    "system:reference-run": "node scripts/system-reference-run.mjs"
+    "system:reference-run": "node scripts/system-reference-run.mjs",
+    "system:import-capacity": "node scripts/system-import-robustness-capacity.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
