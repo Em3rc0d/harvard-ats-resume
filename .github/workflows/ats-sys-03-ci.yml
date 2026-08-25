@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - agent/ats-sys-03-import-robustness-capacity
+      - agent/ats-sys-03e-real-world-corpus
   workflow_dispatch:
 
 permissions:
