@@ -1,63 +1,130 @@
-# CV Engine vNext — Authoritative Additions
+# CV Engine vNext — Authoritative Rebuild Contracts
 
-This directory contains architecture/product decisions that supersede conflicting historical implementation assumptions for the zero-based rebuild.
+This directory contains the authoritative product, AI, security and production-foundation contracts for the zero-based rebuild.
 
-## Current authoritative additions
+## Status
+
+```text
+PRODUCT / TRUTH ARCHITECTURE     CLOSED
+AI / BYOK ARCHITECTURE           CLOSED
+PF0 PRODUCTION FOUNDATION        CLOSED
+ZERO-BASED IMPLEMENTATION        AUTHORIZED
+PRODUCTION READY CLAIM           BLOCKED UNTIL IMPLEMENTATION + B8 EVIDENCE
+```
+
+The documentation phase has reached its stop condition. From this point onward, broad conceptual redesign is prohibited unless executable evidence demonstrates a genuinely missing boundary.
+
+## Authority set
 
 1. `00-FIRST-RUN-TRUST-AND-AI-ACCESS.md`
-   - first-run disclaimer/consent boundary;
-   - platform Gemini access vs BYOK vs no-cloud mode;
-   - session/memory-only BYOK contract;
-   - first-run acceptance criteria and quarries.
+   - disclaimer/consent boundary;
+   - platform Gemini vs BYOK vs no-cloud;
+   - AI never gates the trusted deterministic core.
 
 2. `01-AI-PROVIDER-ROUTING.md`
-   - Gemini is the primary remote AI provider;
-   - capability-specific Gemini model cascade;
-   - Ollama is the fallback provider;
-   - provider success never bypasses truth validation;
-   - cost/retry/deadline/provenance rules.
+   - provider-agnostic gateway;
+   - Gemini primary;
+   - Ollama fallback when available/qualified;
+   - same validation contract across providers.
 
 3. `02-BYOK-SECRET-HANDLING.md`
-   - detailed BYOK credential lifecycle;
+   - transient request/session secret;
    - no intentional persistence;
-   - HTTPS requirement outside localhost;
-   - logging/telemetry/storage prohibitions;
-   - canary/security acceptance tests.
+   - HTTPS outside localhost;
+   - canary leakage tests.
 
 4. `03-GEMINI-MODEL-MATRIX.md`
-   - incorporates the user-provided 2026-08-26 free-tier quota snapshot;
-   - high-volume default: `gemini-3.5-flash-lite`;
-   - quality escalation: `gemini-3.7-flash`;
-   - reserve routes: `gemini-3.6-flash` and `gemini-3.1-flash-lite`;
-   - capability-specific routing, quota/cost rules, and B6 benchmark requirements;
-   - observed provider quota is not treated as a production SLA.
+   - initial model routing baseline;
+   - high-volume default: Gemini 3.5 Flash Lite;
+   - quality escalation: Gemini 3.7 Flash;
+   - reserves: Gemini 3.6 Flash / Gemini 3.1 Flash Lite;
+   - free-tier snapshot is not a production SLA.
 
 5. `04-BUILD-READINESS-AUDIT.md`
-   - formal zero-based rebuild GO/NO-GO review;
-   - records that product/truth/AI/test architecture is strong;
-   - defines `PF0 — Production Foundation Closure` before B1 durability;
-   - identifies the remaining identity, persistence, runtime-topology, quota/cost, and security/observability contracts.
+   - **PF0 CLOSED — IMPLEMENTATION AUTHORIZED**;
+   - final GO/NO-GO boundary for construction.
 
-## PF0 required documents
+6. `05-IDENTITY-AND-SESSION-CONTRACT.md`
+   - Supabase Auth;
+   - authenticated durable Career Vaults;
+   - single-user B2C ownership;
+   - application authorization + PostgreSQL RLS;
+   - account export/deletion.
 
-Before B1 durable Career Evidence is committed, the documentation set must add/freeze:
+7. `06-DATA-PERSISTENCE-AND-LIFECYCLE.md`
+   - Supabase PostgreSQL as durable authority;
+   - revisioned Career Evidence;
+   - immutable historical snapshots/ResumeVersions;
+   - ephemeral private source-file processing;
+   - Redis is operational, not truth authority.
+
+8. `07-RUNTIME-TOPOLOGY-AND-DEPLOYMENT-CONTRACT.md`
+   - Next.js 16 / Vercel commercial runtime;
+   - Supabase Auth/Postgres/temp Storage;
+   - Gemini primary;
+   - Ollama local/remote fallback when qualified;
+   - deterministic/manual degradation when unavailable.
+
+9. `08-AI-QUOTA-COST-AND-ABUSE-POLICY.md`
+   - capability-owned attempt budgets;
+   - daily/platform cost guards;
+   - quality escalation scarcity;
+   - PostgreSQL usage accounting;
+   - BYOK remains bounded.
+
+10. `09-SECURITY-OBSERVABILITY-PRIVACY-BASELINE.md`
+    - data classification;
+    - metadata-first observability;
+    - CSP/security headers;
+    - secret redaction/canary;
+    - private upload boundary;
+    - processor inventory/incident baseline.
+
+11. `10-ULTRAPREMIUM-UI-MOTION-QUALITY-BAR.md`
+    - $45K visual/product quality bar;
+    - $22K motion/fluidity bar;
+    - applies after functionality/UX/accessibility/responsiveness are correct.
+
+## Governing architecture
 
 ```text
-05-IDENTITY-AND-SESSION-CONTRACT.md
-06-DATA-PERSISTENCE-AND-LIFECYCLE.md
-07-RUNTIME-TOPOLOGY-AND-DEPLOYMENT.md
-08-AI-QUOTA-COST-ABUSE-POLICY.md
-09-SECURITY-OBSERVABILITY-PRIVACY.md
+Career Evidence = candidate authority
+Job Snapshot    = market truth
+Career Target   = intent
+Assessment      = derived analysis
+ResumeVersion   = deterministic projection
+AI              = bounded assistant
 ```
-
-B0 empty repository/tooling scaffolding may begin while PF0 is being closed. Feature code must not silently decide these production contracts.
-
-## Governing rule
 
 ```text
-Provider routing improves availability.
-Truth contracts decide acceptance.
-Production foundation decides ownership, durability, security and deployability.
+PostgreSQL = durable authority
+Gemini     = primary remote AI
+Ollama     = resilience fallback when available
+Redis      = optional operational accelerator
 ```
 
-Gemini, Ollama, or any future provider may propose output. Candidate truth, market truth, provenance, durable state, and trusted ResumeVersion rules remain application-owned.
+## Build order
+
+```text
+B0    empty implementation / typed contracts / CI
+B0.5  first-run trust + identity + AI access
+B1    Career Evidence + durable ownership
+B2    Career Target + Job truth
+B3    Assessment
+B4    deterministic ResumeVersion + export
+B5    import convenience
+B6    AI gateway implementation + qualification
+B7    Opportunity Space / market extension
+B8    production evidence / release qualification
+```
+
+## New working rule
+
+```text
+DESIGN → CLOSED
+BUILD  → NOW
+```
+
+Allowed documentation from here is implementation evidence: ADRs, migrations, quarries, benchmark receipts, security evidence and release records.
+
+Provider routing improves availability. Truth contracts decide acceptance. Production foundation decides ownership, durability, security and deployability.
