@@ -47,10 +47,13 @@ Primary material:
 - `docs/market-v0.1/MARKET-03-CAREER-TARGET.md`
 - `docs/market-v0.1/MARKET-04-OPPORTUNITY-SPACE.md`
 - `docs/release/RELEASE_SURFACE_AUDIT_v1.md`
+- `docs/vnext/00-FIRST-RUN-TRUST-AND-AI-ACCESS.md`
 
 Purpose:
 
 - user-facing boundaries;
+- first-run disclaimer/consent;
+- AI access choice;
 - Career Evidence review;
 - Career Target;
 - specific-job vs general-resume flows;
@@ -63,6 +66,9 @@ Purpose:
 Primary authority:
 
 - `REBUILD-CONTRACT.md`
+- `docs/vnext/README.md`
+- `docs/vnext/01-AI-PROVIDER-ROUTING.md`
+- `docs/vnext/02-BYOK-SECRET-HANDLING.md`
 - `docs/ats-v2/baseline/CURRENT_PRODUCT_CONTRACT.md`
 
 Supporting architecture:
@@ -92,8 +98,31 @@ Candidate truth != Job truth
 Candidate truth != Career intent
 Derived assessment != truth
 AI proposal != truth
+Provider success != validation success
 ResumeVersion != Career Evidence
+API key != durable product state
 ```
+
+New vNext AI architecture:
+
+```text
+First-run consent
+   ↓
+AI access mode
+   ├─ CV Engine Gemini key
+   ├─ BYOK Gemini key
+   └─ no-cloud mode
+   ↓
+AI Gateway
+   ↓
+Gemini model cascade (primary provider)
+   ↓ recoverable failure
+Ollama (fallback provider)
+   ↓
+application-owned validation
+```
+
+Exact Gemini model routing remains pending until the user provides the model list and the models are benchmarked per capability.
 
 ## 03 — Historical implementation plan / design decisions
 
@@ -115,20 +144,25 @@ Primary authority:
 Build sequence:
 
 ```text
-B0 Repository + typed contracts
-B1 Career Evidence core + durability
-B2 Career Target + Job truth
-B3 Evidence-backed Assessment
-B4 Deterministic ResumeVersion + provenance + export
-B5 Resume import convenience + reconciliation + fallback
-B6 Optional bounded AI assistance
-B7 Opportunity Space / market extension
-B8 Release hardening
+B0   Repository + typed contracts
+B0.5 First-run trust + AI access foundation
+B1   Career Evidence core + durability
+B2   Career Target + Job truth
+B3   Evidence-backed Assessment
+B4   Deterministic ResumeVersion + provenance + export
+B5   Resume import convenience + reconciliation + fallback
+B6   Gemini-primary / Ollama-fallback AI assistance runtime
+B7   Opportunity Space / market extension
+B8   Release hardening
 ```
 
-Critical correction from the first implementation:
+Critical corrections from the first implementation:
 
 > Resume import is not allowed to block the core product. Manual Career Evidence and deterministic trusted generation must work before importer sophistication is added.
+
+> AI provider routing is an availability/cost layer, not a truth layer. Gemini or Ollama success cannot bypass application-owned validation.
+
+> BYOK is transient secret material, never Career Vault/application state.
 
 ## 05 — Test architecture
 
@@ -142,6 +176,9 @@ Primary material:
 - `docs/system/ATS-SYS-03D-MODEL-FORCED-CAPACITY.md`
 - `docs/system/ATS-SYS-03E-REAL-WORLD-CORPUS.md`
 - `docs/release/BROWSER_ACCEPTANCE_MATRIX_v1.md`
+- `docs/vnext/00-FIRST-RUN-TRUST-AND-AI-ACCESS.md`
+- `docs/vnext/01-AI-PROVIDER-ROUTING.md`
+- `docs/vnext/02-BYOK-SECRET-HANDLING.md`
 
 Required layers in the rebuild:
 
@@ -151,6 +188,8 @@ truth-invariant tests
 application/API tests
 persistence + fault tests
 source-reconciliation fixtures
+provider-routing/fallback fixtures
+BYOK secret-canary tests
 canonical personas
 browser E2E
 identified-runtime receipts
@@ -174,12 +213,17 @@ For the rebuild, this becomes explicit from the start:
 mining-site/
   quarry-001-...
   quarry-002-...
+  quarry-ai-access-...
+  quarry-ai-router-...
+  quarry-byok-...
 
 golden-dataset/
   personas/
   resume-import/
   job-match/
   provenance/
+  provider-routing/
+  secret-handling/
   fault-cases/
 ```
 
@@ -195,6 +239,15 @@ Historical evidence and constraints:
 - `docs/system/RUNTIME-IDENTITY-v0.1.md`
 
 Use these to design the new characterization system. Do not automatically inherit old runtime qualification into the new implementation.
+
+The new runtime characterization must separately identify:
+
+- deterministic core health;
+- Gemini capability health;
+- resolved Gemini model per capability;
+- credential mode (platform/BYOK/local-only) without recording secrets;
+- Ollama capability health;
+- whether fallback was actually exercised.
 
 ## 08 — Release gates
 
@@ -215,6 +268,16 @@ product ready
 
 The rebuild reaches release only when the full user story and its failure/degradation paths have executable receipts on an identified runtime.
 
+New vNext release evidence must include:
+
+- platform-key secret isolation;
+- BYOK non-persistence;
+- BYOK HTTPS enforcement;
+- Gemini-primary routing receipts;
+- Gemini→Ollama fallback receipt;
+- complete-AI-outage degradation receipt;
+- cost/retry budget enforcement.
+
 ## Historical implementation archive
 
 `archive/current-implementation/` contains the README and Quick Start from the previous implementation.
@@ -231,5 +294,7 @@ Before writing production application code, every B0–B8 block must have:
 4. acceptance criteria;
 5. at least one executable fixture or planned quarry;
 6. a clear definition of done.
+
+The Gemini model list must be documented and benchmark-mapped before B6 is considered implementation-ready.
 
 Then we build once, in dependency order, instead of repeatedly rebuilding architecture around symptoms.
