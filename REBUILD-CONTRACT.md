@@ -1,4 +1,4 @@
-# CV Engine — Rebuild Contract v1
+# CV Engine — Rebuild Contract v1.1
 
 ## 1. Purpose
 
@@ -29,6 +29,7 @@ Minimum conceptual entities:
 - ResumeVersion / ResumeClaim
 - Provenance / SourceReceipt
 - CareerVault / durable history
+- AI access context / provider provenance
 
 The exact implementation model may evolve, but these semantic boundaries may not collapse into one generic ResumeData blob.
 
@@ -49,9 +50,61 @@ Fit, gaps, recommendations, opportunity ranking, and decision support. Derived a
 ### Presentation
 Resume wording and formatting. Presentation may change wording but may not create new facts.
 
-## 5. AI contract
+## 5. First-run trust and AI access boundary
+
+Every new product session begins with:
+
+```text
+Trust / privacy / AI disclaimer
+        ↓
+Explicit acknowledgement
+        ↓
+Choose AI access mode
+        ├─ CV Engine Gemini access
+        ├─ Bring Your Own Gemini Key (BYOK)
+        └─ Continue without cloud AI
+        ↓
+Product entry
+```
+
+The first-run boundary must explain:
+
+- what CV Engine does and does not guarantee;
+- that AI output may be incomplete/wrong;
+- that users must review career/application content;
+- that Job Descriptions do not become candidate facts;
+- how selected cloud AI may process bounded resume/career content;
+- which account bears Gemini quota/cost;
+- that BYOK credentials are transient secrets and are not intentionally persisted.
+
+The disclaimer is a disclosure/consent mechanism. It does not replace secure engineering, privacy controls, or legal review.
+
+Authoritative detail:
+
+- `docs/vnext/00-FIRST-RUN-TRUST-AND-AI-ACCESS.md`
+- `docs/vnext/02-BYOK-SECRET-HANDLING.md`
+
+## 6. AI contract and provider strategy
 
 AI is optional/bounded by capability.
+
+Default cloud-enabled routing:
+
+```text
+Capability request
+     ↓
+AI Gateway
+     ↓
+Gemini (primary provider)
+     ↓
+capability-specific Gemini model cascade
+     ↓ recoverable failure / invalid bounded proposal
+Ollama (fallback provider)
+     ↓
+same validation contract
+```
+
+The user will provide the Gemini model list. Exact primary/fallback model identifiers remain uncommitted until benchmark evidence assigns them per capability.
 
 AI may:
 
@@ -67,9 +120,45 @@ AI may not:
 - be the final authority for ResumeVersion provenance;
 - make a trusted-core durability claim.
 
+Provider fallback must never weaken truth validation.
+
+```text
+Gemini output ─┐
+               ├─→ application validation → accept bounded result OR reject/degrade
+Ollama output ─┘
+```
+
 Final resume assembly should remain deterministic unless a future architecture decision explicitly replaces this contract with equally strong evidence/provenance guarantees.
 
-## 6. Import architecture
+Authoritative detail:
+
+- `docs/vnext/01-AI-PROVIDER-ROUTING.md`
+
+## 7. Gemini credential modes
+
+### CV Engine-owned key
+
+- server-side environment/secret only;
+- never exposed to browser code/responses;
+- subject to platform quotas, rate limits, and cost budgets.
+
+### User-owned Gemini key (BYOK)
+
+- entered by the user;
+- memory-only in browser application state by default;
+- not stored in localStorage, sessionStorage, IndexedDB, cookies, URLs, Redis, databases, logs, analytics, or telemetry;
+- transmitted only over HTTPS outside localhost;
+- server receives it only as a request-scoped secret and does not intentionally persist/cache/log it;
+- Ollama never receives the Gemini credential;
+- reload may require re-entry.
+
+### No-cloud mode
+
+- skips Gemini;
+- Ollama may serve optional bounded capabilities if available;
+- deterministic trusted-core workflows remain available.
+
+## 8. Import architecture
 
 Import is convenience, not the authority.
 
@@ -93,17 +182,27 @@ reviewable Career Evidence proposal
 
 If automatic import cannot safely recover the document, the product must degrade to manual Career Evidence entry rather than block the entire product or accept uncertain facts.
 
-## 7. Persistence contract
+AI provider order does not change this contract. Gemini and Ollama proposals are both untrusted until source reconciliation succeeds.
+
+## 9. Persistence contract
 
 Trusted durable state must fail closed. A storage outage must never be represented as successful persistence.
 
 Persistence is part of the product contract, not an implementation detail hidden behind UI optimism.
 
-## 8. Product flow for first release
+BYOK credentials are explicitly outside durable persistence.
+
+## 10. Product flow for first release
 
 The first coherent release should support this complete path before expanding the harbor:
 
 ```text
+OPEN
+  ↓
+Disclaimer / acknowledgement
+  ↓
+AI access choice
+  ↓
 START
   ├─ Manual Career Evidence
   └─ Optional Resume Import → Review
@@ -123,7 +222,7 @@ START
 
 Opportunity Space and broader market intelligence should be added only after the core single-opportunity path is complete and stable.
 
-## 9. Build order
+## 11. Build order
 
 ### B0 — Repository and contracts
 - empty application baseline;
@@ -131,6 +230,18 @@ Opportunity Space and broader market intelligence should be added only after the
 - architecture decision records;
 - typed domain contracts;
 - no UI-first mock implementation.
+
+### B0.5 — First-run trust + AI access foundation
+- versioned disclaimer/consent contract;
+- AI access mode selection;
+- server-only platform Gemini secret boundary;
+- memory-only BYOK contract;
+- insecure-origin BYOK prohibition;
+- provider-agnostic AI Gateway interfaces;
+- capability-specific provider provenance;
+- no Gemini model hard-coding until benchmark matrix is frozen.
+
+B0.5 must not make AI a prerequisite for B1–B4 trusted-core capabilities.
 
 ### B1 — Career Evidence core
 - canonical domain model;
@@ -166,9 +277,14 @@ Opportunity Space and broader market intelligence should be added only after the
 
 Import is intentionally later than manual Career Evidence so importer failures cannot block the core product.
 
-### B6 — Optional AI assistance
+### B6 — AI assistance runtime
+- Gemini-primary capability routing;
+- capability-specific Gemini model cascade;
+- Ollama fallback;
+- BYOK/platform/no-cloud credential modes;
 - inline presentation optimization;
 - bounded adapters;
+- retry/deadline/cost controls;
 - explicit failure/degradation contracts;
 - no AI dependency in trusted deterministic core where avoidable.
 
@@ -184,9 +300,10 @@ Import is intentionally later than manual Career Evidence so importer failures c
 - fault injection;
 - browser E2E;
 - runtime identity;
-- release receipts.
+- release receipts;
+- provider fallback and secret-canary certification.
 
-## 10. Quarry / test discipline
+## 12. Quarry / test discipline
 
 Every feature must have an executable acceptance boundary before implementation is considered closed.
 
@@ -197,6 +314,8 @@ Test layers:
 - API/application behavior tests;
 - persistence/fault tests;
 - import source-reconciliation fixtures;
+- AI-provider routing/fallback fixtures;
+- BYOK secret-canary tests;
 - canonical personas;
 - golden datasets;
 - real browser E2E;
@@ -204,7 +323,25 @@ Test layers:
 
 Meaningful failures become named quarry fixtures/regressions. Do not accumulate one-off symptom patches.
 
-## 11. Release language
+## 13. Cost and availability rules
+
+Cloud AI spending must be bounded by application policy.
+
+Platform-key mode must support:
+
+- per-capability attempt ceilings;
+- token/output ceilings;
+- whole-operation deadlines;
+- platform quota/rate limits;
+- usage accounting;
+- operational budget guards;
+- fallback/degradation instead of repeated paid retries.
+
+BYOK does not remove attempt limits: CV Engine must not accidentally consume a user's quota through uncontrolled retries.
+
+Ollama is the fallback/resilience/privacy lane, not the truth authority.
+
+## 14. Release language
 
 Do not claim:
 
@@ -213,12 +350,14 @@ Do not claim:
 - universal ATS compatibility;
 - supported hardware without measured receipts;
 - runtime/model latency guarantees without identified-runtime evidence;
-- production readiness from CI alone.
+- production readiness from CI alone;
+- that a disclaimer eliminates legal/privacy obligations;
+- that CV Engine "never sees" a BYOK key when the server proxies the provider call.
 
 A release claim must identify the evidence that supports it.
 
-## 12. Definition of done
+## 15. Definition of done
 
-CV Engine vNext is done when a new user can complete the core path from Career Evidence to an exported, provenance-backed ResumeVersion on a clean runtime, including safe failure/degradation paths, without relying on hidden manual developer intervention.
+CV Engine vNext is done when a new user can complete the core path from first-run acknowledgement and AI access selection through Career Evidence to an exported, provenance-backed ResumeVersion on a clean runtime, including safe failure/degradation paths, without relying on hidden manual developer intervention.
 
 The rebuild is not complete because individual endpoints work. It is complete when the **product story works end to end** and the evidence receipts prove the claims we make about it.
