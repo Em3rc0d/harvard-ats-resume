@@ -1,4 +1,4 @@
-# CV Engine — Rebuild Contract v1.1
+# CV Engine — Rebuild Contract v1.2
 
 ## 1. Purpose
 
@@ -104,7 +104,17 @@ Ollama (fallback provider)
 same validation contract
 ```
 
-The user will provide the Gemini model list. Exact primary/fallback model identifiers remain uncommitted until benchmark evidence assigns them per capability.
+Initial routing baseline:
+
+```text
+high-volume default      gemini-3.5-flash-lite
+quality escalation       gemini-3.7-flash
+Gemini reserve           gemini-3.6-flash
+compat/capacity reserve  gemini-3.1-flash-lite
+local fallback           capability-specific Ollama model
+```
+
+These model IDs are an implementation baseline, not release qualification. B6 must benchmark the exact capabilities/models/runtime before support claims are made.
 
 AI may:
 
@@ -133,6 +143,7 @@ Final resume assembly should remain deterministic unless a future architecture d
 Authoritative detail:
 
 - `docs/vnext/01-AI-PROVIDER-ROUTING.md`
+- `docs/vnext/03-GEMINI-MODEL-MATRIX.md`
 
 ## 7. Gemini credential modes
 
@@ -192,6 +203,8 @@ Persistence is part of the product contract, not an implementation detail hidden
 
 BYOK credentials are explicitly outside durable persistence.
 
+The new implementation must not inherit the previous Redis topology by default. The primary datastore, schema, transaction model, ownership model, retention and deletion/export lifecycle must be frozen in PF0 before B1 durable Career Evidence is committed.
+
 ## 10. Product flow for first release
 
 The first coherent release should support this complete path before expanding the harbor:
@@ -222,7 +235,25 @@ START
 
 Opportunity Space and broader market intelligence should be added only after the core single-opportunity path is complete and stable.
 
-## 11. Build order
+## 11. PF0 — Production Foundation Closure
+
+Before trusted-core feature implementation proceeds into B1 durability, the rebuild must freeze these production contracts:
+
+```text
+Identity / session / tenant ownership
+Durable datastore + data lifecycle
+Runtime/deployment topology including hosted Ollama semantics
+AI quota / cost / abuse policy
+Security / observability / privacy baseline
+```
+
+Authoritative readiness review:
+
+- `docs/vnext/04-BUILD-READINESS-AUDIT.md`
+
+B0 repository/tooling scaffolding may begin while PF0 is completed, but B1 durable Career Evidence must not be built on unresolved identity or persistence assumptions.
+
+## 12. Build order
 
 ### B0 — Repository and contracts
 - empty application baseline;
@@ -239,7 +270,7 @@ Opportunity Space and broader market intelligence should be added only after the
 - insecure-origin BYOK prohibition;
 - provider-agnostic AI Gateway interfaces;
 - capability-specific provider provenance;
-- no Gemini model hard-coding until benchmark matrix is frozen.
+- model routing driven by the vNext model matrix.
 
 B0.5 must not make AI a prerequisite for B1–B4 trusted-core capabilities.
 
@@ -248,7 +279,8 @@ B0.5 must not make AI a prerequisite for B1–B4 trusted-core capabilities.
 - manual evidence CRUD/edit/review;
 - provenance/source model;
 - truth-class invariants;
-- durable persistence.
+- durable persistence;
+- identity/ownership rules from PF0.
 
 ### B2 — Target and Job truth
 - Career Target;
@@ -286,6 +318,7 @@ Import is intentionally later than manual Career Evidence so importer failures c
 - bounded adapters;
 - retry/deadline/cost controls;
 - explicit failure/degradation contracts;
+- capability/model benchmarks;
 - no AI dependency in trusted deterministic core where avoidable.
 
 ### B7 — Opportunity Space / market extension
@@ -303,7 +336,7 @@ Import is intentionally later than manual Career Evidence so importer failures c
 - release receipts;
 - provider fallback and secret-canary certification.
 
-## 12. Quarry / test discipline
+## 13. Quarry / test discipline
 
 Every feature must have an executable acceptance boundary before implementation is considered closed.
 
@@ -323,7 +356,7 @@ Test layers:
 
 Meaningful failures become named quarry fixtures/regressions. Do not accumulate one-off symptom patches.
 
-## 13. Cost and availability rules
+## 14. Cost and availability rules
 
 Cloud AI spending must be bounded by application policy.
 
@@ -337,11 +370,13 @@ Platform-key mode must support:
 - operational budget guards;
 - fallback/degradation instead of repeated paid retries.
 
+The user-provided free-tier quota snapshot is suitable as development/dogfood evidence only. It is not production capacity evidence.
+
 BYOK does not remove attempt limits: CV Engine must not accidentally consume a user's quota through uncontrolled retries.
 
-Ollama is the fallback/resilience/privacy lane, not the truth authority.
+Ollama is the fallback/resilience/privacy lane, not the truth authority. A hosted Ollama topology is not considered supported until its physical runtime/cost/cold-start behavior is characterized.
 
-## 14. Release language
+## 15. Release language
 
 Do not claim:
 
@@ -352,11 +387,12 @@ Do not claim:
 - runtime/model latency guarantees without identified-runtime evidence;
 - production readiness from CI alone;
 - that a disclaimer eliminates legal/privacy obligations;
-- that CV Engine "never sees" a BYOK key when the server proxies the provider call.
+- that CV Engine "never sees" a BYOK key when the server proxies the provider call;
+- that an observed Gemini free-tier quota is a permanent production limit or SLA.
 
 A release claim must identify the evidence that supports it.
 
-## 15. Definition of done
+## 16. Definition of done
 
 CV Engine vNext is done when a new user can complete the core path from first-run acknowledgement and AI access selection through Career Evidence to an exported, provenance-backed ResumeVersion on a clean runtime, including safe failure/degradation paths, without relying on hidden manual developer intervention.
 
