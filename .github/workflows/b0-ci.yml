@@ -1,0 +1,47 @@
+name: CV Engine vNext B0
+
+on:
+  push:
+    branches:
+      - build/cv-engine-vnext-b0
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Bootstrap lockfile if needed
+        run: |
+          if [ ! -f package-lock.json ]; then
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          fi
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify
+        run: npm run verify
+
+      - name: Persist bootstrap lockfile
+        if: github.event_name == 'push' && github.ref == 'refs/heads/build/cv-engine-vnext-b0'
+        run: |
+          if ! git diff --quiet -- package-lock.json || [ -n "$(git status --porcelain package-lock.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "B0: lock dependency graph"
+            git push
+          fi
