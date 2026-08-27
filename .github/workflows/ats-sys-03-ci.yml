@@ -9,6 +9,7 @@ on:
       - agent/ats-sys-03e-incident-02-pdf-record-reconstruction
       - agent/ats-sys-03e-incident-03-multirecord-experience-decomposition
       - agent/ats-sys-04-release-import-degradation
+      - agent/ats-sys-04-http-browser-capability-regression
       - release/cv-engine-v1.0.0-rc2
   workflow_dispatch:
 
