@@ -233,6 +233,8 @@ A failed item stops composition and renders an inline error. Existing candidate 
 
 `CVEngineFlow` is the only public owner of `/api/generate-resume`.
 
+Final resume materialization is **deterministic and application-owned**. Ollama is not on this critical path; local AI remains bounded to import extraction and inline wording assistance.
+
 ```text
 request validation
   ↓
@@ -240,18 +242,22 @@ rate limit
   ↓
 Career Vault identity
   ↓
-Gemini constrained draft
+Career Evidence / optional Job Intelligence + Match
+  ↓
+deterministic source-preserving resume assembly
   ↓
 deterministic grounding
   ↓
 semantic grounding
   ↓
-resume composition / provenance
+resume composition / claim provenance
   ↓
-durable Career Vault persistence
+durable Career Vault commit + reload verification
   ↓
 product result
 ```
+
+The materialization provenance must identify the actual deterministic composer (`cv-engine-deterministic` / `source-preserving-resume-composer-v2` under the current contract). Missing or false generation provenance is a trusted-version blocker.
 
 The exact attempted data, including Job Description, is retained before the request so a safe retry does not silently switch target context.
 
@@ -308,36 +314,46 @@ No result action uses native `alert()` or logs an expected UI failure as an unca
 | `/api/optimize-content` | CareerEvidenceForm | fact-preserving validator/fallback |
 | `/api/assess-opportunity` | Target / Opportunity Space | rate limit, durable history, CareerTarget separation |
 | `/api/opportunity-space` | Opportunity Space | durable assessment IDs only |
-| `/api/generate-resume` | CVEngineFlow | validation → truth/semantic/provenance → durability |
+| `/api/generate-resume` | CVEngineFlow | validation → deterministic assembly → truth/semantic/provenance → durability |
 
 Market-observation APIs remain separate from candidate evidence and are outside the primary resume UI flow.
 
 ## 15. Release documentation truth
 
-The repository README and page metadata must describe the current product as Career Opportunity Intelligence. Forbidden release claims include:
+The repository README and page metadata must describe the current product as Career Opportunity Intelligence. Release documentation must match the runtime actually built and tested.
+
+Forbidden release claims include:
 
 - “Production Ready” without completed release gate;
 - hiring probability;
 - guaranteed ATS success;
 - keyword stuffing as the product strategy;
 - invented/placeholder metrics as examples of expected resume content;
-- client-side certificate PDF parsing when the code is server-owned.
+- client-side certificate PDF parsing when the code is server-owned;
+- Gemini or another remote provider as part of the current default runtime;
+- whole-resume model generation when final assembly is deterministic;
+- obsolete model sizes, timeout settings, or runtime defaults contradicted by `.env.example` / Compose;
+- CI-green or synthetic-browser PASS presented as physical field certification.
 
 ## 16. Automated merge gate
 
-Exact PR head must pass:
+Exact PR head must pass the repository-owned release checks, including:
 
 ```text
 npm ci
 npm audit --audit-level=moderate
+local-only AI runtime enforcement
 npm run lint
 npm run typecheck
 npm test
 npm run build
 node scripts/verify-pdfjs-server-bundle.mjs
+docker compose config
+identified Docker image build + build identity verification
+Chromium release acceptance
 ```
 
-Release-surface tests additionally assert the ownership and interaction contracts above.
+The browser gate must exercise user-visible success/failure transitions without unhandled page errors. Where a field incident depends on a browser capability class, the regression must explicitly reproduce that capability boundary rather than relying on localhost defaults that may mask it.
 
 ## 17. Field acceptance gate
 
@@ -363,4 +379,6 @@ durable ResumeVersion
 Download / Print / Create New
 ```
 
-A typed, correct guardrail stop is an acceptable outcome when the generated wording is unsupported. A runtime exception, browser overlay, generic unexplained 502, ghost assertion, or stale/mismatched UI result is not.
+For the RC2 browser-capability incident, field acceptance also requires the actual Windows-browser → non-loopback WSL HTTP path that exposed the failure. The generation request must leave the browser without an unhandled `crypto.randomUUID` error; any subsequent stop must be classified by the trusted server boundary rather than disguised as a client network failure.
+
+A typed, correct guardrail stop is an acceptable outcome when the generated wording is unsupported. A runtime exception, browser overlay, generic unexplained 502, ghost assertion, stale/mismatched UI result, or browser-only capability crash is not.
