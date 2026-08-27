@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { AIAccessMode } from "../../domain/ai/AIAccess";
 import { createSupabaseBrowserClient } from "../../infrastructure/supabase/browser";
 import { AIAccessPanel } from "./AIAccessPanel";
 import { AuthPanel } from "./AuthPanel";
@@ -20,7 +21,22 @@ export function FirstRunExperience({
 }: FirstRunExperienceProps) {
   const [step, setStep] = useState<Step>("TRUST");
   const [authStatus, setAuthStatus] = useState<string | null>(null);
+  const [disclosureAcknowledged, setDisclosureAcknowledged] = useState(false);
   const { mode, clearSessionSecrets, resetAIAccess } = useAIAccessSession();
+
+  async function persistConsent(aiAccessModePreference?: AIAccessMode) {
+    const response = await fetch("/api/consent", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        aiAccessModePreference ? { aiAccessModePreference } : {},
+      ),
+    });
+
+    if (!response.ok) {
+      throw new Error("CONSENT_PERSISTENCE_FAILED");
+    }
+  }
 
   async function resolveAuthenticatedStep() {
     if (!authConfigured) {
@@ -31,26 +47,71 @@ export function FirstRunExperience({
     setAuthStatus("Verifying server session…");
     const response = await fetch("/api/session", { cache: "no-store" });
 
-    if (response.ok) {
+    if (!response.ok) {
       setAuthStatus(null);
-      setStep("AI_ACCESS");
+      setStep("AUTH");
       return;
     }
 
+    if (!disclosureAcknowledged) {
+      setAuthStatus(null);
+      setStep("TRUST");
+      return;
+    }
+
+    setAuthStatus("Recording disclosure acknowledgement…");
+    try {
+      await persistConsent();
+      setAuthStatus(null);
+      setStep("AI_ACCESS");
+    } catch {
+      setAuthStatus("CV Engine could not record your disclosure acknowledgement. Try again.");
+    }
+  }
+
+  async function acknowledgeDisclosure() {
+    setDisclosureAcknowledged(true);
+
+    if (!authConfigured) {
+      setStep("AUTH");
+      return;
+    }
+
+    setAuthStatus("Checking account session…");
+    const response = await fetch("/api/session", { cache: "no-store" });
     setAuthStatus(null);
-    setStep("AUTH");
+
+    if (!response.ok) {
+      setStep("AUTH");
+      return;
+    }
+
+    setAuthStatus("Recording disclosure acknowledgement…");
+    try {
+      await persistConsent();
+      setAuthStatus(null);
+      setStep("AI_ACCESS");
+    } catch {
+      setAuthStatus("CV Engine could not record your disclosure acknowledgement. Try again.");
+    }
+  }
+
+  async function finalizeAIAccess(selectedMode: AIAccessMode) {
+    await persistConsent(selectedMode);
+    setStep("READY");
   }
 
   async function logout() {
     clearSessionSecrets();
     resetAIAccess();
+    setDisclosureAcknowledged(false);
 
     if (authConfigured) {
       const supabase = createSupabaseBrowserClient();
       await supabase.auth.signOut();
     }
 
-    setStep("AUTH");
+    setStep("TRUST");
   }
 
   return (
@@ -73,7 +134,7 @@ export function FirstRunExperience({
       </div>
 
       {step === "TRUST" ? (
-        <TrustDisclosurePanel onAcknowledge={resolveAuthenticatedStep} />
+        <TrustDisclosurePanel onAcknowledge={acknowledgeDisclosure} />
       ) : null}
 
       {step === "AUTH" ? (
@@ -83,7 +144,7 @@ export function FirstRunExperience({
       {step === "AI_ACCESS" ? (
         <AIAccessPanel
           platformGeminiAvailable={platformGeminiAvailable}
-          onReady={() => setStep("READY")}
+          onReady={finalizeAIAccess}
         />
       ) : null}
 
