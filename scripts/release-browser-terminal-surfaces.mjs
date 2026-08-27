@@ -4,7 +4,22 @@ const playwrightModule = process.env.CV_ENGINE_PLAYWRIGHT_MODULE || 'playwright'
 const { chromium } = await import(playwrightModule);
 const baseUrl = process.env.CV_ENGINE_E2E_BASE_URL || 'http://localhost:3000';
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ acceptDownloads: true });
+const context = await browser.newContext({ acceptDownloads: true });
+
+// `crypto.randomUUID()` is unavailable on ordinary non-secure HTTP origins
+// such as a Windows browser reaching the local WSL address. Localhost is a
+// potentially trustworthy origin, so CI would otherwise never exercise that
+// field condition. Shadow the method before application code runs while
+// keeping `getRandomValues()` available, matching the capability boundary the
+// Career Vault fallback is designed to support.
+await context.addInitScript(() => {
+  Object.defineProperty(window.crypto, 'randomUUID', {
+    configurable: true,
+    value: undefined,
+  });
+});
+
+const page = await context.newPage();
 const pageErrors = [];
 page.on('pageerror', (error) => pageErrors.push(error.message));
 
@@ -13,7 +28,7 @@ const resume = {
   summary: '', experience: [], education: [],
   skills: { hardSkills: ['TypeScript'], softSkills: [] }, projects: [], certifications: [], languages: [],
 };
-const context = {
+const importContext = {
   receipt: { receiptId: 'resume-import-browser-terminal', originalFileName: 'candidate.pdf', mimeType: 'application/pdf', byteSize: 256, sha256: 'a'.repeat(64), capturedAt: '2026-08-19T20:00:00.000Z', importer: 'browser-acceptance-fixture', importerVersion: 'browser-acceptance-v1' },
   evidenceMap: [
     { fieldPath: 'personalInfo.fullName', excerpt: 'Jane Candidate', locator: { scope: 'SOURCE_DOCUMENT', granularity: 'PAGE', page: 1, fieldPath: 'personalInfo.fullName' } },
@@ -53,7 +68,7 @@ async function acceptResponsibleUse() {
 }
 async function installImportSuccessRoute() {
   await page.route('**/api/import-resume', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { resume, context } }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { resume, context: importContext } }) });
   });
 }
 async function reachGeneralTarget() {
@@ -71,6 +86,17 @@ try {
   await installImportSuccessRoute();
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await acceptResponsibleUse();
+
+  assert.equal(
+    await page.evaluate(() => typeof window.crypto.randomUUID),
+    'undefined',
+    'HTTP-capability regression must run without crypto.randomUUID',
+  );
+  assert.equal(
+    await page.evaluate(() => typeof window.crypto.getRandomValues),
+    'function',
+    'HTTP-capability regression requires crypto.getRandomValues fallback support',
+  );
 
   // Infrastructure failure is a durability state, never an evidence-review state.
   await reachGeneralTarget();
@@ -137,7 +163,9 @@ try {
   await click('Create New');
   await visible('Build from career truth');
   assert.deepEqual(pageErrors, [], `Result flow produced browser errors: ${pageErrors.join(' | ')}`);
+  console.log('RELEASE_BROWSER_HTTP_CAPABILITY_OK');
   console.log('RELEASE_BROWSER_TERMINAL_SURFACES_OK');
 } finally {
+  await context.close();
   await browser.close();
 }
