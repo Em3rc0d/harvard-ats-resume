@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AIAccessMode } from "../../domain/ai/AIAccess";
 import type { CareerEvidenceCurrent } from "../../domain/career/CareerEvidenceMutation";
 import type { z } from "zod";
@@ -36,26 +36,29 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
   const [editText, setEditText] = useState("");
   const [editVerified, setEditVerified] = useState(false);
 
-  const loadEvidence = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
+    let cancelled = false;
 
-    const response = await fetch("/api/career/evidence", { cache: "no-store" });
-    const body = await response.json().catch(() => null);
+    async function loadInitialEvidence() {
+      const response = await fetch("/api/career/evidence", { cache: "no-store" });
+      const body = await response.json().catch(() => null);
+      if (cancelled) return;
 
-    if (!response.ok) {
-      setError(body?.error ?? "CAREER_EVIDENCE_LOAD_FAILED");
+      if (!response.ok) {
+        setError(body?.error ?? "CAREER_EVIDENCE_LOAD_FAILED");
+        setLoading(false);
+        return;
+      }
+
+      setEvidence(Array.isArray(body?.evidence) ? body.evidence : []);
       setLoading(false);
-      return;
     }
 
-    setEvidence(Array.isArray(body?.evidence) ? body.evidence : []);
-    setLoading(false);
+    void loadInitialEvidence();
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  useEffect(() => {
-    void loadEvidence();
-  }, [loadEvidence]);
 
   const counts = useMemo(() => {
     const verifiedCount = evidence.filter((item) => item.verificationStatus === "VERIFIED").length;
