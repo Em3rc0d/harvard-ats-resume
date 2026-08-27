@@ -10,7 +10,7 @@ import { useAIAccessSession } from "../providers/AIAccessSessionProvider";
 
 type AIAccessPanelProps = {
   platformGeminiAvailable: boolean;
-  onReady: () => void;
+  onReady: (mode: AIAccessMode) => void | Promise<void>;
 };
 
 const modes: AIAccessMode[] = ["PLATFORM_GEMINI", "BYOK_GEMINI", "NO_CLOUD_AI"];
@@ -19,6 +19,7 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
   const { mode, selectMode, setByokCredential, hasByokCredential } = useAIAccessSession();
   const [credentialInput, setCredentialInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   function choose(nextMode: AIAccessMode) {
     if (nextMode === "PLATFORM_GEMINI" && !platformGeminiAvailable) {
@@ -50,6 +51,20 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
     (mode === "PLATFORM_GEMINI" && platformGeminiAvailable) ||
     (mode === "BYOK_GEMINI" && hasByokCredential);
 
+  async function continueToProduct() {
+    if (!mode || !canContinue) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      await onReady(mode);
+    } catch {
+      setError("CV Engine could not record the non-secret AI access preference. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="panel" aria-labelledby="ai-access-title">
       <p className="eyebrow">AI access</p>
@@ -67,7 +82,7 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
             <button
               aria-checked={mode === candidate}
               className={`choice ${mode === candidate ? "selected" : ""}`}
-              disabled={unavailable}
+              disabled={unavailable || busy}
               key={candidate}
               role="radio"
               type="button"
@@ -88,13 +103,14 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
             <input
               autoCapitalize="off"
               autoComplete="off"
+              disabled={busy}
               spellCheck={false}
               type="password"
               value={credentialInput}
               onChange={(event) => setCredentialInput(event.target.value)}
             />
           </label>
-          <button className="secondary" type="button" onClick={storeByokCredential}>
+          <button className="secondary" disabled={busy} type="button" onClick={storeByokCredential}>
             {hasByokCredential ? "Replace session key" : "Use key for this session"}
           </button>
           <p className="fine-print">
@@ -106,8 +122,8 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
 
       {error ? <p className="status error" role="alert">{error}</p> : null}
 
-      <button className="primary" disabled={!canContinue} type="button" onClick={onReady}>
-        Continue to CV Engine
+      <button className="primary" disabled={!canContinue || busy} type="button" onClick={continueToProduct}>
+        {busy ? "Recording preference…" : "Continue to CV Engine"}
       </button>
     </section>
   );
