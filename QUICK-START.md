@@ -1,21 +1,22 @@
 # CV Engine — Quick Start
 
-CV Engine runs its model-backed resume workflows on a **local Ollama runtime**. No remote LLM API key is required for the default stack.
+CV Engine uses a **local Ollama runtime for bounded assistance** and a deterministic trusted core for final resume materialization. No remote LLM API key is required for the default stack.
 
 ## Recommended: one-command Docker stack
 
 ### Prerequisites
 
 - Docker Desktop / Docker Engine with Docker Compose v2
-- At least ~12 GB free disk for the default application + workload models + container layers
-- Enough host memory for one local model at a time
+- Sufficient disk for application layers and the configured local Ollama models
+- Sufficient memory for one configured local model at a time
 
-CV Engine intentionally uses workload-specific models instead of forcing the largest model into every operation:
+The shipping runtime uses workload-specific behavior:
 
-- `qwen3:4b-instruct` — resume extraction and inline rewrite
-- `qwen3:8b` — final resume generation
+- `qwen3:1.7b` — bounded resume-import extraction where deterministic source recovery is not sufficient
+- `qwen3:4b-instruct` — bounded inline wording optimization
+- **no model call** — final resume assembly is deterministic and application-owned
 
-The Docker Ollama service is limited to one loaded model at a time by default so a developer laptop does not need to retain both models in memory concurrently.
+The Docker Ollama service defaults to one loaded model at a time.
 
 ### Start everything
 
@@ -24,7 +25,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The first start downloads the configured workload models into the persistent `ollama-data` volume. Later starts reuse them. The bootstrap also preloads the import model because resume import is normally the first model-backed user action.
+The first start downloads the configured bounded-workload models into the persistent `ollama-data` volume. Later starts reuse them. The bootstrap preloads the import model because resume import is normally the first model-backed user action.
 
 Open:
 
@@ -38,7 +39,7 @@ Runtime health:
 http://localhost:3000/api/health
 ```
 
-A healthy stack returns `READY` only when every configured workload model and the durable Redis backend are available.
+Health distinguishes trusted-core durability from optional AI capability. Durable Redis is trusted-core and fails closed. Local AI may degrade an affected optional/bounded capability without becoming a candidate-truth authority.
 
 ### NVIDIA GPU acceleration
 
@@ -48,43 +49,24 @@ When Docker can access an NVIDIA GPU:
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 ```
 
-If GPU passthrough is unavailable, use the normal CPU compose command.
+Do not infer another host/runtime is supported merely because it starts successfully. Runtime support remains evidence-bound to the qualified profile/fingerprint.
 
 ## Local inference policy
 
 Default workload configuration:
 
 ```env
-OLLAMA_MODEL=qwen3:8b
-OLLAMA_IMPORT_MODEL=qwen3:4b-instruct
-OLLAMA_RESUME_MODEL=qwen3:8b
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen3:1.7b
+OLLAMA_IMPORT_MODEL=qwen3:1.7b
 OLLAMA_OPTIMIZE_MODEL=qwen3:4b-instruct
-OLLAMA_NUM_CTX=16384
+OLLAMA_NUM_CTX=8192
+RESUME_IMPORT_TIMEOUT_MS=180000
 ```
 
-Execution budgets are also workload-specific:
+There is no `OLLAMA_RESUME_MODEL` requirement in the trusted final-generation path. Final resume assembly is deterministic.
 
-- import: 180 seconds maximum by default, 3,072 output-token ceiling
-- final resume: 240 seconds maximum by default, 4,096 output-token ceiling
-- inline optimization: 45 seconds maximum, 768 output-token ceiling
-
-These are safety ceilings, not target latencies. A request ends as soon as the model finishes.
-
-All model outputs remain **untrusted proposals**. Changing model size or timeout does not bypass source reconciliation, grounding, semantic grounding, claim provenance, or durable Career Vault integrity.
-
-For a higher-quality final generation model on a stronger host:
-
-```env
-OLLAMA_RESUME_MODEL=qwen3:14b
-```
-
-For a very constrained host, you can also reduce final generation explicitly:
-
-```env
-OLLAMA_RESUME_MODEL=qwen3:4b-instruct
-```
-
-Do not weaken evidence gates to compensate for a smaller model.
+All model outputs remain **untrusted proposals**. Changing model size or timeout never bypasses source reconciliation, grounding, semantic grounding, claim provenance, or durable Career Vault integrity.
 
 ## What Docker starts
 
@@ -93,8 +75,11 @@ Browser
   ↓
 CV Engine / Next.js :3000
   ├─→ Ollama :11434
-  │      ├─ qwen3:4b-instruct  extraction / optimize
-  │      └─ qwen3:8b           final resume
+  │      ├─ qwen3:1.7b         bounded import extraction
+  │      └─ qwen3:4b-instruct  inline wording optimization
+  │
+  ├─→ deterministic resume composer
+  │      └─ no whole-resume model request
   │
   └─→ Upstash-compatible Redis HTTP proxy
             ↓
@@ -105,10 +90,10 @@ CV Engine / Next.js :3000
 Services:
 
 - `app` — CV Engine
-- `ollama` — local inference server
-- `ollama-init` — pulls every configured workload model and preloads the import model
+- `ollama` — local inference server for bounded AI capabilities
+- `ollama-init` — pulls configured models and preloads the import model
 - `redis` — durable local Redis
-- `redis-http` — Upstash-compatible REST facade used by the existing durable repositories
+- `redis-http` — Upstash-compatible REST facade used by durable repositories
 
 ## Useful commands
 
@@ -117,12 +102,12 @@ Services:
 docker compose up --build
 
 # Follow logs
-docker compose logs -f app ollama
+docker compose logs -f app ollama redis redis-http
 
 # See installed models
 docker compose exec ollama ollama list
 
-# See the currently loaded model and CPU/GPU placement
+# See currently loaded model / CPU-GPU placement
 docker compose exec ollama ollama ps
 
 # Stop containers, preserve data/model volumes
@@ -139,8 +124,8 @@ If you prefer Next.js on the host, run Ollama separately and configure durable R
 ```bash
 npm ci
 cp .env.example .env
+ollama pull qwen3:1.7b
 ollama pull qwen3:4b-instruct
-ollama pull qwen3:8b
 npm run dev
 ```
 
@@ -150,7 +135,7 @@ Default host Ollama URL:
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 ```
 
-You still need `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for trusted durable flows when the application is not using the Docker Compose local Redis stack.
+Trusted durable flows still require `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` when the application is not using the Docker Compose local Redis stack.
 
 ## Trusted flow
 
@@ -159,7 +144,9 @@ Resume PDF/DOCX
    ↓
 server-side text extraction
    ↓
-qwen3:4b-instruct structured extraction proposal
+deterministic source recovery where possible
+   ↓
+bounded qwen3:1.7b extraction only where needed
    ↓
 source reconciliation
    ↓
@@ -167,40 +154,38 @@ Career Evidence review
    ↓
 optional Job / Career Target
    ↓
-qwen3:8b constrained resume proposal
+deterministic source-preserving resume assembly
    ↓
 grounding + semantic grounding
    ↓
 claim provenance
    ↓
-durable Career Vault
+durable Career Vault commit + reload verification
    ↓
 trusted ResumeVersion
 ```
 
-If a local model produces unsupported candidate data, CV Engine removes or blocks it rather than treating it as truth.
+If a local model proposes unsupported candidate data, CV Engine removes or blocks it rather than treating it as truth.
 
 ## Troubleshooting
 
 ### Resume import reaches `RESUME_IMPORT_TIMEOUT`
 
-A timeout means the request crossed its bounded inference window. It does **not** mean Ollama is disconnected and it does not authorize accepting a partial extraction.
+A timeout means an import extraction boundary exceeded its bounded inference window. It does **not** authorize accepting partial or unsupported candidate data.
 
-Inspect the current model placement:
+Inspect model placement:
 
 ```bash
 docker compose exec ollama ollama ps
 ```
 
-Then inspect the application/Ollama logs:
+Inspect application/Ollama logs:
 
 ```bash
 docker compose logs --tail=200 app ollama
 ```
 
-Successful inference logs include model name, prompt/output token counts, load time, total time, and output tokens/second. CV text itself is not logged.
-
-The default Docker stack uses `qwen3:4b-instruct` for import and an independent 180-second Docker budget so an old `.env` containing the previous 90-second setting cannot silently constrain local inference.
+The shipping Docker import model is `qwen3:1.7b`, with a default outer import budget of 180 seconds plus bounded section-level behavior. Do not solve a timeout by weakening reconciliation.
 
 ### Local AI unavailable
 
@@ -209,19 +194,17 @@ docker compose ps
 docker compose logs ollama ollama-init
 ```
 
-Verify all configured models:
+Verify configured models:
 
 ```bash
 docker compose exec ollama ollama list
 ```
 
-### First request is slow
+Manual Career Evidence and deterministic trusted-core behavior must not silently invent facts because a bounded AI helper is unavailable.
 
-The first model load is slower than a warm request. The bootstrap preloads the import model and API calls keep used models alive for subsequent work.
+### First model-backed request is slow
 
-### Not enough memory
-
-CV Engine defaults to one loaded model at a time. If the host is still constrained, use `qwen3:4b-instruct` for final generation too.
+A first model load can be slower than a warm request. `ollama-init` preloads the import model and persistent volumes avoid re-downloading model weights on ordinary restarts.
 
 ### Durable storage unavailable
 
@@ -231,9 +214,13 @@ Inspect:
 docker compose logs redis redis-http
 ```
 
-The Docker stack intentionally fails closed instead of claiming that Career Vault data was saved when Redis is unavailable.
+The Docker stack intentionally fails trusted durable operations closed instead of claiming Career Vault data was saved when Redis is unavailable.
 
-## Verification before merge
+### Browser opened through a non-loopback HTTP address
+
+Some browser APIs differ between `localhost` and ordinary HTTP origins such as a Windows browser reaching a WSL IP. CV Engine's Career Vault capability must not assume `crypto.randomUUID()` exists; the release browser regression exercises the `crypto.getRandomValues()` fallback class.
+
+## Verification before integration
 
 ```bash
 npm audit --audit-level=moderate
@@ -245,4 +232,6 @@ node scripts/verify-pdfjs-server-bundle.mjs
 docker compose config
 ```
 
-The model itself is never the truth authority. The existing evidence and provenance layers remain the release authority.
+CI additionally verifies local-only AI enforcement, exact Docker build identity, and Chromium release acceptance.
+
+The model itself is never the truth authority. Evidence, provenance, deterministic composition, durability, and explicit release receipts remain the authority.
