@@ -7,7 +7,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -16,29 +16,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
-
-      - name: Refresh lockfile when package manifest changed
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          package-manager-cache: false
 
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Verify
         run: npm run verify
-
-      - name: Persist dependency lockfile
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/build/cv-engine-vnext-')
-        run: |
-          if ! git diff --quiet -- package-lock.json || [ -n "$(git status --porcelain package-lock.json)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package-lock.json
-            git commit -m "build: refresh dependency lock graph"
-            git push
-          fi
