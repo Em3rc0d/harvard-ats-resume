@@ -36,4 +36,24 @@ describe("B0.5 secret boundary", () => {
     expect(implementation).not.toContain("@supabase/auth-helpers-nextjs");
     expect(proxyClient).toContain("auth.getClaims()");
   });
+
+  it("persists consent metadata under owner-scoped RLS without a secret column", () => {
+    const migration = read("supabase/migrations/20260827121000_b05_consent_receipts.sql");
+
+    expect(migration).toContain("alter table public.consent_receipts enable row level security");
+    expect(migration).toContain("auth.uid() = owner_user_id");
+    expect(migration).toContain("unique (owner_user_id, disclosure_version)");
+    expect(migration).not.toMatch(/api[_ ]?key/i);
+    expect(migration).not.toMatch(/credential/i);
+  });
+
+  it("allows the consent API to persist only the non-secret AI access mode", () => {
+    const route = read("src/app/api/consent/route.ts");
+
+    expect(route).toContain("AIAccessModeSchema.optional()");
+    expect(route).toContain("ai_access_mode_preference");
+    expect(route).not.toContain("GeminiCredentialInputSchema");
+    expect(route).not.toContain("apiKey");
+    expect(route).not.toContain("credentialInput");
+  });
 });
