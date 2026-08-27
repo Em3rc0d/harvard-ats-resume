@@ -32,6 +32,8 @@ export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
     );
   }
 
+  const client = supabase;
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -39,8 +41,8 @@ export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
 
     const result =
       mode === "SIGN_IN"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+        ? await client.auth.signInWithPassword({ email, password })
+        : await client.auth.signUp({ email, password });
 
     setBusy(false);
 
@@ -63,7 +65,7 @@ export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
     setStatus(null);
 
     const redirectTo = `${window.location.origin}/auth/callback`;
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await client.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
     });
@@ -130,7 +132,11 @@ export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
         </button>
       </div>
 
-      {status ? <p className="status" role="status">{status}</p> : null}
+      {status ? (
+        <p className="status" role="status">
+          {status}
+        </p>
+      ) : null}
     </section>
   );
 }
