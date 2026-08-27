@@ -2,7 +2,7 @@
 
 **Career Opportunity Intelligence with evidence-bound local AI and deterministic guardrails.**
 
-CV Engine is not a keyword-stuffing ATS resume builder. It separates candidate truth, market truth, derived fit, generated presentation, and durable history so a job description or model response cannot silently become a career fact.
+CV Engine is not a keyword-stuffing ATS resume builder. It separates candidate truth, market truth, derived fit, bounded AI assistance, deterministic resume presentation, and durable history so a job description or model response cannot silently become a career fact.
 
 > **Core principle:** evidence before persuasion.
 
@@ -27,7 +27,7 @@ Career Evidence / Career Vault
             ↓
  Apply / Prepare / Skip context
             ↓
- local constrained resume proposal
+ deterministic source-preserving resume composition
             ↓
  deterministic grounding
             ↓
@@ -45,7 +45,8 @@ The system maintains these boundaries:
 - **Career Target** records intent/preferences, never capability.
 - **Job Match** is evidence-backed requirement analysis, not hiring probability.
 - **Opportunity Assessment** is decision support derived from existing evidence and job truth.
-- **Local AI output** is an untrusted proposal, never an authority over candidate truth.
+- **Local AI output** is used only for bounded proposal capabilities such as source extraction and inline wording assistance; it is never an authority over candidate truth or the author of the final trusted resume.
+- **Final resume assembly** is deterministic and application-owned.
 - **ResumeVersion** is emitted only after grounding, semantic grounding, claim provenance, and durable persistence succeed.
 
 ## Trust invariants
@@ -55,49 +56,53 @@ The system maintains these boundaries:
 3. Job requirement ≠ candidate fact.
 4. Career preference ≠ candidate capability.
 5. No assertion support → no trusted ResumeClaim.
-6. Model failure or guardrail failure → safe stop; no trusted ResumeVersion is emitted.
+6. Model failure or guardrail failure → safe stop for the affected capability; no unsupported fact is promoted.
 7. Unsupported parser/model leaves may be omitted while supported source-backed evidence survives.
-8. Durable Career Vault operations fail closed; they are not silently downgraded to in-memory persistence.
+8. Final resume assembly does not depend on a whole-resume model call.
+9. Durable Career Vault operations fail closed; they are not silently downgraded to in-memory persistence.
 
 ## Local intelligence runtime
 
 The default release architecture does **not require a remote LLM provider or API key**.
 
 ```text
-CV Engine deterministic core
-       │
-       ├─ candidate truth
-       ├─ source reconciliation
-       ├─ Job Intelligence / Match
-       ├─ trusted advice
-       ├─ grounding
-       ├─ semantic grounding
-       ├─ claim provenance
-       └─ durability
-       │
-       ↓
-Local AI runtime (Ollama)
-       │
-       └─ qwen3:8b by default
-              ↓
-       untrusted proposal
-              ↓
-       CV Engine validation
-              ↓
-       trusted artifact
+                   CV Engine
+                       │
+        ┌──────────────┴──────────────┐
+        │                             │
+        ▼                             ▼
+Deterministic trusted core      Local AI (Ollama)
+                                bounded assistance only
+candidate truth                 │
+source reconciliation           ├─ resume extraction proposal
+Job Intelligence / Match        └─ inline wording proposal
+trusted advice                        │
+grounding                             ▼
+semantic grounding              deterministic validation
+resume composition                    │
+claim provenance                      ▼
+durability                       accepted or rejected
+        │
+        ▼
+ trusted ResumeVersion
 ```
 
-The same local structured runtime currently serves three bounded capabilities:
+The local structured runtime currently serves two bounded capabilities:
 
 - resume source extraction proposal;
-- fact-preserving resume presentation rewrite;
 - inline candidate-text presentation optimization.
 
-The model cannot bypass application-owned truth contracts.
+The model cannot bypass application-owned truth contracts, and final resume materialization is not a model workload.
 
-### Why Qwen3 8B is the default
+### Workload-specific local model defaults
 
-`qwen3:8b` provides a practical local baseline for multilingual resume material and structured-output workloads while remaining small enough to run on many developer machines. Hosts with more memory can set `OLLAMA_MODEL=qwen3:14b`; smaller hosts can explicitly test a smaller compatible model. The model choice is configuration, not architecture.
+The default local configuration is intentionally workload-specific rather than assigning one large model to every task:
+
+- `qwen3:1.7b` — bounded resume import extraction;
+- `qwen3:4b-instruct` — bounded inline wording optimization;
+- no model — final resume assembly is deterministic and application-owned.
+
+These defaults are runtime configuration, not a claim that smaller hardware or other model combinations are supported. Runtime support is established only by the identified characterization evidence and release policy.
 
 ## Resume import
 
@@ -114,7 +119,7 @@ file validation
   ↓
 server-side document text extraction
   ↓
-local structured extraction proposal
+local structured extraction proposal where needed
   ↓
 source reconciliation
   ↓
@@ -136,7 +141,7 @@ Career Evidence
   +
 optional target Job Description
   ↓
-local constrained rewrite proposal
+deterministic source-preserving resume assembly
   ↓
 text normalization
   ↓
@@ -153,7 +158,7 @@ Career Vault durable commit + reload verification
 ResumeVersion
 ```
 
-Trusted Advice is application-owned and deterministic/context-aware. The local model does not author the visible Suggestions channel.
+The materialization provenance for the current trusted composer is application-owned (`cv-engine-deterministic` / `source-preserving-resume-composer-v2`). Trusted Advice is also application-owned and deterministic/context-aware. The local model does not author the visible Suggestions channel or the final resume.
 
 ## Public product flow
 
@@ -182,7 +187,7 @@ Opportunity Space is a separate comparison surface that evaluates several job de
 
 ## Docker: full local stack
 
-The recommended development/runtime path is Docker Compose because it makes the model and durable storage part of the same reproducible system.
+The recommended development/runtime path is Docker Compose because it makes bounded local AI and durable storage part of the same reproducible system.
 
 ```bash
 cp .env.example .env
@@ -205,7 +210,7 @@ The Compose stack owns:
 
 ```text
 app                 Next.js CV Engine
-ollama              local model server
+ollama              local model server for bounded AI capabilities
 ollama-init         configured model bootstrap
 redis               durable local data store
 redis-http          Upstash-compatible REST facade
@@ -219,7 +224,7 @@ The local Redis REST facade preserves the existing `@upstash/redis` repository c
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 ```
 
-Use this only when the Docker host can expose an NVIDIA GPU to containers. CPU execution remains the portable default.
+Use this only when the Docker host can expose an NVIDIA GPU to containers. CPU execution remains the portable default for the currently characterized reference runtime; lower or different hardware is not inferred to be supported without evidence.
 
 See `QUICK-START.md` for operational commands and troubleshooting.
 
@@ -229,7 +234,8 @@ When running Next.js outside Docker:
 
 ```bash
 npm ci
-ollama pull qwen3:8b
+ollama pull qwen3:1.7b
+ollama pull qwen3:4b-instruct
 cp .env.example .env
 npm run dev
 ```
@@ -238,11 +244,14 @@ Default local model configuration:
 
 ```env
 OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen3:8b
-OLLAMA_NUM_CTX=16384
+OLLAMA_MODEL=qwen3:1.7b
+OLLAMA_IMPORT_MODEL=qwen3:1.7b
+OLLAMA_OPTIMIZE_MODEL=qwen3:4b-instruct
+OLLAMA_NUM_CTX=8192
+RESUME_IMPORT_TIMEOUT_MS=180000
 ```
 
-Host-run trusted durable flows still require a valid `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Docker Compose supplies local equivalents automatically.
+There is no whole-resume generation model setting because final resume assembly is deterministic. Host-run trusted durable flows still require a valid `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Docker Compose supplies local equivalents automatically.
 
 ## Environment
 
@@ -250,13 +259,11 @@ Important server-side settings:
 
 ```env
 OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen3:8b
-OLLAMA_IMPORT_MODEL=
-OLLAMA_RESUME_MODEL=
-OLLAMA_OPTIMIZE_MODEL=
-OLLAMA_NUM_CTX=16384
-RESUME_IMPORT_TIMEOUT_MS=90000
-RESUME_GENERATION_TIMEOUT_MS=120000
+OLLAMA_MODEL=qwen3:1.7b
+OLLAMA_IMPORT_MODEL=qwen3:1.7b
+OLLAMA_OPTIMIZE_MODEL=qwen3:4b-instruct
+OLLAMA_NUM_CTX=8192
+RESUME_IMPORT_TIMEOUT_MS=180000
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 ```
@@ -267,13 +274,13 @@ There is no required remote-model API key in the default runtime.
 
 Primary public routes include:
 
-- `GET /api/health` — local model + durable Redis readiness;
+- `GET /api/health` — bounded local AI + durable Redis readiness;
 - `POST /api/import-resume` — trusted PDF/DOCX intake;
 - `POST /api/extract-certificate-text` — bounded PDF certificate text extraction;
 - `POST /api/optimize-content` — fact-preserving local wording assistance;
 - `POST /api/assess-opportunity` — target-aware opportunity assessment;
 - `POST /api/opportunity-space` — durable multi-opportunity composition;
-- `POST /api/generate-resume` — trusted resume generation + provenance + durability.
+- `POST /api/generate-resume` — deterministic trusted resume composition + provenance + durability.
 
 Additional market-observation routes implement the controlled market architecture and remain intentionally separate from candidate truth.
 
@@ -297,7 +304,7 @@ node scripts/verify-pdfjs-server-bundle.mjs
 docker compose config
 ```
 
-CI remains responsible for dependency audit, lint, typecheck, behavior tests, production build, PDF.js bundle verification, and Chromium acceptance. The local-model migration must not weaken any of those gates.
+CI remains responsible for dependency audit, local-only AI enforcement, lint, typecheck, behavior tests, production build, PDF.js bundle verification, identified Docker build verification, and Chromium acceptance. None of those gates is by itself a substitute for the field release receipts required by the current candidate.
 
 ## Interaction learning: deliberate next boundary
 
@@ -326,6 +333,7 @@ CV Engine does not claim to:
 - invent metrics to make bullets sound stronger;
 - infer credentials, seniority, ownership, impact, or technologies without evidence;
 - guarantee that a resume will “beat” an ATS;
-- treat any model response as a trusted career record by itself.
+- treat any model response as a trusted career record by itself;
+- treat CI success or a synthetic browser fixture as proof that a physical release path has passed.
 
 The product is designed to help a person decide and present more clearly **without corrupting the evidence that decision depends on**.
