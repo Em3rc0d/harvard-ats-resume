@@ -15,13 +15,13 @@ PF0                            CLOSED
 B0                             CLOSED
 B0.5                           CLOSED
 B1                             CLOSED
-B2                             READY_TO_BUILD
-B3                             BLOCKED_BY_B2
+B2                             CLOSED
+B3                             READY_TO_BUILD
 B4                             BLOCKED_BY_B3
 B5                             BLOCKED_BY_B4
 B6                             BLOCKED_BY_B5
 B7                             BLOCKED_BY_B6
-B8                             BLOCKED_BY_B2_B3_B4_B5_B6_B7
+B8                             BLOCKED_BY_B3_B4_B5_B6_B7
 CVENGINE_V1_0_0                BLOCKED_BY_B8
 ```
 
@@ -136,29 +136,52 @@ Receipt: `docs/build/B1-CLOSURE.md`.
 
 ## B2 — Target and Job truth
 
-Contract: `SIGNED`.
-Implementation: `READY_TO_BUILD`.
-
-Required vertical slice:
-
 ```text
-CareerTarget
-JobSnapshot / JobIntelligence
-JobRequirement
-candidate-truth vs market-truth separation
-deterministic requirement representation
-persistence + ownership
-API/application wiring
-UI path
-tests + runtime evidence
+CAREER_TARGET_DOMAIN                    PASS
+TARGET_SEMANTIC_IDENTITY                PASS
+MULTIPLE_TARGET_DIRECTIONS              PASS
+ONE_ACTIVE_TARGET_PER_OWNER             PASS
+JOB_SNAPSHOT_DOMAIN                     PASS
+JOB_REQUIREMENT_DOMAIN                  PASS
+DETERMINISTIC_JOB_INTELLIGENCE          PASS
+CANDIDATE_VS_MARKET_TRUTH_SEPARATION    PASS
+SOURCE_TEXT_PROVENANCE                  PASS
+DB_HASH_AND_SEMANTIC_KEY_VERIFICATION   PASS
+CLIENT_TRUST_BOUNDARY                   PASS
+OWNER_SCOPED_RLS                        PASS
+CROSS_USER_IDOR_DENIAL                  PASS
+ANONYMOUS_MUTATION_DENIAL               PASS
+IMMUTABLE_JOB_TRUTH                     PASS
+ATOMIC_JOB_PERSISTENCE                  PASS
+AUTHENTICATED_API_WIRING                PASS
+B2_UI_PATH                              PASS
+STATIC_CONTRACT_TESTS                   PASS
+CLEAN_DB_MIGRATION_GATE                 PASS
+PHYSICAL_TARGET_GATE                    PASS
+PHYSICAL_JOB_TRUTH_GATE                 PASS
+FRESH_CONNECTION_READBACK               PASS
+B1_REGRESSION_GATE                      PASS
+CONSTRUCTION_CI                         PASS
+STATUS                                  CLOSED
 ```
 
-B2 is the next implementation node and must not be called closed until its own receipt proves this slice.
+Exact implementation-head receipts:
+
+```text
+head_sha      a472428da84ce85f083d37d8316dd1a4d24aca28
+construction  33355740956 success
+b1_postgres   33355740927 success
+b2_postgres   33355740935 success
+```
+
+B2 contains no candidate matching or opportunity decisioning. Those remain B3 responsibilities.
+
+Receipt: `docs/build/B2-CLOSURE.md`.
 
 ## B3 — Assessment
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED_BY_B2`.
+Implementation: `READY_TO_BUILD`.
 
 Required vertical slice:
 
@@ -244,7 +267,7 @@ truth-safe market/candidate boundary
 ## B8 — Release hardening
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED` until B2–B7 are closed.
+Implementation: `BLOCKED` until B3–B7 are closed.
 
 Required release evidence:
 
