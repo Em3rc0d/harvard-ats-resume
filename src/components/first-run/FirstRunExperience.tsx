@@ -3,154 +3,70 @@
 import { useState } from "react";
 import type { AIAccessMode } from "../../domain/ai/AIAccess";
 import { createSupabaseBrowserClient } from "../../infrastructure/supabase/browser";
-import { CareerEvidenceWorkspace } from "../career/CareerEvidenceWorkspace";
+import { CareerIntelligenceWorkspace } from "../CareerIntelligenceWorkspace";
 import { AIAccessPanel } from "./AIAccessPanel";
 import { AuthPanel } from "./AuthPanel";
 import { TrustDisclosurePanel } from "./TrustDisclosurePanel";
 import { useAIAccessSession } from "../providers/AIAccessSessionProvider";
 
 type Step = "TRUST" | "AUTH" | "AI_ACCESS" | "READY";
+type FirstRunExperienceProps = { authConfigured: boolean; platformGeminiAvailable: boolean };
 
-type FirstRunExperienceProps = {
-  authConfigured: boolean;
-  platformGeminiAvailable: boolean;
-};
-
-export function FirstRunExperience({
-  authConfigured,
-  platformGeminiAvailable,
-}: FirstRunExperienceProps) {
+export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: FirstRunExperienceProps) {
   const [step, setStep] = useState<Step>("TRUST");
   const [authStatus, setAuthStatus] = useState<string | null>(null);
   const [disclosureAcknowledged, setDisclosureAcknowledged] = useState(false);
   const { mode, clearSessionSecrets, resetAIAccess } = useAIAccessSession();
 
   async function persistConsent(aiAccessModePreference?: AIAccessMode) {
-    const response = await fetch("/api/consent", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(aiAccessModePreference ? { aiAccessModePreference } : {}),
-    });
-
-    if (!response.ok) {
-      throw new Error("CONSENT_PERSISTENCE_FAILED");
-    }
+    const response = await fetch("/api/consent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(aiAccessModePreference ? { aiAccessModePreference } : {}) });
+    if (!response.ok) throw new Error("CONSENT_PERSISTENCE_FAILED");
   }
 
   async function resolveAuthenticatedStep() {
-    if (!authConfigured) {
-      setStep("AUTH");
-      return;
-    }
-
+    if (!authConfigured) { setStep("AUTH"); return; }
     setAuthStatus("Verifying server session…");
     const response = await fetch("/api/session", { cache: "no-store" });
-
-    if (!response.ok) {
-      setAuthStatus(null);
-      setStep("AUTH");
-      return;
-    }
-
-    if (!disclosureAcknowledged) {
-      setAuthStatus(null);
-      setStep("TRUST");
-      return;
-    }
-
+    if (!response.ok) { setAuthStatus(null); setStep("AUTH"); return; }
+    if (!disclosureAcknowledged) { setAuthStatus(null); setStep("TRUST"); return; }
     setAuthStatus("Recording disclosure acknowledgement…");
-    try {
-      await persistConsent();
-      setAuthStatus(null);
-      setStep("AI_ACCESS");
-    } catch {
-      setAuthStatus("CV Engine could not record your disclosure acknowledgement. Try again.");
-    }
+    try { await persistConsent(); setAuthStatus(null); setStep("AI_ACCESS"); }
+    catch { setAuthStatus("CV Engine could not record your disclosure acknowledgement. Try again."); }
   }
 
   async function acknowledgeDisclosure() {
     setDisclosureAcknowledged(true);
-
-    if (!authConfigured) {
-      setStep("AUTH");
-      return;
-    }
-
+    if (!authConfigured) { setStep("AUTH"); return; }
     setAuthStatus("Checking account session…");
     const response = await fetch("/api/session", { cache: "no-store" });
     setAuthStatus(null);
-
-    if (!response.ok) {
-      setStep("AUTH");
-      return;
-    }
-
+    if (!response.ok) { setStep("AUTH"); return; }
     setAuthStatus("Recording disclosure acknowledgement…");
-    try {
-      await persistConsent();
-      setAuthStatus(null);
-      setStep("AI_ACCESS");
-    } catch {
-      setAuthStatus("CV Engine could not record your disclosure acknowledgement. Try again.");
-    }
+    try { await persistConsent(); setAuthStatus(null); setStep("AI_ACCESS"); }
+    catch { setAuthStatus("CV Engine could not record your disclosure acknowledgement. Try again."); }
   }
 
-  async function finalizeAIAccess(selectedMode: AIAccessMode) {
-    await persistConsent(selectedMode);
-    setStep("READY");
-  }
+  async function finalizeAIAccess(selectedMode: AIAccessMode) { await persistConsent(selectedMode); setStep("READY"); }
 
   async function logout() {
-    clearSessionSecrets();
-    resetAIAccess();
-    setDisclosureAcknowledged(false);
-
-    if (authConfigured) {
-      const supabase = createSupabaseBrowserClient();
-      await supabase.auth.signOut();
-    }
-
+    clearSessionSecrets(); resetAIAccess(); setDisclosureAcknowledged(false);
+    if (authConfigured) { const supabase = createSupabaseBrowserClient(); await supabase.auth.signOut(); }
     setStep("TRUST");
   }
 
-  if (step === "READY") {
-    return <CareerEvidenceWorkspace aiAccessMode={mode} onSignOut={logout} />;
-  }
+  if (step === "READY") return <CareerIntelligenceWorkspace aiAccessMode={mode} onSignOut={logout} />;
 
   return (
     <main className="first-run-shell">
-      <header className="brand-bar">
-        <div>
-          <span className="brand-mark">C</span>
-          <div>
-            <strong>CV Engine</strong>
-            <span>Career intelligence</span>
-          </div>
-        </div>
-        <span className="build-label">vNext · B1</span>
-      </header>
-
+      <header className="brand-bar"><div><span className="brand-mark">C</span><div><strong>CV Engine</strong><span>Career intelligence</span></div></div><span className="build-label">vNext · B2</span></header>
       <div className="step-indicator" aria-label="First-run progress">
         <span className={step === "TRUST" ? "active" : "done"}>1 Trust</span>
         <span className={step === "AUTH" ? "active" : step === "TRUST" ? "" : "done"}>2 Account</span>
         <span className={step === "AI_ACCESS" ? "active" : ""}>3 AI access</span>
       </div>
-
-      {step === "TRUST" ? (
-        <TrustDisclosurePanel onAcknowledge={acknowledgeDisclosure} />
-      ) : null}
-
-      {step === "AUTH" ? (
-        <AuthPanel authConfigured={authConfigured} onAuthenticated={resolveAuthenticatedStep} />
-      ) : null}
-
-      {step === "AI_ACCESS" ? (
-        <AIAccessPanel
-          platformGeminiAvailable={platformGeminiAvailable}
-          onReady={finalizeAIAccess}
-        />
-      ) : null}
-
+      {step === "TRUST" ? <TrustDisclosurePanel onAcknowledge={acknowledgeDisclosure} /> : null}
+      {step === "AUTH" ? <AuthPanel authConfigured={authConfigured} onAuthenticated={resolveAuthenticatedStep} /> : null}
+      {step === "AI_ACCESS" ? <AIAccessPanel platformGeminiAvailable={platformGeminiAvailable} onReady={finalizeAIAccess} /> : null}
       {authStatus ? <p className="floating-status" role="status">{authStatus}</p> : null}
     </main>
   );

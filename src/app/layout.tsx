@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./b2.css";
 
 export const metadata: Metadata = {
   title: "CV Engine vNext",
