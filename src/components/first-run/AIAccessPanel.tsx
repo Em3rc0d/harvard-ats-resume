@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import {
   AI_ACCESS_COPY,
   GeminiCredentialInputSchema,
@@ -15,24 +15,34 @@ type AIAccessPanelProps = {
 };
 
 const modes: AIAccessMode[] = ["PLATFORM_GEMINI", "BYOK_GEMINI", "NO_CLOUD_AI"];
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const noopSubscribe = () => () => undefined;
+
+function useBrowserTransportPolicy() {
+  const byokTransportAllowed = useSyncExternalStore(
+    noopSubscribe,
+    () => isByokTransportAllowed(window.location),
+    () => false,
+  );
+
+  const localHttpException = useSyncExternalStore(
+    noopSubscribe,
+    () =>
+      isByokTransportAllowed(window.location) &&
+      window.location.protocol === "http:" &&
+      LOOPBACK_HOSTS.has(window.location.hostname.toLowerCase()),
+    () => false,
+  );
+
+  return { byokTransportAllowed, localHttpException };
+}
 
 export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPanelProps) {
   const { mode, selectMode, setByokCredential, hasByokCredential } = useAIAccessSession();
   const [credentialInput, setCredentialInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [byokTransportAllowed, setByokTransportAllowed] = useState(false);
-  const [localHttpException, setLocalHttpException] = useState(false);
-
-  useEffect(() => {
-    const allowed = isByokTransportAllowed(window.location);
-    setByokTransportAllowed(allowed);
-    setLocalHttpException(
-      allowed &&
-        window.location.protocol === "http:" &&
-        ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname.toLowerCase()),
-    );
-  }, []);
+  const { byokTransportAllowed, localHttpException } = useBrowserTransportPolicy();
 
   function choose(nextMode: AIAccessMode) {
     if (nextMode === "PLATFORM_GEMINI" && !platformGeminiAvailable) {
