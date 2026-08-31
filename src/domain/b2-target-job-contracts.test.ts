@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { careerTargetSemanticKey } from "../application/targets/CareerTargetIdentity";
 import { analyzeManualJobDescription } from "../application/jobs/DeterministicJobIntelligence";
 import { CareerEvidenceSchema } from "./career/CareerEvidence";
+import { CreateManualJobSnapshotInputSchema } from "./jobs/JobSnapshot";
 import { CreateCareerTargetInputSchema } from "./targets/CareerTarget";
 import { TRUTH_AUTHORITY } from "./truth/TruthClass";
 
@@ -43,6 +44,36 @@ describe("B2 target and job truth contracts", () => {
     const backend = CreateCareerTargetInputSchema.parse(targetBase);
     const security = CreateCareerTargetInputSchema.parse({ ...targetBase, targetRole: "Security Engineer" });
     expect(careerTargetSemanticKey(backend)).not.toBe(careerTargetSemanticKey(security));
+  });
+
+  it("rejects client attempts to supply target ownership or semantic identity", () => {
+    expect(CreateCareerTargetInputSchema.safeParse({
+      ...targetBase,
+      ownerUserId: "00000000-0000-4000-8000-000000000999",
+    }).success).toBe(false);
+
+    expect(CreateCareerTargetInputSchema.safeParse({
+      ...targetBase,
+      semanticKey: "a".repeat(64),
+    }).success).toBe(false);
+  });
+
+  it("rejects client attempts to submit preinterpreted Job truth", () => {
+    const raw = {
+      roleTitle: "Backend Engineer",
+      rawDescription: "Requirements:\n- Java is required.",
+    };
+
+    expect(CreateManualJobSnapshotInputSchema.safeParse({
+      ...raw,
+      ownerUserId: "00000000-0000-4000-8000-000000000999",
+    }).success).toBe(false);
+    expect(CreateManualJobSnapshotInputSchema.safeParse({
+      ...raw,
+      semanticKey: "a".repeat(64),
+      requirements: [{ canonicalConcept: "AWS" }],
+      rawDescriptionSha256: "b".repeat(64),
+    }).success).toBe(false);
   });
 
   it("extracts requirements only from authorized job-description text, never metadata", () => {
