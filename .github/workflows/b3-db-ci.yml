@@ -45,6 +45,8 @@ jobs:
           done
       - name: Execute deterministic assessment contract
         run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b3/assessment.sql
+      - name: Execute evidence-backed state guards
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b3/state-guards.sql
       - name: Execute B3 ownership and client-trust attacks
         run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b3/isolation.sql
       - name: Verify B3 durable state from a fresh connection

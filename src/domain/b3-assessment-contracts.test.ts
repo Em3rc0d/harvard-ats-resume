@@ -16,7 +16,14 @@ const baseMatch = {
   importance: "REQUIRED" as const,
   canonicalConcept: "Kubernetes is required.",
   sourceText: "- Kubernetes is required.",
-  rationale: "Evidence supports Kubernetes.",
+  rationale: "Evidence supports or contradicts the requirement.",
+};
+const evidence = {
+  id: evidenceId,
+  revision: 1,
+  kind: "SKILL" as const,
+  verificationStatus: "VERIFIED" as const,
+  canonicalText: "Candidate evidence relevant to Kubernetes.",
 };
 
 describe("B3 assessment contracts", () => {
@@ -27,36 +34,16 @@ describe("B3 assessment contracts", () => {
     expect(CreateAssessmentInputSchema.safeParse({ jobSnapshotId: requirementId, score: 100 }).success).toBe(false);
   });
 
-  it("requires evidence for MATCH and POTENTIAL_MATCH", () => {
-    for (const status of ["MATCH", "POTENTIAL_MATCH"] as const) {
+  it("requires evidence for every determinate state", () => {
+    for (const status of ["MATCH", "POTENTIAL_MATCH", "GAP", "BLOCKER"] as const) {
       expect(RequirementMatchSchema.safeParse({ ...baseMatch, status, supportingEvidence: [] }).success).toBe(false);
-      expect(RequirementMatchSchema.safeParse({
-        ...baseMatch,
-        status,
-        supportingEvidence: [{
-          id: evidenceId,
-          revision: 1,
-          kind: "SKILL",
-          verificationStatus: "VERIFIED",
-          canonicalText: "Used Kubernetes to operate production workloads.",
-        }],
-      }).success).toBe(true);
+      expect(RequirementMatchSchema.safeParse({ ...baseMatch, status, supportingEvidence: [evidence] }).success).toBe(true);
     }
   });
 
   it("keeps UNKNOWN unsupported rather than silently treating it as a pass", () => {
     expect(RequirementMatchSchema.safeParse({ ...baseMatch, status: "UNKNOWN", supportingEvidence: [] }).success).toBe(true);
-    expect(RequirementMatchSchema.safeParse({
-      ...baseMatch,
-      status: "UNKNOWN",
-      supportingEvidence: [{
-        id: evidenceId,
-        revision: 1,
-        kind: "SKILL",
-        verificationStatus: "VERIFIED",
-        canonicalText: "Kubernetes",
-      }],
-    }).success).toBe(false);
+    expect(RequirementMatchSchema.safeParse({ ...baseMatch, status: "UNKNOWN", supportingEvidence: [evidence] }).success).toBe(false);
   });
 
   it("locks the persistence boundary to a single trusted input", () => {

@@ -33,12 +33,20 @@ export const RequirementMatchSchema = z.object({
   supportingEvidence: z.array(SupportingEvidenceSnapshotSchema),
   rationale: z.string().trim().min(1).max(5_000),
 }).superRefine((value, context) => {
-  const supported = value.status === "MATCH" || value.status === "POTENTIAL_MATCH";
-  if (supported && value.supportingEvidence.length === 0) {
-    context.addIssue({ code: "custom", path: ["supportingEvidence"], message: "Supported match states require Career Evidence." });
+  const evidenceBacked = value.status !== "UNKNOWN";
+  if (evidenceBacked && value.supportingEvidence.length === 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["supportingEvidence"],
+      message: "All determinate match states require Career Evidence; UNKNOWN is the only unsupported state.",
+    });
   }
   if (value.status === "UNKNOWN" && value.supportingEvidence.length > 0) {
-    context.addIssue({ code: "custom", path: ["supportingEvidence"], message: "UNKNOWN must not silently carry supporting evidence." });
+    context.addIssue({
+      code: "custom",
+      path: ["supportingEvidence"],
+      message: "UNKNOWN must not silently carry supporting evidence.",
+    });
   }
 });
 
