@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "build/cv-engine-vnext-*"
+      - "agent/cvengine-contract-closure"
   pull_request:
 
 permissions:
