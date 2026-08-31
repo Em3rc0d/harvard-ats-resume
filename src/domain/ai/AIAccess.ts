@@ -26,6 +26,23 @@ export const GeminiCredentialInputSchema = z
   .min(16, "Gemini API key is too short")
   .max(512, "Gemini API key is too long");
 
+export type BrowserOriginLike = Readonly<{
+  protocol: string;
+  hostname: string;
+}>;
+
+const LOCAL_BYOK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+/**
+ * BYOK may cross the network only over HTTPS. Plain HTTP is permitted solely
+ * for explicit loopback development origins.
+ */
+export function isByokTransportAllowed(origin: BrowserOriginLike): boolean {
+  if (origin.protocol === "https:") return true;
+  if (origin.protocol !== "http:") return false;
+  return LOCAL_BYOK_HOSTS.has(origin.hostname.toLowerCase());
+}
+
 export const AI_ACCESS_COPY: Readonly<Record<AIAccessMode, { title: string; description: string }>> = {
   PLATFORM_GEMINI: {
     title: "Use CV Engine AI",
