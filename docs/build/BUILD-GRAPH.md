@@ -3,6 +3,7 @@
 Status: **AUTHORITATIVE CONSTRUCTION LEDGER**
 
 Closure policy: `docs/build/CLOSURE-PROTOCOL.md`
+Contract sign-off: `docs/build/CONTRACT-SIGNOFF.md`
 
 This file is the single status ledger for the zero-based rebuild. Historical PRs, archived implementation notes and older status documents do not override it.
 
@@ -12,8 +13,8 @@ This file is the single status ledger for the zero-based rebuild. Historical PRs
 Documentation / architecture   CLOSED
 PF0                            CLOSED
 B0                             CLOSED
-B0.5                           BLOCKED_WITH_RECEIPT
-B1                             BLOCKED_WITH_RECEIPT
+B0.5                           CANDIDATE
+B1                             CANDIDATE
 B2                             BLOCKED_BY_B1
 B3                             BLOCKED_BY_B2
 B4                             BLOCKED_BY_B3
@@ -24,32 +25,20 @@ B8                             BLOCKED_BY_B1_B2_B3_B4_B5_B6_B7
 CVENGINE_V1_0_0                BLOCKED_BY_B8
 ```
 
+`CANDIDATE` means the implementation and closure gate exist, but the exact final branch head must be green before the node is promoted to `CLOSED`.
+
 ## Signed contracts
 
-The following architecture/product contracts are frozen unless new executable evidence forces a revision:
-
-- `REBUILD-CONTRACT.md`
-- `docs/vnext/00-FIRST-RUN-TRUST-AND-AI-ACCESS.md`
-- `docs/vnext/01-AI-PROVIDER-ROUTING.md`
-- `docs/vnext/02-BYOK-SECRET-HANDLING.md`
-- `docs/vnext/03-GEMINI-MODEL-MATRIX.md`
-- `docs/vnext/05-IDENTITY-AND-SESSION-CONTRACT.md`
-- `docs/vnext/06-DATA-PERSISTENCE-AND-LIFECYCLE.md`
-- `docs/vnext/07-RUNTIME-TOPOLOGY-AND-DEPLOYMENT-CONTRACT.md`
-- `docs/vnext/08-AI-QUOTA-COST-AND-ABUSE-POLICY.md`
-- `docs/vnext/09-SECURITY-OBSERVABILITY-PRIVACY-BASELINE.md`
-- `docs/vnext/10-ULTRAPREMIUM-UI-MOTION-QUALITY-BAR.md`
-
-The contracts are signed as specifications. Signing them does **not** imply their implementation node is closed.
+The product, truth, identity, persistence, runtime, AI, security and B2–B8 build contracts are signed in `docs/build/CONTRACT-SIGNOFF.md`. Signing a contract does not assert implementation completion.
 
 ## PF0
 
 ```text
-CONTRACT_SIGNED      PASS
-DECISIONS_FROZEN     PASS
-IMPLEMENTATION_AUTHORIZED PASS
-PRODUCTION_QUALIFIED NOT_APPLICABLE_AT_PF0
-STATUS               CLOSED
+CONTRACT_SIGNED              PASS
+DECISIONS_FROZEN             PASS
+IMPLEMENTATION_AUTHORIZED    PASS
+PRODUCTION_QUALIFIED         NOT_APPLICABLE_AT_PF0
+STATUS                       CLOSED
 ```
 
 Authority: `docs/vnext/04-BUILD-READINESS-AUDIT.md`.
@@ -59,22 +48,20 @@ Authority: `docs/vnext/04-BUILD-READINESS-AUDIT.md`.
 ```text
 CLEAN_APP_BASELINE   PASS
 LOCKFILE             PASS
-TYPECHECK             PASS
-LINT                  PASS
-UNIT_TEST             PASS
+TYPECHECK            PASS
+LINT                 PASS
+UNIT_TEST            PASS
 NEXT_BUILD            PASS
-CI_EXACT_HEAD         PASS
-NO_LEGACY_COPY        PASS
-STATUS                CLOSED
+CI_EXACT_HEAD        PASS
+NO_LEGACY_COPY       PASS
+STATUS               CLOSED
 ```
-
-Qualified through the successful construction workflow on rebuild head `89418e21faf7192126df1dfe60822ed1828ad773` and inherited by this closure branch unless later changes break B0 verification.
 
 Receipt: `docs/build/B0-FOUNDATION-STATUS.md`.
 
 ## B0.5 — First-run trust + AI access foundation
 
-Implemented today:
+Implemented:
 
 ```text
 TRUST_DISCLOSURE                 PASS
@@ -85,59 +72,56 @@ AI_MODE_SELECTION                PASS
 NO_CLOUD_PATH                    PASS
 BYOK_MEMORY_ONLY_STORE           PASS
 PLATFORM_KEY_SERVER_ONLY_SCHEMA  PASS
+BYOK_REMOTE_HTTP_REFUSAL         PASS
+LOOPBACK_HTTP_EXCEPTION          PASS
+AI_GATEWAY_FOUNDATION_INTERFACE  PASS
+MODEL_ROUTE_FOUNDATION           PASS
+EXECUTABLE_CONTRACT_TESTS        PASS
 ```
 
-Closure blockers:
+Dynamic provider-path secret certification is inherited by B6/B8 because B0.5 contains the provider foundation, not provider network execution.
 
-```text
-BYOK_REMOTE_HTTP_REFUSAL         REQUIRED
-BYOK_SECRET_CANARY               REQUIRED
-FIRST_RUN_EXECUTABLE_GATE        REQUIRED
-AI_GATEWAY_FOUNDATION_INTERFACE  REQUIRED
-MODEL_ROUTE_FOUNDATION           REQUIRED
-```
+Status: `CANDIDATE` pending exact-final-head construction CI.
 
-Runtime provider invocation, retry/fallback benchmarks and full provider secret-path certification belong to B6/B8 and must not be falsely pulled forward into B0.5.
-
-Status: `BLOCKED_WITH_RECEIPT` until `docs/build/B0.5-CLOSURE.md` reaches PASS.
+Receipt: `docs/build/B0.5-CLOSURE.md`.
 
 ## B1 — Career Evidence core
 
-Implemented today:
+Implemented:
 
 ```text
-CAREER_EVIDENCE_DOMAIN       PASS
-OWNER_SCOPED_SCHEMA          PASS
-REVISIONED_STORAGE_MODEL     PASS
-RLS_DEFINED                  PASS
-OPTIMISTIC_CONCURRENCY       PASS
-MANUAL_CREATE                PASS
-LIST_CURRENT                 PASS
-REVISE                       PASS
-DELETE                       PASS
-AUTHENTICATED_API_WIRING     PASS
-CAREER_EVIDENCE_UI           PASS
-STATIC_CONTRACT_TESTS        PASS
+CAREER_EVIDENCE_DOMAIN           PASS
+OWNER_SCOPED_SCHEMA              PASS
+REVISIONED_STORAGE_MODEL         PASS
+RLS_DEFINED                      PASS
+OPTIMISTIC_CONCURRENCY           PASS
+MANUAL_CREATE                    PASS
+LIST_CURRENT                     PASS
+REVISE                           PASS
+DELETE                           PASS
+AUTHENTICATED_API_WIRING         PASS
+CAREER_EVIDENCE_UI               PASS
+STATIC_CONTRACT_TESTS            PASS
+CLEAN_DB_MIGRATION_GATE          PASS
+REAL_RLS_A_VS_B_GATE             PASS
+ANONYMOUS_DENIAL_GATE            PASS
+REVISION_HISTORY_GATE            PASS
+STALE_REVISION_CONFLICT_GATE     PASS
+CONCURRENT_REVISION_RACE_GATE    PASS
+ATOMIC_ROLLBACK_GATE             PASS
+DURABLE_READBACK_GATE            PASS
+JOB_DESCRIPTION_REJECTION_GATE   PASS
 ```
 
-Required physical closure evidence:
+First physical PostgreSQL receipt: workflow run `33353818973`, successful on head `b933fa2d44a25597deb469a613e6e5fd5f4aeedd`.
 
-```text
-CLEAN_DB_MIGRATION           REQUIRED
-REAL_RLS_USER_A_VS_USER_B    REQUIRED
-ANONYMOUS_DENIAL             REQUIRED
-REVISION_HISTORY             REQUIRED
-STALE_REVISION_CONFLICT      REQUIRED
-CONCURRENT_REVISION_RACE     REQUIRED
-ATOMIC_ROLLBACK              REQUIRED
-DURABLE_READBACK             REQUIRED
-JOB_DESCRIPTION_REJECTION    REQUIRED
-CI_EXECUTES_DATABASE_GATE    REQUIRED
-```
+Status: `CANDIDATE` pending exact-final-head construction + PostgreSQL gates.
 
-Status: `BLOCKED_WITH_RECEIPT` until `docs/build/B1-CLOSURE.md` reaches PASS.
+Receipt: `docs/build/B1-CLOSURE.md`.
 
 ## B2 — Target and Job truth
+
+Signed contract, implementation blocked until B1 closes.
 
 Required vertical slice:
 
@@ -153,9 +137,9 @@ UI path
 tests + runtime evidence
 ```
 
-Status: `BLOCKED_BY_B1`.
-
 ## B3 — Assessment
+
+Signed contract, implementation blocked until B2 closes.
 
 Required vertical slice:
 
@@ -169,9 +153,9 @@ OpportunityAssessment
 no hiring-probability theater
 ```
 
-Status: `BLOCKED_BY_B2`.
-
 ## B4 — ResumeVersion
+
+Signed contract, implementation blocked until B3 closes.
 
 Required vertical slice:
 
@@ -184,9 +168,9 @@ general + targeted resume
 renderer/export
 ```
 
-Status: `BLOCKED_BY_B3`.
-
 ## B5 — Trusted import convenience
+
+Signed contract, implementation blocked until B4 closes.
 
 Required vertical slice:
 
@@ -200,9 +184,9 @@ manual fallback
 temporary source lifecycle
 ```
 
-Status: `BLOCKED_BY_B4`.
-
 ## B6 — AI assistance runtime
+
+Signed contract, implementation blocked until B5 closes.
 
 Required vertical slice:
 
@@ -219,9 +203,9 @@ capability/model benchmarks
 safe total-outage degradation
 ```
 
-Status: `BLOCKED_BY_B5`.
-
 ## B7 — Opportunity Space / market extension
+
+Signed contract, implementation blocked until B6 closes.
 
 Required vertical slice:
 
@@ -234,9 +218,9 @@ candidate retrieval + selected-candidate analysis
 truth-safe market/candidate boundary
 ```
 
-Status: `BLOCKED_BY_B6`.
-
 ## B8 — Release hardening
+
+Signed contract, implementation blocked until all product nodes are closed.
 
 Required release evidence:
 
@@ -255,8 +239,6 @@ export/delete lifecycle
 performance/capacity evidence
 production deployment receipts
 ```
-
-Status: `BLOCKED`.
 
 ## v1.0.0 release equation
 
