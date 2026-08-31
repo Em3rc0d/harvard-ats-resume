@@ -1,6 +1,6 @@
 # B1 — Career Evidence Core Closure
 
-Status: **CANDIDATE — exact-head CI required**
+Status: **CLOSED**
 
 Contract authority:
 
@@ -81,23 +81,38 @@ head_sha   b933fa2d44a25597deb469a613e6e5fd5f4aeedd
 conclusion success
 ```
 
-The job completed all migration, RLS/revision/rollback and concurrent-race steps successfully.
+Exact implementation-head closure receipt:
+
+```text
+head_sha    7c8e771897a5981e49484c23ea4c8ec0924f8432
+construction workflow/run  CV Engine vNext Construction / 33354071620
+postgres workflow/run      CV Engine B1 PostgreSQL Gate / 33354071468
+construction conclusion    success
+postgres conclusion        success
+```
+
+The closure-ledger promotion commit changes status documentation only. Its own required GitHub checks are part of the external closure receipt: if either is red, this `CLOSED` declaration is invalid and the node reverts to `CANDIDATE` by policy.
 
 ## Scope boundary
 
 B1 closes Career Evidence ownership/durability for the implemented manual evidence slice. It does not claim completion of later lifecycle surfaces such as account-wide export/delete, source-upload cleanup, ResumeVersion immutability or backup/restore; those are inherited by their build nodes and B8 release qualification.
 
-## Closure condition
-
-B1 closes only when both of these pass on the exact final branch head:
+## Closure declaration
 
 ```text
-CV Engine vNext Construction
-CV Engine B1 PostgreSQL Gate
+CONTRACT_SIGNED             PASS
+IMPLEMENTED                 PASS
+WIRED                       PASS
+STATIC_TESTS                PASS
+CLEAN_DB_MIGRATION          PASS
+RLS_PHYSICAL_GATE           PASS
+REVISION_HISTORY            PASS
+CONCURRENCY_GATE            PASS
+ATOMIC_ROLLBACK             PASS
+DURABLE_READBACK            PASS
+CONSTRUCTION_CI             PASS
+OPEN_B1_BLOCKERS            NONE
+B1                          CLOSED
 ```
 
-Until exact-head evidence exists:
-
-```text
-B1 = CANDIDATE
-```
+B2 is unblocked. Reopen B1 only if new evidence invalidates one of these predicates.

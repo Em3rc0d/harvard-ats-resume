@@ -13,23 +13,28 @@ This file is the single status ledger for the zero-based rebuild. Historical PRs
 Documentation / architecture   CLOSED
 PF0                            CLOSED
 B0                             CLOSED
-B0.5                           CANDIDATE
-B1                             CANDIDATE
-B2                             BLOCKED_BY_B1
+B0.5                           CLOSED
+B1                             CLOSED
+B2                             READY_TO_BUILD
 B3                             BLOCKED_BY_B2
 B4                             BLOCKED_BY_B3
 B5                             BLOCKED_BY_B4
 B6                             BLOCKED_BY_B5
 B7                             BLOCKED_BY_B6
-B8                             BLOCKED_BY_B1_B2_B3_B4_B5_B6_B7
+B8                             BLOCKED_BY_B2_B3_B4_B5_B6_B7
 CVENGINE_V1_0_0                BLOCKED_BY_B8
 ```
 
-`CANDIDATE` means the implementation and closure gate exist, but the exact final branch head must be green before the node is promoted to `CLOSED`.
+## Contract status
 
-## Signed contracts
+All current rebuild contracts through B8 are signed in `docs/build/CONTRACT-SIGNOFF.md`.
 
-The product, truth, identity, persistence, runtime, AI, security and B2–B8 build contracts are signed in `docs/build/CONTRACT-SIGNOFF.md`. Signing a contract does not assert implementation completion.
+```text
+CONTRACTS_SIGNED = YES
+RELEASE_READY    = NO
+```
+
+A signed contract is frozen specification; it does not imply the corresponding implementation node is complete.
 
 ## PF0
 
@@ -61,8 +66,6 @@ Receipt: `docs/build/B0-FOUNDATION-STATUS.md`.
 
 ## B0.5 — First-run trust + AI access foundation
 
-Implemented:
-
 ```text
 TRUST_DISCLOSURE                 PASS
 EXPLICIT_ACKNOWLEDGEMENT         PASS
@@ -77,17 +80,23 @@ LOOPBACK_HTTP_EXCEPTION          PASS
 AI_GATEWAY_FOUNDATION_INTERFACE  PASS
 MODEL_ROUTE_FOUNDATION           PASS
 EXECUTABLE_CONTRACT_TESTS        PASS
+CONSTRUCTION_CI                  PASS
+STATUS                           CLOSED
 ```
 
-Dynamic provider-path secret certification is inherited by B6/B8 because B0.5 contains the provider foundation, not provider network execution.
+Exact implementation-head construction receipt:
 
-Status: `CANDIDATE` pending exact-final-head construction CI.
+```text
+head_sha  7c8e771897a5981e49484c23ea4c8ec0924f8432
+run       33354071620
+result    success
+```
+
+Dynamic provider-path secret certification remains a B6/B8 release responsibility.
 
 Receipt: `docs/build/B0.5-CLOSURE.md`.
 
 ## B1 — Career Evidence core
-
-Implemented:
 
 ```text
 CAREER_EVIDENCE_DOMAIN           PASS
@@ -111,17 +120,24 @@ CONCURRENT_REVISION_RACE_GATE    PASS
 ATOMIC_ROLLBACK_GATE             PASS
 DURABLE_READBACK_GATE            PASS
 JOB_DESCRIPTION_REJECTION_GATE   PASS
+CONSTRUCTION_CI                  PASS
+STATUS                           CLOSED
 ```
 
-First physical PostgreSQL receipt: workflow run `33353818973`, successful on head `b933fa2d44a25597deb469a613e6e5fd5f4aeedd`.
+Exact implementation-head receipts:
 
-Status: `CANDIDATE` pending exact-final-head construction + PostgreSQL gates.
+```text
+head_sha      7c8e771897a5981e49484c23ea4c8ec0924f8432
+construction  33354071620 success
+postgres      33354071468 success
+```
 
 Receipt: `docs/build/B1-CLOSURE.md`.
 
 ## B2 — Target and Job truth
 
-Signed contract, implementation blocked until B1 closes.
+Contract: `SIGNED`.
+Implementation: `READY_TO_BUILD`.
 
 Required vertical slice:
 
@@ -137,9 +153,12 @@ UI path
 tests + runtime evidence
 ```
 
+B2 is the next implementation node and must not be called closed until its own receipt proves this slice.
+
 ## B3 — Assessment
 
-Signed contract, implementation blocked until B2 closes.
+Contract: `SIGNED`.
+Implementation: `BLOCKED_BY_B2`.
 
 Required vertical slice:
 
@@ -155,7 +174,8 @@ no hiring-probability theater
 
 ## B4 — ResumeVersion
 
-Signed contract, implementation blocked until B3 closes.
+Contract: `SIGNED`.
+Implementation: `BLOCKED_BY_B3`.
 
 Required vertical slice:
 
@@ -170,7 +190,8 @@ renderer/export
 
 ## B5 — Trusted import convenience
 
-Signed contract, implementation blocked until B4 closes.
+Contract: `SIGNED`.
+Implementation: `BLOCKED_BY_B4`.
 
 Required vertical slice:
 
@@ -186,7 +207,8 @@ temporary source lifecycle
 
 ## B6 — AI assistance runtime
 
-Signed contract, implementation blocked until B5 closes.
+Contract: `SIGNED`.
+Implementation: `BLOCKED_BY_B5`.
 
 Required vertical slice:
 
@@ -205,7 +227,8 @@ safe total-outage degradation
 
 ## B7 — Opportunity Space / market extension
 
-Signed contract, implementation blocked until B6 closes.
+Contract: `SIGNED`.
+Implementation: `BLOCKED_BY_B6`.
 
 Required vertical slice:
 
@@ -220,7 +243,8 @@ truth-safe market/candidate boundary
 
 ## B8 — Release hardening
 
-Signed contract, implementation blocked until all product nodes are closed.
+Contract: `SIGNED`.
+Implementation: `BLOCKED` until B2–B7 are closed.
 
 Required release evidence:
 
@@ -262,3 +286,5 @@ Only then may the release ledger state:
 RELEASE_READY = YES
 PRODUCTION_QUALIFIED = YES
 ```
+
+The ledger promotion itself is valid only while its required GitHub checks remain green. New contradictory evidence reopens the affected node under `CLOSURE-PROTOCOL.md`.
