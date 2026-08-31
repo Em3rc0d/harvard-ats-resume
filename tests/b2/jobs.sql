@@ -7,7 +7,9 @@ select encode(digest(:'jd_description','sha256'),'hex') raw_hash,encode(digest(:
 select encode(digest('TOOL'||chr(31)||'REQUIRED'||chr(31)||'kubernetes is required.'||chr(31)||:'h_h1'||chr(31)||'0','sha256'),'hex') k1,
        encode(digest('TOOL'||chr(31)||'PREFERRED'||chr(31)||'terraform is preferred.'||chr(31)||:'h_h2'||chr(31)||'1','sha256'),'hex') k2 \gset k_
 select encode(digest('MANUAL_JOB_DESCRIPTION'||chr(31)||'backend engineer'||chr(31)||''||chr(31)||:'h_raw_hash'||chr(31)||'b2-deterministic-job-intelligence-v1'||chr(31)||:'k_k1'||','||:'k_k2','sha256'),'hex') sk \gset s_
-select count(*) evidence_before from public.career_evidence \gset before_
+
+create temporary table b2_job_truth_guard(evidence_before integer not null) on commit preserve rows;
+insert into b2_job_truth_guard select count(*) from public.career_evidence;
 
 select snapshot_id from public.cv_engine_create_job_snapshot(:'s_sk','Backend Engineer','',:'jd_description',:'h_raw_hash','b2-deterministic-job-intelligence-v1',jsonb_build_array(
  jsonb_build_object('semanticKey',:'k_k1','category','TOOL','importance','REQUIRED','canonicalConcept','Kubernetes is required.','sourceText',:'jd_req1','sourceTextSha256',:'h_h1','sourceOrdinal',0),
@@ -18,9 +20,14 @@ select snapshot_id from public.cv_engine_create_job_snapshot(:'s_sk','Backend En
  jsonb_build_object('semanticKey',:'k_k2','category','TOOL','importance','PREFERRED','canonicalConcept','Terraform is preferred.','sourceText',:'jd_req2','sourceTextSha256',:'h_h2','sourceOrdinal',1)
 ));
 
-do $$ begin
-  if (select count(*) from public.job_snapshots)<>1 or (select count(*) from public.job_requirements)<>2 then raise exception 'B2_JOB_DURABILITY_OR_REPLAY_FAILED'; end if;
-  if (select count(*) from public.career_evidence)<>:'before_evidence_before'::integer then raise exception 'B2_JOB_MUTATED_CANDIDATE_TRUTH'; end if;
+do $$ declare before_count integer; begin
+  select evidence_before into before_count from b2_job_truth_guard;
+  if (select count(*) from public.job_snapshots)<>1 or (select count(*) from public.job_requirements)<>2 then
+    raise exception 'B2_JOB_DURABILITY_OR_REPLAY_FAILED';
+  end if;
+  if (select count(*) from public.career_evidence)<>before_count then
+    raise exception 'B2_JOB_MUTATED_CANDIDATE_TRUTH';
+  end if;
 end $$;
 
 -- Unsupported market text cannot become a persisted requirement.
