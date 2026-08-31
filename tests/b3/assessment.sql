@@ -1,5 +1,21 @@
 \set ON_ERROR_STOP on
 
+-- Lock token semantics directly before any higher-level matcher assertions.
+-- These helpers remain unavailable to authenticated clients; this runs as the
+-- migration owner solely to certify deterministic matching behavior.
+do $$
+begin
+  if public.cv_engine_b3_tokens('Kubernetes is required.') <> array['kubernetes']::text[] then
+    raise exception 'B3_TOKENIZER_REQUIRED_TERM_REGRESSION:%', public.cv_engine_b3_tokens('Kubernetes is required.');
+  end if;
+  if public.cv_engine_b3_tokens('Docker is preferred.') <> array['docker']::text[] then
+    raise exception 'B3_TOKENIZER_PREFERRED_TERM_REGRESSION:%', public.cv_engine_b3_tokens('Docker is preferred.');
+  end if;
+  if public.cv_engine_b3_overlap('Kubernetes is required.', 'Kubernetes') <> 1 then
+    raise exception 'B3_EXACT_CONCEPT_OVERLAP_REGRESSION';
+  end if;
+end $$;
+
 -- Trusted fixture preparation runs as the migration owner. The B2 SHA helper is
 -- intentionally not executable by authenticated clients and this test must not
 -- weaken that boundary merely to prepare deterministic fixture identities.
