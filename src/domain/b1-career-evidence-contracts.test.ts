@@ -64,8 +64,10 @@ describe("B1 Career Evidence contracts", () => {
 
   it("connects successful first-run completion to the real Career Evidence workspace", () => {
     const firstRun = read("src/components/first-run/FirstRunExperience.tsx");
+    const intelligenceWorkspace = read("src/components/CareerIntelligenceWorkspace.tsx");
 
-    expect(firstRun).toContain("<CareerEvidenceWorkspace");
+    expect(firstRun).toContain("<CareerIntelligenceWorkspace");
+    expect(intelligenceWorkspace).toContain("<CareerEvidenceWorkspace");
     expect(firstRun).toContain("persistConsent(selectedMode)");
     expect(firstRun).not.toContain("Your trusted session is ready for Career Evidence");
   });
