@@ -1,10 +1,8 @@
 \set ON_ERROR_STOP on
-set role authenticated;
-set request.jwt.claim.sub='00000000-0000-4000-8000-000000000101';
 
-select evidence_id from public.cv_engine_create_career_evidence('SKILL','MANUAL','VERIFIED','Kubernetes',null) \gset ev_k8s_
-select evidence_id from public.cv_engine_create_career_evidence('SKILL','MANUAL','VERIFIED','Docker',null) \gset ev_docker_
-
+-- Trusted fixture preparation runs as the migration owner. The B2 SHA helper is
+-- intentionally not executable by authenticated clients and this test must not
+-- weaken that boundary merely to prepare deterministic fixture identities.
 select E'Requirements:\n- Kubernetes is required.\n- AWS is required.\nPreferred:\n- Docker is preferred.' description,
        '- Kubernetes is required.' req1,
        '- AWS is required.' req2,
@@ -17,6 +15,13 @@ select public.cv_engine_sha256('TOOL'||chr(31)||'REQUIRED'||chr(31)||'kubernetes
        public.cv_engine_sha256('TOOL'||chr(31)||'REQUIRED'||chr(31)||'aws is required.'||chr(31)||:'h_h2'||chr(31)||'1') k2,
        public.cv_engine_sha256('TOOL'||chr(31)||'PREFERRED'||chr(31)||'docker is preferred.'||chr(31)||:'h_h3'||chr(31)||'2') k3 \gset k_
 select public.cv_engine_sha256('MANUAL_JOB_DESCRIPTION'||chr(31)||'platform engineer'||chr(31)||''||chr(31)||:'h_raw_hash'||chr(31)||'b2-deterministic-job-intelligence-v1'||chr(31)||:'k_k1'||','||:'k_k2'||','||:'k_k3') sk \gset s_
+
+set role authenticated;
+set request.jwt.claim.sub='00000000-0000-4000-8000-000000000101';
+
+select evidence_id from public.cv_engine_create_career_evidence('SKILL','MANUAL','VERIFIED','Kubernetes',null) \gset ev_k8s_
+select evidence_id from public.cv_engine_create_career_evidence('SKILL','MANUAL','VERIFIED','Docker',null) \gset ev_docker_
+
 select snapshot_id from public.cv_engine_create_job_snapshot(
   :'s_sk','Platform Engineer','',:'jd_description',:'h_raw_hash','b2-deterministic-job-intelligence-v1',
   jsonb_build_array(
