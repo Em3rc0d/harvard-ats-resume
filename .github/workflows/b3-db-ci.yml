@@ -1,16 +1,16 @@
-name: CV Engine B2 PostgreSQL Gate
+name: CV Engine B3 PostgreSQL Gate
 
 on:
   push:
     branches:
-      - "build/cv-engine-vnext-*"
+      - "build/cv-engine-vnext-b3"
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  b2-postgres:
+  b3-postgres:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -40,13 +40,12 @@ jobs:
         run: |
           set -euo pipefail
           for migration in $(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | sort); do
+            echo "Applying $migration"
             psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f "$migration"
           done
-      - name: Execute CareerTarget physical contract
-        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b2/targets.sql
-      - name: Execute Job truth physical contract
-        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b2/jobs.sql
-      - name: Execute ownership and immutability contract
-        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b2/isolation.sql
-      - name: Verify durable state from a fresh connection
-        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b2/readback.sql
+      - name: Execute deterministic assessment contract
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b3/assessment.sql
+      - name: Execute B3 ownership and client-trust attacks
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b3/isolation.sql
+      - name: Verify B3 durable state from a fresh connection
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b3/readback.sql
