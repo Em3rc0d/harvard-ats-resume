@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import {
   AI_ACCESS_COPY,
   GeminiCredentialInputSchema,
+  isByokTransportAllowed,
   type AIAccessMode,
 } from "../../domain/ai/AIAccess";
 import { useAIAccessSession } from "../providers/AIAccessSessionProvider";
@@ -14,16 +15,43 @@ type AIAccessPanelProps = {
 };
 
 const modes: AIAccessMode[] = ["PLATFORM_GEMINI", "BYOK_GEMINI", "NO_CLOUD_AI"];
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const noopSubscribe = () => () => undefined;
+
+function useBrowserTransportPolicy() {
+  const byokTransportAllowed = useSyncExternalStore(
+    noopSubscribe,
+    () => isByokTransportAllowed(window.location),
+    () => false,
+  );
+
+  const localHttpException = useSyncExternalStore(
+    noopSubscribe,
+    () =>
+      isByokTransportAllowed(window.location) &&
+      window.location.protocol === "http:" &&
+      LOOPBACK_HOSTS.has(window.location.hostname.toLowerCase()),
+    () => false,
+  );
+
+  return { byokTransportAllowed, localHttpException };
+}
 
 export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPanelProps) {
   const { mode, selectMode, setByokCredential, hasByokCredential } = useAIAccessSession();
   const [credentialInput, setCredentialInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { byokTransportAllowed, localHttpException } = useBrowserTransportPolicy();
 
   function choose(nextMode: AIAccessMode) {
     if (nextMode === "PLATFORM_GEMINI" && !platformGeminiAvailable) {
       setError("CV Engine Gemini access is not configured in this runtime.");
+      return;
+    }
+
+    if (nextMode === "BYOK_GEMINI" && !byokTransportAllowed) {
+      setError("BYOK is disabled on insecure remote HTTP. Use HTTPS or localhost development.");
       return;
     }
 
@@ -35,6 +63,11 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
   }
 
   function storeByokCredential() {
+    if (!byokTransportAllowed) {
+      setError("BYOK is disabled on insecure remote HTTP. Use HTTPS or localhost development.");
+      return;
+    }
+
     const parsed = GeminiCredentialInputSchema.safeParse(credentialInput);
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid Gemini API key.");
@@ -49,7 +82,7 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
   const canContinue =
     mode === "NO_CLOUD_AI" ||
     (mode === "PLATFORM_GEMINI" && platformGeminiAvailable) ||
-    (mode === "BYOK_GEMINI" && hasByokCredential);
+    (mode === "BYOK_GEMINI" && byokTransportAllowed && hasByokCredential);
 
   async function continueToProduct() {
     if (!mode || !canContinue) return;
@@ -77,7 +110,9 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
       <div className="choice-grid" role="radiogroup" aria-label="AI access mode">
         {modes.map((candidate) => {
           const copy = AI_ACCESS_COPY[candidate];
-          const unavailable = candidate === "PLATFORM_GEMINI" && !platformGeminiAvailable;
+          const unavailable =
+            (candidate === "PLATFORM_GEMINI" && !platformGeminiAvailable) ||
+            (candidate === "BYOK_GEMINI" && !byokTransportAllowed);
           return (
             <button
               aria-checked={mode === candidate}
@@ -90,7 +125,12 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
             >
               <strong>{copy.title}</strong>
               <span>{copy.description}</span>
-              {unavailable ? <small>Not configured in this runtime</small> : null}
+              {candidate === "PLATFORM_GEMINI" && !platformGeminiAvailable ? (
+                <small>Not configured in this runtime</small>
+              ) : null}
+              {candidate === "BYOK_GEMINI" && !byokTransportAllowed ? (
+                <small>HTTPS required outside localhost</small>
+              ) : null}
             </button>
           );
         })}
@@ -103,20 +143,28 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
             <input
               autoCapitalize="off"
               autoComplete="off"
-              disabled={busy}
+              disabled={busy || !byokTransportAllowed}
               spellCheck={false}
               type="password"
               value={credentialInput}
               onChange={(event) => setCredentialInput(event.target.value)}
             />
           </label>
-          <button className="secondary" disabled={busy} type="button" onClick={storeByokCredential}>
+          <button
+            className="secondary"
+            disabled={busy || !byokTransportAllowed}
+            type="button"
+            onClick={storeByokCredential}
+          >
             {hasByokCredential ? "Replace session key" : "Use key for this session"}
           </button>
           <p className="fine-print">
             The raw key stays in browser memory only in this build. It is not written to local
             storage, cookies, URLs, Redis, PostgreSQL, logs, analytics, or consent metadata.
           </p>
+          {localHttpException ? (
+            <p className="fine-print">Local HTTP is enabled only as an explicit development exception.</p>
+          ) : null}
         </div>
       ) : null}
 

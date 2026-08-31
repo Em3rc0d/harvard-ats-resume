@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { TransientBYOKStore } from "../application/ai/TransientBYOKStore";
-import { AIAccessPreferenceSchema } from "./ai/AIAccess";
+import {
+  buildProviderAttemptPlan,
+  getModelRoute,
+} from "../application/ai/AIGatewayFoundation";
+import {
+  AIAccessPreferenceSchema,
+  isByokTransportAllowed,
+} from "./ai/AIAccess";
 import {
   ConsentReceiptSchema,
   CURRENT_TRUST_DISCLOSURE,
@@ -55,5 +62,43 @@ describe("B0.5 trust and AI access contracts", () => {
     expect(store.hasCredential()).toBe(false);
     expect(store.read()).toBeNull();
     expect(JSON.stringify(store)).not.toContain(plausibleKey);
+  });
+
+  it("permits BYOK only over HTTPS or explicit loopback HTTP development", () => {
+    expect(isByokTransportAllowed({ protocol: "https:", hostname: "cvengine.example" })).toBe(true);
+    expect(isByokTransportAllowed({ protocol: "http:", hostname: "localhost" })).toBe(true);
+    expect(isByokTransportAllowed({ protocol: "http:", hostname: "127.0.0.1" })).toBe(true);
+    expect(isByokTransportAllowed({ protocol: "http:", hostname: "::1" })).toBe(true);
+    expect(isByokTransportAllowed({ protocol: "http:", hostname: "cvengine.example" })).toBe(false);
+    expect(isByokTransportAllowed({ protocol: "ftp:", hostname: "localhost" })).toBe(false);
+  });
+
+  it("freezes the vNext capability-specific model routing baseline", () => {
+    expect(getModelRoute("RESUME_IMPORT_FRAGMENT").geminiModels).toEqual([
+      "gemini-3.5-flash-lite",
+      "gemini-3.7-flash",
+    ]);
+    expect(getModelRoute("INLINE_WORDING_OPTIMIZATION").geminiModels).toEqual([
+      "gemini-3.5-flash-lite",
+    ]);
+  });
+
+  it("skips Gemini completely in no-cloud mode while preserving local fallback", () => {
+    const plan = buildProviderAttemptPlan("JOB_DESCRIPTION_INTERPRETATION", "NO_CLOUD_AI");
+    expect(plan.some((attempt) => attempt.provider === "GEMINI")).toBe(false);
+    expect(plan).toEqual([
+      {
+        provider: "OLLAMA",
+        model: "cv-engine-analysis",
+        credentialMode: "NO_CLOUD_AI",
+      },
+    ]);
+  });
+
+  it("routes cloud-enabled modes through Gemini before Ollama", () => {
+    const plan = buildProviderAttemptPlan("RESUME_IMPORT_FRAGMENT", "PLATFORM_KEY");
+    expect(plan.map((attempt) => attempt.provider)).toEqual(["GEMINI", "GEMINI", "OLLAMA"]);
+    expect(plan[0]?.model).toBe("gemini-3.5-flash-lite");
+    expect(plan.at(-1)?.credentialMode).toBe("NO_CLOUD_AI");
   });
 });
