@@ -14,6 +14,11 @@ from public.cv_engine_create_career_evidence(
 )
 \gset b1_
 
+create temporary table b1_test_context (
+  evidence_id uuid primary key
+) on commit preserve rows;
+insert into b1_test_context(evidence_id) values (:'b1_evidence_id'::uuid);
+
 -- Readback and initial revision integrity.
 do $$
 declare
@@ -43,16 +48,18 @@ from public.cv_engine_revise_career_evidence(
 
 do $$
 declare
+  v_id uuid;
   v_current integer;
   v_history integer;
 begin
+  select evidence_id into v_id from b1_test_context;
   select current_revision into v_current
   from public.career_evidence
-  where id = :'b1_evidence_id'::uuid;
+  where id = v_id;
 
   select count(*) into v_history
   from public.career_evidence_revisions
-  where evidence_id = :'b1_evidence_id'::uuid;
+  where evidence_id = v_id;
 
   if v_current <> 2 or v_history <> 2 then
     raise exception 'B1_REVISION_HISTORY_FAILED current=% history=%', v_current, v_history;
@@ -62,10 +69,13 @@ $$;
 
 -- A stale expected revision must fail rather than silently overwrite.
 do $$
+declare
+  v_id uuid;
 begin
+  select evidence_id into v_id from b1_test_context;
   begin
     perform * from public.cv_engine_revise_career_evidence(
-      :'b1_evidence_id'::uuid,
+      v_id,
       1,
       'VERIFIED',
       'This stale write must never win.',
@@ -136,12 +146,15 @@ set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000202';
 
 do $$
 declare
+  v_id uuid;
   v_visible integer;
   v_changed integer;
 begin
+  select evidence_id into v_id from b1_test_context;
+
   select count(*) into v_visible
   from public.career_evidence
-  where id = :'b1_evidence_id'::uuid;
+  where id = v_id;
 
   if v_visible <> 0 then
     raise exception 'B1_RLS_CROSS_USER_READ_ALLOWED';
@@ -149,7 +162,7 @@ begin
 
   update public.career_evidence
   set current_revision = current_revision + 1
-  where id = :'b1_evidence_id'::uuid;
+  where id = v_id;
   get diagnostics v_changed = row_count;
 
   if v_changed <> 0 then
@@ -157,7 +170,7 @@ begin
   end if;
 
   delete from public.career_evidence
-  where id = :'b1_evidence_id'::uuid;
+  where id = v_id;
   get diagnostics v_changed = row_count;
 
   if v_changed <> 0 then
@@ -168,10 +181,13 @@ $$;
 
 -- User B cannot use the revision RPC against User A's evidence.
 do $$
+declare
+  v_id uuid;
 begin
+  select evidence_id into v_id from b1_test_context;
   begin
     perform * from public.cv_engine_revise_career_evidence(
-      :'b1_evidence_id'::uuid,
+      v_id,
       2,
       'VERIFIED',
       'Cross-user mutation must fail.',
