@@ -17,11 +17,11 @@ B0.5                           CLOSED
 B1                             CLOSED
 B2                             CLOSED
 B3                             CLOSED
-B4                             READY_TO_BUILD
-B5                             BLOCKED_BY_B4
+B4                             CLOSED
+B5                             READY_TO_BUILD
 B6                             BLOCKED_BY_B5
 B7                             BLOCKED_BY_B6
-B8                             BLOCKED_BY_B4_B5_B6_B7
+B8                             BLOCKED_BY_B5_B6_B7
 CVENGINE_V1_0_0                BLOCKED_BY_B8
 ```
 
@@ -175,38 +175,57 @@ CONSTRUCTION_CI                           PASS
 STATUS                                    CLOSED
 ```
 
-Final implementation head before promotion:
-
-```text
-head_sha      aa7d40e0744e47bc794c768dbd88270ad7182d00
-construction  33359163193 success
-b1_postgres   33359163195 success
-b2_postgres   33359163192 success
-b3_postgres   33359163184 success
-```
-
 Receipt: `docs/build/B3-CLOSURE.md`.
 
 ## B4 — ResumeVersion
 
-Contract: `SIGNED`.
-Implementation: `READY_TO_BUILD`.
+```text
+DETERMINISTIC_COMPOSITION                 PASS
+SOURCE_PRESERVING_TRUSTED_CLAIMS          PASS
+VERIFIED_EVIDENCE_ONLY                    PASS
+JOB_TRUTH_NEVER_BECOMES_CANDIDATE_CLAIM  PASS
+GENERAL_TARGETED_BOUNDARY                 PASS
+TARGETED_ASSESSMENT_PROVENANCE            PASS
+CLAIM_TO_EVIDENCE_ID_REVISION             PASS
+HASHED_PROVENANCE                         PASS
+MANIFEST_DOCUMENT_CLAIM_CONSISTENCY       PASS
+IMMUTABLE_RESUME_VERSION                  PASS
+IMMUTABLE_RESUME_CLAIMS                   PASS
+SEMANTIC_REPLAY_IDEMPOTENCE               PASS
+HISTORICAL_VERSION_PRESERVATION           PASS
+ATOMIC_VERSION_PLUS_CLAIMS                PASS
+FAULT_INJECTION_ROLLBACK                  PASS
+OWNER_SCOPED_RLS                          PASS
+CROSS_USER_READ_DENIAL                    PASS
+ANONYMOUS_RPC_DENIAL                      PASS
+DIRECT_CLIENT_WRITE_DENIAL                PASS
+TEXT_EXPORT                               PASS
+PROVENANCE_JSON_EXPORT                    PASS
+FRESH_CONNECTION_DURABLE_READBACK         PASS
+B1_REGRESSION                             PASS
+B2_REGRESSION                             PASS
+B3_REGRESSION                             PASS
+CONSTRUCTION                              PASS
+STATUS                                    CLOSED
+```
 
-Required vertical slice:
+Final implementation head before promotion:
 
 ```text
-source-preserving deterministic composition
-claim-to-assertion/evidence provenance
-atomic immutable ResumeVersion
-manifest/version metadata
-general + targeted resume
-renderer/export
+head_sha      45d83e30649b3936fdbcbdb75663dea9ada9216d
+construction  33461600465 success
+b1_postgres   33461600415 success
+b2_postgres   33461600422 success
+b3_postgres   33461600380 success
+b4_postgres   33461600358 success
 ```
+
+Receipt: `docs/build/B4-CLOSURE.md`.
 
 ## B5 — Trusted import convenience
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED_BY_B4`.
+Implementation: `READY_TO_BUILD`.
 
 Required vertical slice:
 
@@ -259,7 +278,7 @@ truth-safe market/candidate boundary
 ## B8 — Release hardening
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED` until B4–B7 are closed.
+Implementation: `BLOCKED` until B5–B7 are closed.
 
 Required release evidence:
 
