@@ -1,0 +1,51 @@
+name: CV Engine B5 PostgreSQL Gate
+
+on:
+  push:
+    branches:
+      - "build/cv-engine-vnext-*"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  b5-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cvengine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d cvengine"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/cvengine
+      PGPASSWORD: postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Bootstrap Supabase auth semantics
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b1/postgres-auth-shim.sql
+      - name: Apply all versioned migrations to clean database
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in $(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | sort); do
+            echo "Applying $migration"
+            psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Execute trusted import and acceptance contract
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b5/import.sql
+      - name: Execute B5 ownership, lifecycle and direct-write attacks
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b5/isolation.sql
+      - name: Verify B5 durable provenance from a fresh connection
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b5/readback.sql
