@@ -15,11 +15,13 @@ export function ResumeImportWorkspace() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/imports/resume", { cache: "no-store" }).then(async (response) => ({ response, body: await response.json().catch(() => null) })).then(({ response, body }) => {
-      if (cancelled) return;
-      if (!response.ok) setError(body?.error ?? "IMPORT_LOAD_FAILED");
-      else setImports(Array.isArray(body?.imports) ? body.imports : []);
-    });
+    void fetch("/api/imports/resume", { cache: "no-store" })
+      .then(async (response) => ({ response, body: await response.json().catch(() => null) }))
+      .then(({ response, body }) => {
+        if (cancelled) return;
+        if (!response.ok) setError(body?.error ?? "IMPORT_LOAD_FAILED");
+        else setImports(Array.isArray(body?.imports) ? body.imports : []);
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -43,11 +45,12 @@ export function ResumeImportWorkspace() {
   async function resolveProposal(receiptId: string, proposalId: string, action: "accept" | "dismiss") {
     setBusy(true);
     setError(null);
-    const response = await fetch(`/api/imports/proposals/${proposalId}/${action}`, {
-      method: "POST",
-      headers: action === "accept" ? { "Content-Type": "application/json" } : undefined,
-      body: action === "accept" ? JSON.stringify({ kind: kindByProposal[proposalId] ?? "PROJECT" }) : undefined,
-    });
+    const init: RequestInit = { method: "POST" };
+    if (action === "accept") {
+      init.headers = { "Content-Type": "application/json" };
+      init.body = JSON.stringify({ kind: kindByProposal[proposalId] ?? "PROJECT" });
+    }
+    const response = await fetch(`/api/imports/proposals/${proposalId}/${action}`, init);
     const body = await response.json().catch(() => null);
     if (!response.ok) setError(body?.error ?? "IMPORT_PROPOSAL_UPDATE_FAILED");
     else if (body.receipt) replaceReceipt(body.receipt as ImportReceipt);

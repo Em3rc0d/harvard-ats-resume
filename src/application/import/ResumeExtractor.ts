@@ -114,12 +114,12 @@ function extractDocxText(buffer: Buffer) {
 
 function decodePdfBytes(bytes: number[]) {
   const buffer = Buffer.from(bytes);
-  if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
+  if (buffer.length >= 2 && buffer.readUInt8(0) === 0xfe && buffer.readUInt8(1) === 0xff) {
     const body = buffer.subarray(2);
     const swapped = Buffer.alloc(body.length);
     for (let i = 0; i + 1 < body.length; i += 2) {
-      swapped[i] = body[i + 1];
-      swapped[i + 1] = body[i];
+      swapped.writeUInt8(body.readUInt8(i + 1), i);
+      swapped.writeUInt8(body.readUInt8(i), i + 1);
     }
     return swapped.toString("utf16le");
   }
@@ -135,23 +135,26 @@ function readPdfLiteral(source: string, start: number) {
     if (code === 0x5c) {
       index += 1;
       if (index >= source.length) break;
-      const escaped = source[index];
+      const escaped = source.charAt(index);
       const map: Record<string, number> = { n: 10, r: 13, t: 9, b: 8, f: 12, "(": 40, ")": 41, "\\": 92 };
-      if (escaped in map) {
-        bytes.push(map[escaped]);
+      const mapped = map[escaped];
+      if (mapped !== undefined) {
+        bytes.push(mapped);
         index += 1;
         continue;
       }
       if (escaped === "\r" || escaped === "\n") {
-        if (escaped === "\r" && source[index + 1] === "\n") index += 1;
+        if (escaped === "\r" && source.charAt(index + 1) === "\n") index += 1;
         index += 1;
         continue;
       }
       if (/[0-7]/.test(escaped)) {
         let octal = escaped;
         let consumed = 1;
-        while (consumed < 3 && /[0-7]/.test(source[index + consumed] ?? "")) {
-          octal += source[index + consumed];
+        while (consumed < 3) {
+          const next = source.charAt(index + consumed);
+          if (!/[0-7]/.test(next)) break;
+          octal += next;
           consumed += 1;
         }
         bytes.push(Number.parseInt(octal, 8) & 0xff);
@@ -196,7 +199,7 @@ function readPdfHex(source: string, start: number) {
 
 function skipWhitespace(source: string, start: number) {
   let index = start;
-  while (index < source.length && /\s/.test(source[index])) index += 1;
+  while (index < source.length && /\s/.test(source.charAt(index))) index += 1;
   return index;
 }
 
@@ -204,15 +207,16 @@ function extractPdfTextFromBlock(block: string) {
   const chunks: string[] = [];
   let index = 0;
   while (index < block.length) {
-    if (block[index] === "(") {
+    if (block.charAt(index) === "(") {
       const literal = readPdfLiteral(block, index);
       if (!literal) { index += 1; continue; }
       const operatorAt = skipWhitespace(block, literal.end);
-      if (block.startsWith("Tj", operatorAt) || block[operatorAt] === "'" || block[operatorAt] === '"') chunks.push(literal.value);
+      const operator = block.charAt(operatorAt);
+      if (block.startsWith("Tj", operatorAt) || operator === "'" || operator === '"') chunks.push(literal.value);
       index = literal.end;
       continue;
     }
-    if (block[index] === "<" && block[index + 1] !== "<") {
+    if (block.charAt(index) === "<" && block.charAt(index + 1) !== "<") {
       const hex = readPdfHex(block, index);
       if (!hex) { index += 1; continue; }
       const operatorAt = skipWhitespace(block, hex.end);
@@ -220,20 +224,20 @@ function extractPdfTextFromBlock(block: string) {
       index = hex.end;
       continue;
     }
-    if (block[index] === "[") {
+    if (block.charAt(index) === "[") {
       let cursor = index + 1;
       const values: string[] = [];
       let closed = false;
       while (cursor < block.length) {
-        if (block[cursor] === "]") { closed = true; cursor += 1; break; }
-        if (block[cursor] === "(") {
+        if (block.charAt(cursor) === "]") { closed = true; cursor += 1; break; }
+        if (block.charAt(cursor) === "(") {
           const literal = readPdfLiteral(block, cursor);
           if (!literal) break;
           values.push(literal.value);
           cursor = literal.end;
           continue;
         }
-        if (block[cursor] === "<" && block[cursor + 1] !== "<") {
+        if (block.charAt(cursor) === "<" && block.charAt(cursor + 1) !== "<") {
           const hex = readPdfHex(block, cursor);
           if (!hex) break;
           values.push(hex.value);
@@ -262,14 +266,19 @@ function extractPdfText(buffer: Buffer) {
   while ((match = streamRegex.exec(latin)) !== null) {
     const dictionaryEnd = latin.lastIndexOf(">>", match.index);
     const dictionaryStart = dictionaryEnd >= 0 ? latin.lastIndexOf("<<", dictionaryEnd) : -1;
-    const endStream = latin.indexOf("endstream", match.index + match[0].length);
+    const streamMarker = match[0] ?? "";
+    const endStream = latin.indexOf("endstream", match.index + streamMarker.length);
     if (dictionaryStart < 0 || dictionaryEnd < dictionaryStart || endStream < 0) continue;
     const dictionary = latin.slice(dictionaryStart, dictionaryEnd + 2);
     const unsupportedFilter = /\/Filter\s+(?!\/FlateDecode\b)/.test(dictionary) || (/\/Filter\s*\[/.test(dictionary) && !/\/FlateDecode/.test(dictionary));
     if (unsupportedFilter) continue;
-    let dataStart = match.index + match[0].length;
+    const dataStart = match.index + streamMarker.length;
     let dataEnd = endStream;
-    while (dataEnd > dataStart && (buffer[dataEnd - 1] === 0x0a || buffer[dataEnd - 1] === 0x0d)) dataEnd -= 1;
+    while (dataEnd > dataStart) {
+      const previous = buffer.readUInt8(dataEnd - 1);
+      if (previous !== 0x0a && previous !== 0x0d) break;
+      dataEnd -= 1;
+    }
     const streamBytes = buffer.subarray(dataStart, dataEnd);
     try {
       const decoded = /\/FlateDecode\b/.test(dictionary) ? inflateSync(streamBytes, { maxOutputLength: 2 * 1024 * 1024 }) : streamBytes;
@@ -283,7 +292,10 @@ function extractPdfText(buffer: Buffer) {
   const chunks: string[] = [];
   for (const stream of decodedStreams) {
     const blocks = stream.matchAll(/BT([\s\S]*?)ET/g);
-    for (const block of blocks) chunks.push(...extractPdfTextFromBlock(block[1]));
+    for (const block of blocks) {
+      const blockBody = block[1];
+      if (blockBody !== undefined) chunks.push(...extractPdfTextFromBlock(blockBody));
+    }
   }
   return normalizeExtractedText(chunks.join("\n"));
 }
