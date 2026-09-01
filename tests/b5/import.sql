@@ -19,6 +19,7 @@ select * from public.cv_engine_record_resume_import(
     jsonb_build_object('ordinal',3,'sourceLine',3,'canonicalText','AWS exposure','sourceTextSha256',:'hashes_h3')
   )
 );
+
 create temporary table b5_replay as
 select * from public.cv_engine_record_resume_import(
   'renamed-resume.pdf','PDF',1234,:'hashes_source_hash',:'hashes_extracted_hash','EXTRACTED',null,
@@ -29,64 +30,142 @@ select * from public.cv_engine_record_resume_import(
   )
 );
 
-select receipt_id from b5_first \gset receipt_
-select id proposal_id from public.import_proposals where receipt_id=:'receipt_receipt_id'::uuid and ordinal=1 \gset p1_
-select id proposal_id from public.import_proposals where receipt_id=:'receipt_receipt_id'::uuid and ordinal=2 \gset p2_
-select id proposal_id from public.import_proposals where receipt_id=:'receipt_receipt_id'::uuid and ordinal=3 \gset p3_
+create temporary table b5_state as
+select
+  f.receipt_id,
+  (select id from public.import_proposals where receipt_id=f.receipt_id and ordinal=1) proposal_1_id,
+  (select id from public.import_proposals where receipt_id=f.receipt_id and ordinal=2) proposal_2_id,
+  (select id from public.import_proposals where receipt_id=f.receipt_id and ordinal=3) proposal_3_id
+from b5_first f;
 
-select evidence_id from public.cv_engine_accept_import_proposal(:'p1_proposal_id'::uuid,'SKILL') \gset accepted_
-select public.cv_engine_dismiss_import_proposal(:'p2_proposal_id'::uuid);
+create temporary table b5_accepted as
+select evidence_id
+from public.cv_engine_accept_import_proposal((select proposal_1_id from b5_state),'SKILL');
 
-do $$ declare first_id uuid; replay_id uuid; replay_created boolean; begin
+select public.cv_engine_dismiss_import_proposal((select proposal_2_id from b5_state));
+
+do $$
+declare
+  first_id uuid;
+  replay_id uuid;
+  replay_created boolean;
+begin
   select receipt_id into first_id from b5_first;
   select receipt_id, created into replay_id, replay_created from b5_replay;
-  if first_id <> replay_id or replay_created then raise exception 'B5_IMPORT_REPLAY_NOT_IDEMPOTENT'; end if;
-  if (select count(*) from public.import_proposals where receipt_id=first_id) <> 3 then raise exception 'B5_PROPOSAL_COUNT_MISMATCH'; end if;
+  if first_id <> replay_id or replay_created then
+    raise exception 'B5_IMPORT_REPLAY_NOT_IDEMPOTENT';
+  end if;
+  if (select count(*) from public.import_proposals where receipt_id=first_id) <> 3 then
+    raise exception 'B5_PROPOSAL_COUNT_MISMATCH';
+  end if;
 end $$;
 
-do $$ begin
+do $$
+declare
+  accepted_id uuid := (select evidence_id from b5_accepted);
+  receipt_id_value uuid := (select receipt_id from b5_state);
+  dismissed_id uuid := (select proposal_2_id from b5_state);
+begin
   if not exists (
-    select 1 from public.career_evidence ce
-    join public.career_evidence_revisions cer on cer.evidence_id=ce.id and cer.owner_user_id=ce.owner_user_id and cer.revision_number=ce.current_revision
-    where ce.id=:'accepted_evidence_id'::uuid
+    select 1
+    from public.career_evidence ce
+    join public.career_evidence_revisions cer
+      on cer.evidence_id=ce.id
+     and cer.owner_user_id=ce.owner_user_id
+     and cer.revision_number=ce.current_revision
+    where ce.id=accepted_id
       and ce.source='IMPORTED_RESUME'
       and ce.kind='SKILL'
       and cer.verification_status='NEEDS_REVIEW'
       and cer.canonical_text='Kubernetes operations'
-      and cer.source_document_id=:'receipt_receipt_id'::uuid
-  ) then raise exception 'B5_ACCEPTED_PROPOSAL_DID_NOT_CREATE_REVIEWABLE_IMPORTED_EVIDENCE'; end if;
+      and cer.source_document_id=receipt_id_value
+  ) then
+    raise exception 'B5_ACCEPTED_PROPOSAL_DID_NOT_CREATE_REVIEWABLE_IMPORTED_EVIDENCE';
+  end if;
+
   if exists (
-    select 1 from public.career_evidence ce
-    join public.career_evidence_revisions cer on cer.evidence_id=ce.id and cer.owner_user_id=ce.owner_user_id and cer.revision_number=ce.current_revision
-    where ce.id=:'accepted_evidence_id'::uuid and cer.verification_status='VERIFIED'
-  ) then raise exception 'B5_IMPORT_AUTO_VERIFIED_CANDIDATE_TRUTH'; end if;
-  if not exists (select 1 from public.import_proposals where id=:'p2_proposal_id'::uuid and status='DISMISSED' and accepted_evidence_id is null) then raise exception 'B5_DISMISS_FAILED'; end if;
+    select 1
+    from public.career_evidence ce
+    join public.career_evidence_revisions cer
+      on cer.evidence_id=ce.id
+     and cer.owner_user_id=ce.owner_user_id
+     and cer.revision_number=ce.current_revision
+    where ce.id=accepted_id
+      and cer.verification_status='VERIFIED'
+  ) then
+    raise exception 'B5_IMPORT_AUTO_VERIFIED_CANDIDATE_TRUTH';
+  end if;
+
+  if not exists (
+    select 1
+    from public.import_proposals
+    where id=dismissed_id
+      and status='DISMISSED'
+      and accepted_evidence_id is null
+  ) then
+    raise exception 'B5_DISMISS_FAILED';
+  end if;
 end $$;
 
-do $$ begin
+do $$
+declare
+  dismissed_id uuid := (select proposal_2_id from b5_state);
+begin
   begin
-    perform * from public.cv_engine_accept_import_proposal(:'p2_proposal_id'::uuid,'PROJECT');
+    perform * from public.cv_engine_accept_import_proposal(dismissed_id,'PROJECT');
     raise exception 'B5_DISMISSED_PROPOSAL_ACCEPTED';
-  exception when check_violation then null; end;
+  exception
+    when check_violation then null;
+  end;
 end $$;
 
 -- Proposal-hash mismatch must roll the entire receipt transaction back.
-do $$ begin
+create temporary table b5_bad_hash as
+select :'hashes_bad_source_hash'::text source_hash,
+       :'hashes_extracted_hash'::text extracted_hash;
+
+do $$
+declare
+  source_hash_value text := (select source_hash from b5_bad_hash);
+  extracted_hash_value text := (select extracted_hash from b5_bad_hash);
+begin
   begin
     perform * from public.cv_engine_record_resume_import(
-      'bad.pdf','PDF',10,:'hashes_bad_source_hash',:'hashes_extracted_hash','EXTRACTED',null,
-      jsonb_build_array(jsonb_build_object('ordinal',1,'sourceLine',1,'canonicalText','Injected text','sourceTextSha256',repeat('0',64)))
+      'bad.pdf','PDF',10,source_hash_value,extracted_hash_value,'EXTRACTED',null,
+      jsonb_build_array(
+        jsonb_build_object(
+          'ordinal',1,
+          'sourceLine',1,
+          'canonicalText','Injected text',
+          'sourceTextSha256',repeat('0',64)
+        )
+      )
     );
     raise exception 'B5_BAD_PROPOSAL_HASH_ACCEPTED';
-  exception when check_violation then null; end;
+  exception
+    when check_violation then null;
+  end;
 end $$;
 
 reset role;
 
-do $$ begin
-  if exists (select 1 from public.import_receipts where source_sha256=:'hashes_bad_source_hash') then raise exception 'B5_BAD_IMPORT_PARTIAL_RECEIPT_SURVIVED'; end if;
+do $$
+declare
+  bad_source_hash_value text := (select source_hash from b5_bad_hash);
+begin
   if exists (
-    select 1 from information_schema.columns
-    where table_schema='public' and table_name in ('import_receipts','import_proposals') and data_type='bytea'
-  ) then raise exception 'B5_RAW_SOURCE_BYTES_ARE_DURABLE'; end if;
+    select 1 from public.import_receipts where source_sha256=bad_source_hash_value
+  ) then
+    raise exception 'B5_BAD_IMPORT_PARTIAL_RECEIPT_SURVIVED';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema='public'
+      and table_name in ('import_receipts','import_proposals')
+      and data_type='bytea'
+  ) then
+    raise exception 'B5_RAW_SOURCE_BYTES_ARE_DURABLE';
+  end if;
 end $$;
