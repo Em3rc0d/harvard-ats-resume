@@ -1,4 +1,4 @@
-name: CV Engine B3 PostgreSQL Gate
+name: CV Engine B4 PostgreSQL Gate
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  b3-postgres:
+  b4-postgres:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -43,11 +43,9 @@ jobs:
             echo "Applying $migration"
             psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f "$migration"
           done
-      - name: Execute deterministic assessment contract
-        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b3/assessment.sql
-      - name: Execute evidence-backed state guards
-        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b3/state-guards.sql
-      - name: Execute B3 ownership and client-trust attacks
-        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b3/isolation.sql
-      - name: Verify B3 durable state from a fresh connection
-        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b3/readback.sql
+      - name: Execute deterministic ResumeVersion and transaction contract
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b4/resume.sql
+      - name: Execute B4 ownership, immutability and client-trust attacks
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b4/isolation.sql
+      - name: Verify B4 durable renderer and provenance from a fresh connection
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b4/readback.sql
