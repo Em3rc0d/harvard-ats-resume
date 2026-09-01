@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuthenticatedSupabaseContext } from "../../../../application/auth/requireAuthenticatedUser";
-import { executeAICapability, type SafeAIEvent } from "../../../../application/ai/AIGatewayRuntime";
-import { AICapabilityNameSchema } from "../../../../application/ai/AIGatewayFoundation";
+import { executeAICapability, getAIExecutionBudget, type SafeAIEvent } from "../../../../application/ai/AIGatewayRuntime";
+import { AICapabilityNameSchema, buildProviderAttemptPlan } from "../../../../application/ai/AIGatewayFoundation";
+import {
+  assertProviderEconomicsWithinPolicy,
+  geminiActualPaidCostUsd,
+} from "../../../../application/ai/AIProviderEconomics";
 import { GeminiCredentialInputSchema, type AIAccessMode } from "../../../../domain/ai/AIAccess";
 import type { CredentialMode } from "../../../../domain/ai/AICapability";
 import { CURRENT_TRUST_DISCLOSURE_VERSION } from "../../../../domain/trust/FirstRunTrust";
@@ -32,7 +36,6 @@ function safeLogger(event: SafeAIEvent) {
 function providerStatus(failureCode: string) {
   if (failureCode === "INPUT_BUDGET_EXCEEDED") return 413;
   if (failureCode === "PROVIDER_RATE_LIMITED") return 429;
-  if (failureCode === "CREDENTIAL_UNAVAILABLE") return 503;
   return 503;
 }
 
@@ -71,16 +74,30 @@ export async function POST(request: Request) {
       byokGeminiKey = key.data;
     }
 
+    const credentialMode = credentialModeForAccess(accessMode);
+    const budget = getAIExecutionBudget(parsed.data.capability);
+    const plannedAttempts = buildProviderAttemptPlan(parsed.data.capability, credentialMode);
+    let economics;
+    try {
+      economics = assertProviderEconomicsWithinPolicy(parsed.data.capability, plannedAttempts, budget);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "AI_ECONOMICS_POLICY_FAILED";
+      return NextResponse.json({ error: "AI_ASSIST_UNAVAILABLE", failureCode: code }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+    }
+
+    const production = process.env.NODE_ENV === "production";
+    const ollamaBaseUrl = process.env.OLLAMA_BASE_URL?.trim() || (production ? "http://127.0.0.1:9" : "http://127.0.0.1:11434");
+
     const outcome = await executeAICapability({
       capability: parsed.data.capability,
-      credentialMode: credentialModeForAccess(accessMode),
+      credentialMode,
       prompt: parsed.data.prompt,
       systemInstruction: SYSTEM_INSTRUCTIONS[parsed.data.capability],
     }, {
       platformGeminiKey: process.env.GEMINI_API_KEY?.trim() || null,
       byokGeminiKey,
       geminiBaseUrl: process.env.GEMINI_API_BASE_URL?.trim() || "https://generativelanguage.googleapis.com",
-      ollamaBaseUrl: process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434",
+      ollamaBaseUrl,
       ollamaApiKey: process.env.OLLAMA_API_KEY?.trim() || null,
       logger: safeLogger,
     });
@@ -91,8 +108,15 @@ export async function POST(request: Request) {
         failureCode: outcome.failureCode,
         requestId: outcome.requestId,
         attempts: outcome.attempts,
+        economics,
       }, { status: providerStatus(outcome.failureCode), headers: { "Cache-Control": "private, no-store" } });
     }
+
+    const estimatedPaidCostUsd = outcome.attempts.reduce((total, attempt) => {
+      if (attempt.provider !== "GEMINI") return total;
+      const estimate = geminiActualPaidCostUsd(attempt.model, attempt.inputTokens, attempt.outputTokens);
+      return estimate === null ? total : total + estimate;
+    }, 0);
 
     return NextResponse.json({
       proposal: outcome.proposal,
@@ -101,6 +125,7 @@ export async function POST(request: Request) {
       requestId: outcome.requestId,
       resultSha256: outcome.resultSha256,
       usage: { inputTokens: outcome.inputTokens, outputTokens: outcome.outputTokens },
+      economics: { ...economics, estimatedPaidCostUsd },
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ error: "AI_ASSIST_INTERNAL_FAILURE" }, { status: 500, headers: { "Cache-Control": "private, no-store" } });
