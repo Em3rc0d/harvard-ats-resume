@@ -65,6 +65,25 @@ export const ResumeVersionSchema = z.object({
   if (value.mode === "TARGETED" && (value.jobSnapshotId === null || value.opportunityAssessmentId === null)) {
     context.addIssue({ code: "custom", path: ["mode"], message: "TARGETED ResumeVersion requires JobSnapshot and OpportunityAssessment provenance." });
   }
+  if (value.document.mode !== value.mode) {
+    context.addIssue({ code: "custom", path: ["document", "mode"], message: "Rendered document mode must match ResumeVersion mode." });
+  }
+  if (value.manifest.evidenceFingerprintSha256 !== value.evidenceFingerprintSha256) {
+    context.addIssue({ code: "custom", path: ["manifest", "evidenceFingerprintSha256"], message: "Manifest fingerprint must match ResumeVersion fingerprint." });
+  }
+  if (value.manifest.claimCount !== value.claims.length || value.manifest.evidenceReceipts.length !== value.claims.length || value.document.claims.length !== value.claims.length) {
+    context.addIssue({ code: "custom", path: ["manifest", "claimCount"], message: "Manifest, document and claim cardinalities must agree." });
+  }
+  value.claims.forEach((claim, index) => {
+    const documentClaim = value.document.claims[index];
+    const receipt = value.manifest.evidenceReceipts[index];
+    if (!documentClaim || documentClaim.ordinal !== claim.ordinal || documentClaim.kind !== claim.evidenceKind || documentClaim.text !== claim.renderedText) {
+      context.addIssue({ code: "custom", path: ["document", "claims", index], message: "Rendered document claim must match provenance claim exactly." });
+    }
+    if (!receipt || receipt.evidenceId !== claim.evidenceId || receipt.revision !== claim.evidenceRevision || receipt.textSha256 !== claim.evidenceTextSha256) {
+      context.addIssue({ code: "custom", path: ["manifest", "evidenceReceipts", index], message: "Manifest receipt must match provenance claim exactly." });
+    }
+  });
 });
 
 export const CreateResumeVersionInputSchema = z.discriminatedUnion("mode", [
