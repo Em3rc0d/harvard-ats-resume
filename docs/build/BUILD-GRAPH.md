@@ -16,12 +16,12 @@ B0                             CLOSED
 B0.5                           CLOSED
 B1                             CLOSED
 B2                             CLOSED
-B3                             READY_TO_BUILD
-B4                             BLOCKED_BY_B3
+B3                             CLOSED
+B4                             READY_TO_BUILD
 B5                             BLOCKED_BY_B4
 B6                             BLOCKED_BY_B5
 B7                             BLOCKED_BY_B6
-B8                             BLOCKED_BY_B3_B4_B5_B6_B7
+B8                             BLOCKED_BY_B4_B5_B6_B7
 CVENGINE_V1_0_0                BLOCKED_BY_B8
 ```
 
@@ -84,16 +84,6 @@ CONSTRUCTION_CI                  PASS
 STATUS                           CLOSED
 ```
 
-Exact implementation-head construction receipt:
-
-```text
-head_sha  7c8e771897a5981e49484c23ea4c8ec0924f8432
-run       33354071620
-result    success
-```
-
-Dynamic provider-path secret certification remains a B6/B8 release responsibility.
-
 Receipt: `docs/build/B0.5-CLOSURE.md`.
 
 ## B1 — Career Evidence core
@@ -122,14 +112,6 @@ DURABLE_READBACK_GATE            PASS
 JOB_DESCRIPTION_REJECTION_GATE   PASS
 CONSTRUCTION_CI                  PASS
 STATUS                           CLOSED
-```
-
-Exact implementation-head receipts:
-
-```text
-head_sha      7c8e771897a5981e49484c23ea4c8ec0924f8432
-construction  33354071620 success
-postgres      33354071468 success
 ```
 
 Receipt: `docs/build/B1-CLOSURE.md`.
@@ -165,40 +147,50 @@ CONSTRUCTION_CI                         PASS
 STATUS                                  CLOSED
 ```
 
-Exact implementation-head receipts:
-
-```text
-head_sha      a472428da84ce85f083d37d8316dd1a4d24aca28
-construction  33355740956 success
-b1_postgres   33355740927 success
-b2_postgres   33355740935 success
-```
-
-B2 contains no candidate matching or opportunity decisioning. Those remain B3 responsibilities.
-
 Receipt: `docs/build/B2-CLOSURE.md`.
 
-## B3 — Assessment
-
-Contract: `SIGNED`.
-Implementation: `READY_TO_BUILD`.
-
-Required vertical slice:
+## B3 — Evidence-backed Assessment
 
 ```text
-RequirementMatch
-MATCH / POTENTIAL_MATCH / GAP / UNKNOWN / BLOCKER
-MatchReport
-explicit missing requirements
-explainable rationale
-OpportunityAssessment
-no hiring-probability theater
+REQUIREMENT_MATCH_DOMAIN                 PASS
+MATCH_POTENTIAL_UNKNOWN_ENGINE           PASS
+GAP_BLOCKER_EVIDENCE_GUARD               PASS
+UNKNOWN_ONLY_UNSUPPORTED_STATE           PASS
+MATCH_REPORT                              PASS
+OPPORTUNITY_ASSESSMENT                    PASS
+NO_HIRING_PROBABILITY_THEATER             PASS
+CAREER_EVIDENCE_PROVENANCE_SNAPSHOT       PASS
+SEMANTIC_REPLAY_IDEMPOTENCE               PASS
+HISTORICAL_ASSESSMENT_PRESERVATION        PASS
+CLIENT_TRUST_BOUNDARY                     PASS
+OWNER_SCOPED_RLS                          PASS
+CROSS_USER_IDOR_DENIAL                    PASS
+ANONYMOUS_RPC_DENIAL                      PASS
+DIRECT_CLIENT_WRITE_DENIAL                PASS
+CLEAN_DB_MIGRATION_GATE                   PASS
+FRESH_CONNECTION_READBACK                 PASS
+B1_REGRESSION_GATE                        PASS
+B2_REGRESSION_GATE                        PASS
+CONSTRUCTION_CI                           PASS
+STATUS                                    CLOSED
 ```
+
+Final implementation head before promotion:
+
+```text
+head_sha      aa7d40e0744e47bc794c768dbd88270ad7182d00
+construction  33359163193 success
+b1_postgres   33359163195 success
+b2_postgres   33359163192 success
+b3_postgres   33359163184 success
+```
+
+Receipt: `docs/build/B3-CLOSURE.md`.
 
 ## B4 — ResumeVersion
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED_BY_B3`.
+Implementation: `READY_TO_BUILD`.
 
 Required vertical slice:
 
@@ -267,7 +259,7 @@ truth-safe market/candidate boundary
 ## B8 — Release hardening
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED` until B3–B7 are closed.
+Implementation: `BLOCKED` until B4–B7 are closed.
 
 Required release evidence:
 
