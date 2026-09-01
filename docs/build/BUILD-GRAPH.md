@@ -19,9 +19,9 @@ B2                             CLOSED
 B3                             CLOSED
 B4                             CLOSED
 B5                             CLOSED
-B6                             READY_TO_BUILD
-B7                             BLOCKED_BY_B6
-B8                             BLOCKED_BY_B6_B7
+B6                             CLOSED
+B7                             READY_TO_BUILD
+B8                             BLOCKED_BY_B7
 CVENGINE_V1_0_0                BLOCKED_BY_B8
 ```
 
@@ -56,7 +56,7 @@ LOCKFILE             PASS
 TYPECHECK            PASS
 LINT                 PASS
 UNIT_TEST            PASS
-NEXT_BUILD           PASS
+NEXT_BUILD            PASS
 CI_EXACT_HEAD        PASS
 NO_LEGACY_COPY       PASS
 STATUS               CLOSED
@@ -241,44 +241,57 @@ CONSTRUCTION                            PASS
 STATUS                                  CLOSED
 ```
 
-Final implementation head before promotion:
-
-```text
-head_sha      e37649ecb8382f9d4897f8101844147c914dcb72
-construction  33507517079 success
-b1_postgres   33507517051 success
-b2_postgres   33507517049 success
-b3_postgres   33507517151 success
-b4_postgres   33507517135 success
-b5_postgres   33507517082 success
-```
-
 Receipt: `docs/build/B5-CLOSURE.md`.
 
 ## B6 — AI assistance runtime
 
-Contract: `SIGNED`.
-Implementation: `READY_TO_BUILD`.
+```text
+GEMINI_PRIMARY_RUNTIME                  PASS
+CAPABILITY_MODEL_CASCADE               PASS
+OLLAMA_FALLBACK_PROTOCOL               PASS
+PLATFORM_BYOK_NO_CLOUD_MODES           PASS
+BYOK_REQUEST_SCOPED                    PASS
+NO_CLOUD_SKIPS_GEMINI                  PASS
+ATTEMPT_LIMITS                         PASS
+PER_ATTEMPT_TIMEOUT                    PASS
+WHOLE_OPERATION_DEADLINE               PASS
+INPUT_OUTPUT_TOKEN_BUDGETS             PASS
+PAID_COST_CAPS                         PASS
+PRICING_CONTRACT_EXPIRY_FAIL_CLOSED    PASS
+NORMALIZED_PROVIDER_FAILURES           PASS
+NON_SECRET_PROVENANCE                  PASS
+GEMINI_SECRET_CANARY                   PASS
+OLLAMA_NEVER_RECEIVES_GEMINI_SECRET    PASS
+PROVIDER_ERROR_SECRET_REDACTION        PASS
+SAFE_TOTAL_OUTAGE_DEGRADATION          PASS
+TRUSTED_CORE_AI_OPTIONAL               PASS
+ASSESSMENT_AI_EXPLANATION_WIRED        PASS
+SERVER_OWNED_SYSTEM_INSTRUCTIONS       PASS
+B1_B2_B3_B4_B5_REGRESSION             PASS
+CONSTRUCTION                           PASS
+B6_AI_RUNTIME_GATE                     PASS
+STATUS                                 CLOSED
+```
 
-Required vertical slice:
+Final implementation head before promotion:
 
 ```text
-Gemini-primary AI Gateway runtime
-capability-specific model cascade
-Ollama fallback
-platform/BYOK/no-cloud credential modes
-attempt/deadline/token/cost controls
-normalized provider failures
-non-secret execution provenance
-secret-canary certification
-capability/model benchmarks
-safe total-outage degradation
+head_sha      78bb000a634c6ebf5946e4b0162ae6591598fe9a
+construction  33509286148 success
+b1_postgres   33509286145 success
+b2_postgres   33509286196 success
+b3_postgres   33509286168 success
+b4_postgres   33509286113 success
+b5_postgres   33509286126 success
+b6_ai_runtime 33509286265 success
 ```
+
+Receipt: `docs/build/B6-CLOSURE.md`.
 
 ## B7 — Opportunity Space / market extension
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED_BY_B6`.
+Implementation: `READY_TO_BUILD`.
 
 Required vertical slice:
 
@@ -294,7 +307,7 @@ truth-safe market/candidate boundary
 ## B8 — Release hardening
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED` until B6–B7 are closed.
+Implementation: `BLOCKED` until B7 is closed.
 
 Required release evidence:
 
