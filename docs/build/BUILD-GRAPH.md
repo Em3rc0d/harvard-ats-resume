@@ -20,8 +20,8 @@ B3                             CLOSED
 B4                             CLOSED
 B5                             CLOSED
 B6                             CLOSED
-B7                             READY_TO_BUILD
-B8                             BLOCKED_BY_B7
+B7                             CLOSED
+B8                             READY_TO_BUILD
 CVENGINE_V1_0_0                BLOCKED_BY_B8
 ```
 
@@ -273,41 +273,51 @@ B6_AI_RUNTIME_GATE                     PASS
 STATUS                                 CLOSED
 ```
 
-Final implementation head before promotion:
-
-```text
-head_sha      78bb000a634c6ebf5946e4b0162ae6591598fe9a
-construction  33509286148 success
-b1_postgres   33509286145 success
-b2_postgres   33509286196 success
-b3_postgres   33509286168 success
-b4_postgres   33509286113 success
-b5_postgres   33509286126 success
-b6_ai_runtime 33509286265 success
-```
-
 Receipt: `docs/build/B6-CLOSURE.md`.
 
 ## B7 — Opportunity Space / market extension
 
-Contract: `SIGNED`.
-Implementation: `READY_TO_BUILD`.
+```text
+MARKET_OBSERVATION_DOMAIN                 PASS
+JOB_SNAPSHOT_PROVENANCE                   PASS
+MARKET_HISTORY_IMMUTABLE                  PASS
+CAPTURE_REPLAY_IDEMPOTENT                 PASS
+ASSESSMENT_REQUIRED_BEFORE_SELECTION      PASS
+ASSESSMENT_JOB_IDENTITY_MATCH             PASS
+ASSESSMENT_SEMANTIC_KEY_PRESERVED         PASS
+SELECTION_REPLAY_IDEMPOTENT               PASS
+MULTI_OPPORTUNITY_COMPARISON              PASS
+DETERMINISTIC_CATEGORY_ORDERING           PASS
+NO_HIRING_PROBABILITY                     PASS
+NO_ATS_SCORE                              PASS
+MARKET_FLOW_NEVER_MUTATES_CANDIDATE_TRUTH PASS
+OWNER_SCOPED_RLS                          PASS
+CROSS_USER_READ_DENIAL                    PASS
+CROSS_USER_CAPTURE_DENIAL                 PASS
+CROSS_USER_SELECTION_DENIAL               PASS
+ANONYMOUS_RPC_DENIAL                      PASS
+DIRECT_CLIENT_WRITE_DENIAL                PASS
+HISTORICAL_REWRITE_DENIAL                 PASS
+FRESH_CONNECTION_READBACK                 PASS
+B1_B2_B3_B4_B5_REGRESSION                 PASS
+B6_AI_REGRESSION                          PASS
+CONSTRUCTION                              PASS
+STATUS                                    CLOSED
+```
 
-Required vertical slice:
+Final implementation head before promotion:
 
 ```text
-multi-opportunity comparison
-market observation lifecycle
-controlled acquisition/refresh
-historical market persistence
-candidate retrieval + selected-candidate analysis
-truth-safe market/candidate boundary
+head_sha      6b9334ad87f1fbf08a90befd5f150642da5b17f9
+exact_head    8/8 workflows success
 ```
+
+Receipt: `docs/build/B7-CLOSURE.md`.
 
 ## B8 — Release hardening
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED` until B7 is closed.
+Implementation: `READY_TO_BUILD`.
 
 Required release evidence:
 
