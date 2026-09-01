@@ -3,9 +3,39 @@
 import { useEffect, useMemo, useState } from "react";
 import type { JobSnapshot } from "../../domain/jobs/JobSnapshot";
 import type { AssessmentBundle } from "../../domain/matching/Assessment";
+import { useAIAccessSession } from "../providers/AIAccessSessionProvider";
 
 function label(value: string) {
   return value.replaceAll("_", " ").toLowerCase().replace(/^./, (char) => char.toUpperCase());
+}
+
+function explanationPrompt(bundle: AssessmentBundle, job: JobSnapshot | undefined) {
+  const requirements = bundle.report.matches.map((match) => ({
+    status: match.status,
+    importance: match.importance,
+    category: match.category,
+    requirement: match.sourceText,
+    rationale: match.rationale,
+    supportingEvidence: match.supportingEvidence.map((evidence) => ({
+      kind: evidence.kind,
+      verificationStatus: evidence.verificationStatus,
+      canonicalText: evidence.canonicalText,
+      revision: evidence.revision,
+    })),
+  }));
+
+  return JSON.stringify({
+    roleTitle: job?.roleTitle ?? null,
+    company: job?.company ?? null,
+    deterministicAssessment: {
+      recommendation: bundle.assessment.recommendation,
+      action: bundle.assessment.action,
+      evidenceStrength: bundle.assessment.evidenceStrength,
+      rationale: bundle.assessment.rationale,
+      scopeBoundary: bundle.assessment.scopeBoundary,
+    },
+    requirements,
+  });
 }
 
 export function AssessmentWorkspace() {
@@ -14,6 +44,10 @@ export function AssessmentWorkspace() {
   const [jobSnapshotId, setJobSnapshotId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiBusyId, setAiBusyId] = useState<string | null>(null);
+  const [aiExplanations, setAiExplanations] = useState<Record<string, string>>({});
+  const [aiReceipts, setAiReceipts] = useState<Record<string, string>>({});
+  const { mode, readByokCredential } = useAIAccessSession();
 
   useEffect(() => {
     let cancelled = false;
@@ -56,12 +90,46 @@ export function AssessmentWorkspace() {
     setBusy(false);
   }
 
+  async function explain(bundle: AssessmentBundle) {
+    const id = bundle.assessment.id;
+    const byok = mode === "BYOK_GEMINI" ? readByokCredential() : null;
+    if (mode === "BYOK_GEMINI" && !byok) {
+      setError("BYOK_CREDENTIAL_REQUIRED_FOR_THIS_SESSION");
+      return;
+    }
+
+    setAiBusyId(id);
+    setError(null);
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (byok) headers["x-cvengine-byok-key"] = byok;
+    const response = await fetch("/api/ai/assist", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        capability: "OPPORTUNITY_EXPLANATION",
+        prompt: explanationPrompt(bundle, jobById.get(bundle.assessment.jobSnapshotId)),
+      }),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      setError(body?.failureCode ?? body?.error ?? "AI_EXPLANATION_UNAVAILABLE");
+      setAiBusyId(null);
+      return;
+    }
+    setAiExplanations((current) => ({ ...current, [id]: String(body?.proposal?.text ?? "") }));
+    const provider = String(body?.provenance?.provider ?? "unknown");
+    const model = String(body?.provenance?.model ?? "unknown");
+    const requestId = String(body?.requestId ?? "unknown");
+    setAiReceipts((current) => ({ ...current, [id]: `${provider} · ${model} · request ${requestId}` }));
+    setAiBusyId(null);
+  }
+
   return (
     <section className="workspace" aria-labelledby="assessment-title">
       <div className="workspace-header"><div>
         <p className="eyebrow">Assessment · Derived analysis</p>
         <h1 id="assessment-title">Compare evidence to what the employer actually requires.</h1>
-        <p className="lead">B3 consumes immutable Job Truth and current Career Evidence. Missing evidence remains UNKNOWN; this surface never claims a hiring probability or commercial ATS score.</p>
+        <p className="lead">B3 remains authoritative. B6 may explain that deterministic result, but it cannot invent evidence, change match states, estimate hiring probability or become candidate truth.</p>
       </div></div>
 
       <div className="workspace-grid">
@@ -76,6 +144,7 @@ export function AssessmentWorkspace() {
             Create evidence assessment
           </button>
           <p className="muted">The browser supplies only the Job Snapshot ID. Ownership, evidence fingerprint, matches and recommendations are derived inside the trusted persistence boundary.</p>
+          <p className="muted">AI access mode: <strong>{mode ?? "not configured"}</strong>. AI remains optional; trusted assessment and ResumeVersion paths work without it.</p>
         </section>
 
         <section className="evidence-list" aria-live="polite">
@@ -83,12 +152,25 @@ export function AssessmentWorkspace() {
           {assessments.map((bundle) => {
             const job = jobById.get(bundle.assessment.jobSnapshotId);
             const unknownRequired = bundle.report.matches.filter((match) => match.importance === "REQUIRED" && match.status === "UNKNOWN");
+            const explanation = aiExplanations[bundle.assessment.id];
+            const receipt = aiReceipts[bundle.assessment.id];
             return <article className="panel evidence-card" key={bundle.assessment.id}>
               <div className="evidence-meta"><span>{label(bundle.assessment.recommendation)}</span><span>{label(bundle.assessment.evidenceStrength)} evidence</span></div>
               <h2>{job?.roleTitle ?? "Captured opportunity"}</h2>
               {job?.company ? <p className="muted">{job.company}</p> : null}
               <p>{bundle.assessment.rationale}</p>
               <p className="muted"><strong>{label(bundle.assessment.action)}</strong> · {bundle.assessment.scopeBoundary}</p>
+
+              <div className="stack">
+                <button className="secondary" type="button" disabled={aiBusyId === bundle.assessment.id} onClick={() => void explain(bundle)}>
+                  {aiBusyId === bundle.assessment.id ? "Generating bounded explanation…" : "Explain with optional AI"}
+                </button>
+                {explanation ? <div className="panel">
+                  <strong>AI explanation · proposal only</strong>
+                  <p>{explanation}</p>
+                  {receipt ? <p className="muted">{receipt}</p> : null}
+                </div> : null}
+              </div>
 
               {unknownRequired.length > 0 ? <div className="stack">
                 <strong>Required items still unknown</strong>
