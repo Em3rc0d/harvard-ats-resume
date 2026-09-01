@@ -1,0 +1,30 @@
+name: CV Engine B6 AI Runtime Gate
+
+on:
+  push:
+    branches:
+      - 'build/cv-engine-vnext-*'
+      - 'agent/cvengine-*'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  b6-ai-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Execute B6 provider, fallback, timeout and secret-canary attacks
+        run: npx vitest run src/domain/b6-runtime.test.ts src/domain/b6-economics.test.ts src/domain/b0-5-contracts.test.ts
+      - name: Verify B6 TypeScript boundary
+        run: npm run typecheck
