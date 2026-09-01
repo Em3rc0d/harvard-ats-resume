@@ -1,10 +1,5 @@
 \set ON_ERROR_STOP on
 
--- B3 fixture has already created one READY_NOW assessed Platform Engineer job for user A.
-create temporary table b7_truth_before as
-select (select count(*) from public.career_evidence) evidence_count,
-       (select count(*) from public.career_evidence_revisions) revision_count;
-
 -- Prepare a second immutable market-side JobSnapshot with no matching Career Evidence.
 select E'Requirements:\n- Terraform is required.' description,
        '- Terraform is required.' req1 \gset jd2_
@@ -15,6 +10,12 @@ select public.cv_engine_sha256('MANUAL_JOB_DESCRIPTION'||chr(31)||'infrastructur
 
 set role authenticated;
 set request.jwt.claim.sub='00000000-0000-4000-8000-000000000101';
+
+-- Baseline is captured under the same role that executes the B7 flow so the
+-- temporary evidence receipt remains readable inside subsequent DO blocks.
+create temporary table b7_truth_before as
+select (select count(*) from public.career_evidence) evidence_count,
+       (select count(*) from public.career_evidence_revisions) revision_count;
 
 create temporary table b7_ready_job as
 select id job_snapshot_id
