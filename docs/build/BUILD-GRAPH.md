@@ -18,10 +18,10 @@ B1                             CLOSED
 B2                             CLOSED
 B3                             CLOSED
 B4                             CLOSED
-B5                             READY_TO_BUILD
-B6                             BLOCKED_BY_B5
+B5                             CLOSED
+B6                             READY_TO_BUILD
 B7                             BLOCKED_BY_B6
-B8                             BLOCKED_BY_B5_B6_B7
+B8                             BLOCKED_BY_B6_B7
 CVENGINE_V1_0_0                BLOCKED_BY_B8
 ```
 
@@ -56,7 +56,7 @@ LOCKFILE             PASS
 TYPECHECK            PASS
 LINT                 PASS
 UNIT_TEST            PASS
-NEXT_BUILD            PASS
+NEXT_BUILD           PASS
 CI_EXACT_HEAD        PASS
 NO_LEGACY_COPY       PASS
 STATUS               CLOSED
@@ -209,40 +209,56 @@ CONSTRUCTION                              PASS
 STATUS                                    CLOSED
 ```
 
-Final implementation head before promotion:
-
-```text
-head_sha      45d83e30649b3936fdbcbdb75663dea9ada9216d
-construction  33461600465 success
-b1_postgres   33461600415 success
-b2_postgres   33461600422 success
-b3_postgres   33461600380 success
-b4_postgres   33461600358 success
-```
-
 Receipt: `docs/build/B4-CLOSURE.md`.
 
 ## B5 — Trusted import convenience
 
-Contract: `SIGNED`.
-Implementation: `READY_TO_BUILD`.
+```text
+PDF_BOUNDED_MECHANICAL_EXTRACTION       PASS
+DOCX_BOUNDED_MECHANICAL_EXTRACTION      PASS
+UNSUPPORTED_DOCUMENT_FAIL_CLOSED        PASS
+RAW_SOURCE_BYTES_NOT_DURABLE            PASS
+SOURCE_AND_TEXT_HASH_RECEIPTS            PASS
+DETERMINISTIC_REVIEW_PROPOSALS          PASS
+IMPORT_REPLAY_IDEMPOTENCE               PASS
+EXPLICIT_USER_REVIEW                    PASS
+CLIENT_CANNOT_REPLACE_PROPOSAL_TEXT     PASS
+ACCEPTANCE_TRANSACTIONAL                PASS
+IMPORTED_RESUME_PROVENANCE              PASS
+ACCEPTED_STATUS_NEEDS_REVIEW            PASS
+IMPORT_NEVER_AUTO_VERIFIES              PASS
+DISMISSED_PROPOSAL_DENIAL               PASS
+HASH_MISMATCH_ATOMIC_ROLLBACK           PASS
+MANUAL_FALLBACK                         PASS
+OWNER_SCOPED_RLS                        PASS
+CROSS_USER_IDOR_DENIAL                  PASS
+ANONYMOUS_MUTATION_DENIAL               PASS
+B1_REGRESSION                           PASS
+B2_REGRESSION                           PASS
+B3_REGRESSION                           PASS
+B4_REGRESSION                           PASS
+CONSTRUCTION                            PASS
+STATUS                                  CLOSED
+```
 
-Required vertical slice:
+Final implementation head before promotion:
 
 ```text
-PDF/DOCX mechanical extraction
-deterministic structure first
-bounded ambiguity assistance only
-source reconciliation
-reviewable evidence proposal
-manual fallback
-temporary source lifecycle
+head_sha      e37649ecb8382f9d4897f8101844147c914dcb72
+construction  33507517079 success
+b1_postgres   33507517051 success
+b2_postgres   33507517049 success
+b3_postgres   33507517151 success
+b4_postgres   33507517135 success
+b5_postgres   33507517082 success
 ```
+
+Receipt: `docs/build/B5-CLOSURE.md`.
 
 ## B6 — AI assistance runtime
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED_BY_B5`.
+Implementation: `READY_TO_BUILD`.
 
 Required vertical slice:
 
@@ -278,7 +294,7 @@ truth-safe market/candidate boundary
 ## B8 — Release hardening
 
 Contract: `SIGNED`.
-Implementation: `BLOCKED` until B5–B7 are closed.
+Implementation: `BLOCKED` until B6–B7 are closed.
 
 Required release evidence:
 
