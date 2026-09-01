@@ -16,23 +16,29 @@ select public.cv_engine_sha256('MANUAL_JOB_DESCRIPTION'||chr(31)||'infrastructur
 set role authenticated;
 set request.jwt.claim.sub='00000000-0000-4000-8000-000000000101';
 
-select id ready_job_id from public.job_snapshots where owner_user_id=auth.uid() and role_title='Platform Engineer' order by created_at limit 1 \gset ready_
-select snapshot_id incomplete_job_id from public.cv_engine_create_job_snapshot(
+create temporary table b7_ready_job as
+select id job_snapshot_id
+from public.job_snapshots
+where owner_user_id=auth.uid() and role_title='Platform Engineer'
+order by created_at limit 1;
+
+create temporary table b7_incomplete_job as
+select snapshot_id job_snapshot_id from public.cv_engine_create_job_snapshot(
   :'s2_sk','Infrastructure Engineer','',:'jd2_description',:'h2_raw_hash','b2-deterministic-job-intelligence-v1',
   jsonb_build_array(
     jsonb_build_object('semanticKey',:'k2_k1','category','TOOL','importance','REQUIRED','canonicalConcept','Terraform is required.','sourceText',:'jd2_req1','sourceTextSha256',:'h2_h1','sourceOrdinal',0)
   )
-) \gset incomplete_
+);
 
 create temporary table b7_incomplete_assessment as
-select * from public.cv_engine_create_opportunity_assessment(:'incomplete_incomplete_job_id'::uuid);
+select * from public.cv_engine_create_opportunity_assessment((select job_snapshot_id from b7_incomplete_job));
 
 create temporary table b7_ready_capture as
-select * from public.cv_engine_capture_market_observation(:'ready_ready_job_id'::uuid);
+select * from public.cv_engine_capture_market_observation((select job_snapshot_id from b7_ready_job));
 create temporary table b7_ready_replay as
-select * from public.cv_engine_capture_market_observation(:'ready_ready_job_id'::uuid);
+select * from public.cv_engine_capture_market_observation((select job_snapshot_id from b7_ready_job));
 create temporary table b7_incomplete_capture as
-select * from public.cv_engine_capture_market_observation(:'incomplete_incomplete_job_id'::uuid);
+select * from public.cv_engine_capture_market_observation((select job_snapshot_id from b7_incomplete_job));
 
 create temporary table b7_ready_select as
 select * from public.cv_engine_select_opportunity((select observation_id from b7_ready_capture));
@@ -88,26 +94,28 @@ begin
   end if;
 end $$;
 
+create temporary table b7_user_a_ids as
+select (select observation_id from b7_ready_capture) observation_id,
+       (select space_item_id from b7_ready_select) space_item_id,
+       (select job_snapshot_id from b7_ready_job) job_snapshot_id;
+
 -- Direct client writes and historical rewrites are forbidden.
 do $$
+declare ids record;
 begin
+  select * into ids from b7_user_a_ids;
   begin
     insert into public.market_observations(owner_user_id,job_snapshot_id,job_snapshot_semantic_key,raw_description_sha256,role_title,company,observed_at,lifecycle_version)
     select auth.uid(),id,semantic_key,raw_description_sha256,role_title,company,captured_at,'b7-market-observation-v1'
-    from public.job_snapshots where id=:'ready_ready_job_id'::uuid;
+    from public.job_snapshots where id=ids.job_snapshot_id;
     raise exception 'B7_DIRECT_MARKET_INSERT_ACCEPTED';
   exception when insufficient_privilege then null; end;
 
   begin
-    update public.market_observations set role_title='rewritten' where id=(select observation_id from b7_ready_capture);
+    update public.market_observations set role_title='rewritten' where id=ids.observation_id;
     raise exception 'B7_HISTORICAL_REWRITE_ACCEPTED';
   exception when insufficient_privilege then null; end;
 end $$;
-
-create temporary table b7_user_a_ids as
-select (select observation_id from b7_ready_capture) observation_id,
-       (select space_item_id from b7_ready_select) space_item_id,
-       :'ready_ready_job_id'::uuid job_snapshot_id;
 
 -- User B cannot see, capture, or select user A's market truth.
 set request.jwt.claim.sub='00000000-0000-4000-8000-000000000202';
@@ -122,12 +130,12 @@ begin
   begin
     perform * from public.cv_engine_capture_market_observation(ids.job_snapshot_id);
     raise exception 'B7_CROSS_USER_CAPTURE_ACCEPTED';
-  exception when no_data_found then null; when sqlstate 'P0002' then null; end;
+  exception when sqlstate 'P0002' then null; end;
 
   begin
     perform * from public.cv_engine_select_opportunity(ids.observation_id);
     raise exception 'B7_CROSS_USER_SELECT_ACCEPTED';
-  exception when no_data_found then null; when sqlstate 'P0002' then null; end;
+  exception when sqlstate 'P0002' then null; end;
 end $$;
 
 reset role;
