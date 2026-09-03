@@ -153,6 +153,6 @@ export async function proposePresentationRevision(
     ok: true,
     revision,
     ai,
-    validation: validationResult,
+    validation,
   };
 }
