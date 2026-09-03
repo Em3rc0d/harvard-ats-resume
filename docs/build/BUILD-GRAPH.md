@@ -21,16 +21,18 @@ B4                             CLOSED
 B5                             CLOSED
 B6                             CLOSED
 B7                             CLOSED
-B8                             IMPLEMENTED_CERTIFICATION_PENDING
-CVENGINE_V1_0_0                BLOCKED_BY_B8
+P1                             SIGNED_IMPLEMENTATION_AUTHORIZED
+B8                             IMPLEMENTED_CERTIFICATION_BLOCKED_BY_P1
+CVENGINE_V1_0_0                BLOCKED_BY_P1_AND_B8
 ```
 
 ## Contract status
 
-All current rebuild contracts through B8 are signed in `docs/build/CONTRACT-SIGNOFF.md`.
+All current rebuild contracts through B8 plus the explicit P1 product-scope revision are signed in `docs/build/CONTRACT-SIGNOFF.md`.
 
 ```text
 CONTRACTS_SIGNED = YES
+P1_CLOSED        = NO
 RELEASE_READY    = NO
 ```
 
@@ -211,6 +213,8 @@ STATUS                                    CLOSED
 
 Receipt: `docs/build/B4-CLOSURE.md`.
 
+B4 remains a valid safe baseline. P1 extends presentation semantics without rewriting the B4 closure receipt.
+
 ## B5 — Trusted import convenience
 
 ```text
@@ -275,6 +279,8 @@ STATUS                                 CLOSED
 
 Receipt: `docs/build/B6-CLOSURE.md`.
 
+`INLINE_WORDING_OPTIMIZATION` is an available bounded AI capability. P1 owns wiring it into an approved/provenance-bearing presentation workflow.
+
 ## B7 — Opportunity Space / market extension
 
 ```text
@@ -314,10 +320,57 @@ exact_head    8/8 workflows success
 
 Receipt: `docs/build/B7-CLOSURE.md`.
 
+## P1 — Truth-Preserving Professional Presentation
+
+Authority: `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`.
+
+Current state:
+
+```text
+CONTRACT_SIGNED                         PASS
+IMPLEMENTATION_AUTHORIZED               PASS
+PRESENTATION_REVISION_DOMAIN             OPEN
+VERIFIED_EVIDENCE_ONLY                   OPEN
+NO_JOB_TO_CANDIDATE_TRUTH_PROMOTION      OPEN
+NO_UNSUPPORTED_METRIC_NOVELTY            OPEN
+NO_UNSUPPORTED_SKILL_NOVELTY             OPEN
+NO_UNSUPPORTED_SENIORITY_STRENGTHENING   OPEN
+MULTI_EVIDENCE_SUMMARY_PROVENANCE        OPEN
+SIDE_BY_SIDE_DIFF_REVIEW                  OPEN
+EXPLICIT_USER_APPROVAL                    OPEN
+APPROVED_REVISION_IMMUTABILITY            OPEN
+DETERMINISTIC_PRESENTATION_PLAN           OPEN
+TARGETED_SELECTION_WITHOUT_FACT_MUTATION OPEN
+RESUMECLAIM_PRESENTATION_PROVENANCE       OPEN
+RESUMEVERSION_DETERMINISTIC_REPLAY        OPEN
+AI_OUTAGE_SAFE_DEGRADATION                OPEN
+DOCX_EXPORT                               OPEN
+PDF_EXPORT                                OPEN
+TXT_EXPORT_REGRESSION                     OPEN
+PROVENANCE_JSON_EXPORT                    OPEN
+CROSS_FORMAT_CLAIM_CONSISTENCY            OPEN
+ATS_SAFE_BASELINE_STRUCTURE               OPEN
+B1_B2_B3_B4_B5_B6_B7_REGRESSION          OPEN
+REAL_BROWSER_E2E                          OPEN
+IDENTIFIED_RUNTIME_EXPORT_RECEIPT         OPEN
+STATUS                                    SIGNED_IMPLEMENTATION_AUTHORIZED
+```
+
+Product equation:
+
+```text
+CareerEvidence = what is true
+PresentationRevision = how verified truth is expressed
+PresentationPlan = what is selected/ordered/emphasized for context
+ResumeVersion = deterministic compiled projection
+```
+
+P1 does not reopen B4/B6. It is a new release-blocking node created by explicit product-scope revision under `CLOSURE-PROTOCOL.md`.
+
 ## B8 — Release hardening
 
 Contract: `SIGNED`.
-Implementation: `IMPLEMENTED — certification pending`.
+Implementation: `IMPLEMENTED — final certification blocked by P1`.
 
 Current B8 implementation adds:
 
@@ -336,14 +389,16 @@ B8_RELEASE_WORKFLOW
 Required before promotion to CLOSED:
 
 ```text
-all inherited GitHub gates green on exact B8 head
-B8 release gate green on exact B8 head
+P1 CLOSED
+all inherited GitHub gates green on exact release head
+B8 release gate green on exact release head
 Supabase production migration applied
 Supabase security advisor blocker cleared
 runtime deployment receipt
 production smoke
 browser acceptance / E2E
 backup/restore evidence
+P1 presentation/export regression receipts
 ```
 
 ## v1.0.0 release equation
@@ -359,6 +414,7 @@ CVENGINE_V1_0_0 =
   && B5_CLOSED
   && B6_CLOSED
   && B7_CLOSED
+  && P1_CLOSED
   && B8_CLOSED
 ```
 
