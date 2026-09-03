@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     env:
       CERT_ARTIFACT_DIR: artifacts/production-certification
-      CERT_HARNESS_REVISION: "5"
+      CERT_HARNESS_REVISION: "6"
     steps:
       - name: Checkout certification branch
         uses: actions/checkout@v4
@@ -24,6 +24,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Install Playwright
         run: |
