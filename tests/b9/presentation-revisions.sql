@@ -289,7 +289,7 @@ from public.cv_engine_resolve_presentation_revision(
   'REJECT'
 );
 
--- Account export includes B9 durable state.
+-- Account export includes B9 durable state while preserving the B8 envelope contract.
 do $$
 declare
   v_export jsonb;
@@ -297,7 +297,7 @@ declare
 begin
   v_export := public.cv_engine_export_account();
   v_count := jsonb_array_length(v_export->'presentationRevisions');
-  if v_export->>'schemaVersion' <> 'b9-account-export-v1' or v_count <> 2 then
+  if v_export->>'schemaVersion' <> 'b8-account-export-v1' or v_count <> 2 then
     raise exception 'B9_ACCOUNT_EXPORT_MISSING_PRESENTATION schema=% count=%', v_export->>'schemaVersion', v_count;
   end if;
 end;
