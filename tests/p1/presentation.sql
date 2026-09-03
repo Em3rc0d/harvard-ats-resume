@@ -13,6 +13,10 @@ select evidence_id from public.cv_engine_create_career_evidence(
   'ACHIEVEMENT','MANUAL','NEEDS_REVIEW','Unverified claim that must never enter a trusted presentation.',null
 ) \gset ev_unverified_
 
+select set_config('p1.ev_api_id', :'ev_api_evidence_id', false);
+select set_config('p1.ev_docker_id', :'ev_docker_evidence_id', false);
+select set_config('p1.ev_unverified_id', :'ev_unverified_evidence_id', false);
+
 create temporary table p1_general_plan as
 select * from public.cv_engine_create_presentation_plan(
   'GENERAL', null, null, null,
@@ -32,17 +36,20 @@ select * from public.cv_engine_create_presentation_plan(
   )
 ) \gset plan_;
 
+select set_config('p1.plan_id', :'plan_presentation_plan_id', false);
+select set_config('p1.plan_sha', :'plan_plan_sha256', false);
+
 do $$
 begin
   if not exists (
     select 1 from public.presentation_plans
-    where id=:'plan_presentation_plan_id'::uuid
+    where id=current_setting('p1.plan_id')::uuid
       and owner_user_id='00000000-0000-4000-8000-000000000101'::uuid
       and mode='GENERAL'
-      and plan_sha256=:'plan_plan_sha256'
+      and plan_sha256=current_setting('p1.plan_sha')
   ) then raise exception 'P1_PLAN_NOT_DURABLE'; end if;
 
-  if (select count(*) from public.presentation_plan_evidence where plan_id=:'plan_presentation_plan_id'::uuid and selection='SELECTED') <> 2 then
+  if (select count(*) from public.presentation_plan_evidence where plan_id=current_setting('p1.plan_id')::uuid and selection='SELECTED') <> 2 then
     raise exception 'P1_PLAN_EVIDENCE_RECEIPTS_MISSING';
   end if;
 end $$;
@@ -53,9 +60,9 @@ begin
   begin
     perform * from public.cv_engine_create_presentation_plan(
       'GENERAL',null,null,null,
-      jsonb_build_array(jsonb_build_object('evidenceId', :'ev_unverified_evidence_id', 'evidenceRevision', 1)),
+      jsonb_build_array(jsonb_build_object('evidenceId', current_setting('p1.ev_unverified_id'), 'evidenceRevision', 1)),
       '[]'::jsonb,
-      jsonb_build_array(jsonb_build_object('sectionKey','experience','ordinal',1,'evidenceRefs',jsonb_build_array(jsonb_build_object('evidenceId', :'ev_unverified_evidence_id', 'evidenceRevision', 1))))
+      jsonb_build_array(jsonb_build_object('sectionKey','experience','ordinal',1,'evidenceRefs',jsonb_build_array(jsonb_build_object('evidenceId', current_setting('p1.ev_unverified_id'), 'evidenceRevision', 1))))
     );
     raise exception 'P1_UNVERIFIED_EVIDENCE_WAS_ACCEPTED';
   exception when others then
@@ -73,12 +80,13 @@ select * from public.cv_engine_create_presentation_revision(
   'DETERMINISTIC'
 ) \gset exact_;
 
+select set_config('p1.exact_revision_id', :'exact_presentation_revision_id', false);
+
 do $$
 begin
-  if :'exact_review_status' <> 'ACCEPTED' then raise exception 'P1_SOURCE_EXACT_NOT_ACCEPTED'; end if;
   if not exists (
     select 1 from public.presentation_revisions
-    where id=:'exact_presentation_revision_id'::uuid
+    where id=current_setting('p1.exact_revision_id')::uuid
       and status='PROPOSED'
       and semantic_status='SOURCE_EXACT'
       and overall_status='ACCEPTED'
@@ -86,13 +94,18 @@ begin
   ) then raise exception 'P1_SOURCE_EXACT_STATE_INVALID'; end if;
 end $$;
 
-select * from public.cv_engine_approve_presentation_revision(:'exact_presentation_revision_id'::uuid) \gset exact_approved_;
+select * from public.cv_engine_approve_presentation_revision(:'exact_presentation_revision_id'::uuid);
 
 do $$
 begin
-  if :'exact_approved_status' <> 'APPROVED' or :'exact_approved_semantic_status' <> 'SOURCE_EXACT' then
-    raise exception 'P1_SOURCE_EXACT_APPROVAL_FAILED';
-  end if;
+  if not exists (
+    select 1 from public.presentation_revisions
+    where id=current_setting('p1.exact_revision_id')::uuid
+      and status='APPROVED'
+      and semantic_status='SOURCE_EXACT'
+      and overall_status='ACCEPTED'
+      and approved_by_user_at is not null
+  ) then raise exception 'P1_SOURCE_EXACT_APPROVAL_FAILED'; end if;
 end $$;
 
 -- A safe rewrite remains REVIEW_REQUIRED until the user explicitly approves it.
@@ -105,31 +118,39 @@ select * from public.cv_engine_create_presentation_revision(
   'USER_EDIT'
 ) \gset rewrite_;
 
+select set_config('p1.rewrite_revision_id', :'rewrite_presentation_revision_id', false);
+
 do $$
 begin
-  if :'rewrite_review_status' <> 'REVIEW_REQUIRED' then raise exception 'P1_REWRITE_DID_NOT_REQUIRE_REVIEW'; end if;
   if not exists (
     select 1 from public.presentation_revisions
-    where id=:'rewrite_presentation_revision_id'::uuid
+    where id=current_setting('p1.rewrite_revision_id')::uuid
       and deterministic_status='PASS'
       and semantic_status='REVIEW_REQUIRED'
       and overall_status='REVIEW_REQUIRED'
+      and status='PROPOSED'
   ) then raise exception 'P1_REWRITE_REVIEW_STATE_INVALID'; end if;
 end $$;
 
-select * from public.cv_engine_approve_presentation_revision(:'rewrite_presentation_revision_id'::uuid) \gset rewrite_approved_;
+select * from public.cv_engine_approve_presentation_revision(:'rewrite_presentation_revision_id'::uuid);
 
 do $$
 begin
-  if :'rewrite_approved_status' <> 'APPROVED' or :'rewrite_approved_semantic_status' <> 'MANUAL_EVIDENCE_REVIEW_PASS' then
-    raise exception 'P1_EXPLICIT_REWRITE_APPROVAL_FAILED';
-  end if;
+  if not exists (
+    select 1 from public.presentation_revisions
+    where id=current_setting('p1.rewrite_revision_id')::uuid
+      and status='APPROVED'
+      and semantic_status='MANUAL_EVIDENCE_REVIEW_PASS'
+      and overall_status='ACCEPTED'
+      and approved_by_user_at is not null
+  ) then raise exception 'P1_EXPLICIT_REWRITE_APPROVAL_FAILED'; end if;
+
   if not exists (
     select 1 from public.presentation_revision_evidence
-    where presentation_revision_id=:'rewrite_presentation_revision_id'::uuid
-      and evidence_id=:'ev_api_evidence_id'::uuid
+    where presentation_revision_id=current_setting('p1.rewrite_revision_id')::uuid
+      and evidence_id=current_setting('p1.ev_api_id')::uuid
       and evidence_revision=1
-      and evidence_text_sha256=encode(digest(evidence_canonical_text,'sha256'),'hex')
+      and evidence_text_sha256=public.cv_engine_sha256(evidence_canonical_text)
   ) then raise exception 'P1_REWRITE_PROVENANCE_MISSING'; end if;
 end $$;
 
@@ -140,7 +161,7 @@ begin
   begin
     update public.presentation_revisions
       set proposed_text='tampered'
-      where id=:'rewrite_presentation_revision_id'::uuid;
+      where id=current_setting('p1.rewrite_revision_id')::uuid;
     raise exception 'P1_APPROVED_REVISION_MUTATED';
   exception when others then
     if sqlerrm <> 'P1_PRESENTATION_REVISION_IMMUTABLE' then raise; end if;
@@ -154,8 +175,8 @@ do $$
 begin
   begin
     perform * from public.cv_engine_create_presentation_revision(
-      :'plan_presentation_plan_id'::uuid,'CLAIM',
-      jsonb_build_array(jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1)),
+      current_setting('p1.plan_id')::uuid,'CLAIM',
+      jsonb_build_array(jsonb_build_object('evidenceId', current_setting('p1.ev_api_id'), 'evidenceRevision', 1)),
       'Built Java APIs that reduced latency by 35%.',array['CLARITY'],'USER_EDIT'
     );
     raise exception 'P1_UNSUPPORTED_NUMBER_ACCEPTED';
@@ -169,8 +190,8 @@ do $$
 begin
   begin
     perform * from public.cv_engine_create_presentation_revision(
-      :'plan_presentation_plan_id'::uuid,'CLAIM',
-      jsonb_build_array(jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1)),
+      current_setting('p1.plan_id')::uuid,'CLAIM',
+      jsonb_build_array(jsonb_build_object('evidenceId', current_setting('p1.ev_api_id'), 'evidenceRevision', 1)),
       'Led and architected Java and Spring Boot REST APIs for internal systems.',array['ACTIVE_VOICE'],'USER_EDIT'
     );
     raise exception 'P1_UNSUPPORTED_STRENGTHENING_ACCEPTED';
@@ -205,13 +226,15 @@ select * from public.cv_engine_create_presentation_plan(
   jsonb_build_array(jsonb_build_object('sectionKey','skills','ordinal',1,'evidenceRefs',jsonb_build_array(jsonb_build_object('evidenceId', :'ev_docker_evidence_id', 'evidenceRevision', 1))))
 ) \gset targeted_;
 
+select set_config('p1.targeted_plan_id', :'targeted_presentation_plan_id', false);
+
 -- Market truth must not backfill candidate truth.
 do $$
 begin
   begin
     perform * from public.cv_engine_create_presentation_revision(
-      :'targeted_presentation_plan_id'::uuid,'CLAIM',
-      jsonb_build_array(jsonb_build_object('evidenceId', :'ev_docker_evidence_id', 'evidenceRevision', 1)),
+      current_setting('p1.targeted_plan_id')::uuid,'CLAIM',
+      jsonb_build_array(jsonb_build_object('evidenceId', current_setting('p1.ev_docker_id'), 'evidenceRevision', 1)),
       'Docker and Kubernetes container delivery',array['KEYWORD_ALIGNMENT'],'USER_EDIT'
     );
     raise exception 'P1_MARKET_TERM_PROMOTED';
@@ -230,11 +253,13 @@ select * from public.cv_engine_create_presentation_revision(
   'Developer with experience building Java and Spring Boot REST APIs and Docker container delivery.',
   array['SUMMARY_SYNTHESIS','CONCISION'],'USER_EDIT'
 ) \gset summary_;
-select * from public.cv_engine_approve_presentation_revision(:'summary_presentation_revision_id'::uuid) \gset summary_approved_;
+
+select set_config('p1.summary_revision_id', :'summary_presentation_revision_id', false);
+select * from public.cv_engine_approve_presentation_revision(:'summary_presentation_revision_id'::uuid);
 
 do $$
 begin
-  if (select count(*) from public.presentation_revision_evidence where presentation_revision_id=:'summary_presentation_revision_id'::uuid) <> 2 then
+  if (select count(*) from public.presentation_revision_evidence where presentation_revision_id=current_setting('p1.summary_revision_id')::uuid) <> 2 then
     raise exception 'P1_MULTI_EVIDENCE_SUMMARY_PROVENANCE_FAILED';
   end if;
 end $$;
@@ -243,10 +268,10 @@ end $$;
 set request.jwt.claim.sub='00000000-0000-4000-8000-000000000202';
 do $$
 begin
-  if exists(select 1 from public.presentation_plans where id=:'plan_presentation_plan_id'::uuid) then raise exception 'P1_CROSS_USER_PLAN_READ'; end if;
-  if exists(select 1 from public.presentation_revisions where id=:'rewrite_presentation_revision_id'::uuid) then raise exception 'P1_CROSS_USER_REVISION_READ'; end if;
+  if exists(select 1 from public.presentation_plans where id=current_setting('p1.plan_id')::uuid) then raise exception 'P1_CROSS_USER_PLAN_READ'; end if;
+  if exists(select 1 from public.presentation_revisions where id=current_setting('p1.rewrite_revision_id')::uuid) then raise exception 'P1_CROSS_USER_REVISION_READ'; end if;
   begin
-    perform * from public.cv_engine_approve_presentation_revision(:'rewrite_presentation_revision_id'::uuid);
+    perform * from public.cv_engine_approve_presentation_revision(current_setting('p1.rewrite_revision_id')::uuid);
     raise exception 'P1_CROSS_USER_APPROVAL_SUCCEEDED';
   exception when others then
     if sqlerrm <> 'P1_PRESENTATION_REVISION_NOT_FOUND' then raise; end if;
@@ -272,22 +297,22 @@ set request.jwt.claim.sub='';
 do $$
 begin
   begin
-    perform * from public.cv_engine_approve_presentation_revision(:'rewrite_presentation_revision_id'::uuid);
+    perform * from public.cv_engine_approve_presentation_revision(current_setting('p1.rewrite_revision_id')::uuid);
     raise exception 'P1_ANON_RPC_ALLOWED';
   exception when insufficient_privilege then null;
   end;
 end $$;
 reset role;
 
--- Fresh privileged connection/state can read the exact durable historical artifact.
+-- Privileged durable readback preserves the exact historical artifact.
 do $$
 begin
   if not exists(
     select 1 from public.presentation_revisions
-    where id=:'rewrite_presentation_revision_id'::uuid
+    where id=current_setting('p1.rewrite_revision_id')::uuid
       and status='APPROVED'
       and proposed_text='Built REST APIs with Java and Spring Boot for internal systems.'
-      and proposed_sha256=encode(digest(proposed_text,'sha256'),'hex')
+      and proposed_sha256=public.cv_engine_sha256(proposed_text)
   ) then raise exception 'P1_DURABLE_READBACK_FAILED'; end if;
 end $$;
 
