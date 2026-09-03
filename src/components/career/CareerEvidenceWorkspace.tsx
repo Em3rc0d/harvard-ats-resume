@@ -5,6 +5,7 @@ import type { AIAccessMode } from "../../domain/ai/AIAccess";
 import type { CareerEvidenceCurrent } from "../../domain/career/CareerEvidenceMutation";
 import type { z } from "zod";
 import { CareerEvidenceKindSchema } from "../../domain/career/CareerEvidence";
+import { useAIAccessSession } from "../providers/AIAccessSessionProvider";
 
 type CareerEvidenceKind = z.infer<typeof CareerEvidenceKindSchema>;
 
@@ -19,12 +20,16 @@ const KINDS: ReadonlyArray<{ value: CareerEvidenceKind; label: string }> = [
   { value: "METRIC", label: "Defensible metric" },
 ];
 
+const WORDING_OBJECTIVE =
+  "Improve clarity, concision, and professional phrasing while preserving the source meaning exactly.";
+
 type CareerEvidenceWorkspaceProps = {
   aiAccessMode: AIAccessMode | null;
   onSignOut: () => Promise<void>;
 };
 
 export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvidenceWorkspaceProps) {
+  const { readByokCredential } = useAIAccessSession();
   const [evidence, setEvidence] = useState<CareerEvidenceCurrent[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -35,6 +40,7 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [editVerified, setEditVerified] = useState(false);
+  const [presentationNotices, setPresentationNotices] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +70,9 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
     const verifiedCount = evidence.filter((item) => item.verificationStatus === "VERIFIED").length;
     return { total: evidence.length, verified: verifiedCount };
   }, [evidence]);
+
+  const aiWordingEnabled =
+    aiAccessMode === "PLATFORM_GEMINI" || aiAccessMode === "BYOK_GEMINI";
 
   async function createEvidence() {
     if (!kind || !canonicalText.trim()) {
@@ -129,8 +138,63 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
     setEvidence((current) =>
       current.map((candidate) => (candidate.id === item.id ? body.evidence : candidate)),
     );
+    setPresentationNotices((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
     setEditingId(null);
     setEditText("");
+    setBusy(false);
+  }
+
+  async function improveWording(item: CareerEvidenceCurrent) {
+    setBusy(true);
+    setError(null);
+    setPresentationNotices((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (aiAccessMode === "BYOK_GEMINI") {
+      const credential = readByokCredential();
+      if (!credential) {
+        setError("BYOK_CREDENTIAL_REQUIRED");
+        setBusy(false);
+        return;
+      }
+      headers["x-cvengine-byok-key"] = credential;
+    }
+
+    const response = await fetch(`/api/presentation/evidence/${item.id}/proposals`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ objective: WORDING_OBJECTIVE }),
+    });
+    const body = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      if (
+        response.status === 422
+        && Array.isArray(body?.validation?.reasonCodes)
+      ) {
+        setPresentationNotices((current) => ({
+          ...current,
+          [item.id]: `Suggestion rejected by fact-preservation checks: ${body.validation.reasonCodes.join(", ")}.`,
+        }));
+      } else {
+        setError(body?.error ?? "PRESENTATION_PROPOSAL_FAILED");
+      }
+      setBusy(false);
+      return;
+    }
+
+    setPresentationNotices((current) => ({
+      ...current,
+      [item.id]: "Validated wording suggestion ready for review.",
+    }));
     setBusy(false);
   }
 
@@ -148,6 +212,11 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
     }
 
     setEvidence((current) => current.filter((candidate) => candidate.id !== item.id));
+    setPresentationNotices((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
     setBusy(false);
   }
 
@@ -249,8 +318,17 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
               {editingId !== item.id ? (
                 <div className="split-actions">
                   <button className="secondary" disabled={busy} type="button" onClick={() => beginEdit(item)}>Edit as new revision</button>
+                  {item.verificationStatus === "VERIFIED" && aiWordingEnabled ? (
+                    <button className="secondary" disabled={busy} type="button" onClick={() => void improveWording(item)}>
+                      Improve wording
+                    </button>
+                  ) : null}
                   <button className="text-button danger-text" disabled={busy} type="button" onClick={() => void removeEvidence(item)}>Delete</button>
                 </div>
+              ) : null}
+
+              {presentationNotices[item.id] ? (
+                <p className="status" role="status">{presentationNotices[item.id]}</p>
               ) : null}
             </article>
           ))}
