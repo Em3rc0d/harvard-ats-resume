@@ -72,11 +72,11 @@ begin
   if p_attempt < 1 or p_attempt > 3 then
     raise exception 'P1_AI_ATTEMPT_INVALID' using errcode = '22023';
   end if;
-  if p_credential_mode not in ('PLATFORM_KEY','BYOK_REQUEST_SCOPED','NO_CLOUD_AI') then
+  if p_credential_mode not in ('PLATFORM','BYOK','LOCAL_ONLY') then
     raise exception 'P1_AI_CREDENTIAL_MODE_INVALID' using errcode = '22023';
   end if;
-  if p_provider='gemini' and p_credential_mode='NO_CLOUD_AI' then
-    raise exception 'P1_AI_GEMINI_CANNOT_USE_NO_CLOUD_MODE' using errcode = '23514';
+  if p_provider='gemini' and p_credential_mode='LOCAL_ONLY' then
+    raise exception 'P1_AI_GEMINI_CANNOT_USE_LOCAL_ONLY' using errcode = '23514';
   end if;
   if p_result_sha256 !~ '^[0-9a-f]{64}$' then
     raise exception 'P1_AI_RESULT_HASH_INVALID' using errcode = '22023';
