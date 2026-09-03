@@ -11,6 +11,46 @@ const ConsentMutationSchema = z
   })
   .strict();
 
+export async function GET() {
+  try {
+    const { user, client } = await requireAuthenticatedSupabaseContext();
+    const { data, error } = await client
+      .from("consent_receipts")
+      .select("acknowledged_at, ai_access_mode_preference")
+      .eq("owner_user_id", user.userId)
+      .eq("disclosure_version", CURRENT_TRUST_DISCLOSURE_VERSION)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      return NextResponse.json(
+        {
+          acknowledged: false,
+          disclosureVersion: CURRENT_TRUST_DISCLOSURE_VERSION,
+          acknowledgedAt: null,
+          aiAccessModePreference: null,
+        },
+        { headers: { "Cache-Control": "private, no-store" } },
+      );
+    }
+
+    const rawMode = data.ai_access_mode_preference;
+    const parsedMode = rawMode === null ? null : AIAccessModeSchema.parse(rawMode);
+
+    return NextResponse.json(
+      {
+        acknowledged: true,
+        disclosureVersion: CURRENT_TRUST_DISCLOSURE_VERSION,
+        acknowledgedAt: new Date(String(data.acknowledged_at)).toISOString(),
+        aiAccessModePreference: parsedMode,
+      },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
+  } catch (error) {
+    return careerApiError(error);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { client } = await requireAuthenticatedSupabaseContext();

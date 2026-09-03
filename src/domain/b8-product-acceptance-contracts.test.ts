@@ -8,6 +8,33 @@ describe("B8 product acceptance source contracts", () => {
     expect(auth).toContain("emailRedirectTo: redirectTo");
   });
 
+  it("restores durable consent and AI preference for returning authenticated users", () => {
+    const firstRun = readFileSync("src/components/first-run/FirstRunExperience.tsx", "utf8");
+    const consent = readFileSync("src/app/api/consent/route.ts", "utf8");
+    expect(firstRun).toContain('type Step = "BOOTSTRAP"');
+    expect(firstRun).toContain('fetch("/api/session", { cache: "no-store" })');
+    expect(firstRun).toContain('fetch("/api/consent", { cache: "no-store" })');
+    expect(firstRun).toContain("selectMode(restoredMode)");
+    expect(firstRun).toContain('restoredMode === "BYOK_GEMINI"');
+    expect(firstRun).toContain('restoredMode === "PLATFORM_GEMINI" && !platformGeminiAvailable');
+    expect(firstRun).toContain("vNext · B8 RC");
+    expect(firstRun).not.toContain("vNext · B2");
+    expect(consent).toContain("export async function GET()");
+    expect(consent).toContain('.from("consent_receipts")');
+    expect(consent).toContain("CURRENT_TRUST_DISCLOSURE_VERSION");
+    expect(consent).toContain('"Cache-Control": "private, no-store"');
+  });
+
+  it("does not restore a BYOK secret from durable storage", () => {
+    const firstRun = readFileSync("src/components/first-run/FirstRunExperience.tsx", "utf8");
+    const provider = readFileSync("src/components/providers/AIAccessSessionProvider.tsx", "utf8");
+    const consent = readFileSync("src/app/api/consent/route.ts", "utf8");
+    expect(firstRun).toContain('restoredMode === "BYOK_GEMINI"');
+    expect(firstRun).toContain('setStep("AI_ACCESS")');
+    expect(provider).toContain("TransientBYOKStore");
+    expect(consent).not.toMatch(/credential|api[_-]?key|byok[_-]?key/i);
+  });
+
   it("exposes owner lifecycle actions through the product UI", () => {
     const shell = readFileSync("src/components/CareerIntelligenceWorkspace.tsx", "utf8");
     const account = readFileSync("src/components/account/AccountLifecycleWorkspace.tsx", "utf8");
