@@ -33,7 +33,7 @@ select * from public.cv_engine_create_presentation_plan(
       )
     )
   )
-) \gset plan_;
+) \gset plan_
 
 select set_config('p1.plan_id', :'plan_presentation_plan_id', false);
 select set_config('p1.plan_sha', :'plan_plan_sha256', false);
@@ -77,7 +77,7 @@ select * from public.cv_engine_create_presentation_revision(
   'Built Java and Spring Boot REST APIs for internal systems.',
   '{}'::text[],
   'DETERMINISTIC'
-) \gset exact_;
+) \gset exact_
 
 select set_config('p1.exact_revision_id', :'exact_presentation_revision_id', false);
 
@@ -115,7 +115,7 @@ select * from public.cv_engine_create_presentation_revision(
   'Built REST APIs with Java and Spring Boot for internal systems.',
   array['CLARITY','REORDER'],
   'USER_EDIT'
-) \gset rewrite_;
+) \gset rewrite_
 
 select set_config('p1.rewrite_revision_id', :'rewrite_presentation_revision_id', false);
 
@@ -217,14 +217,14 @@ select snapshot_id from public.cv_engine_create_job_snapshot(
     jsonb_build_object('semanticKey',:'p1k_k2','category','TOOL','importance','PREFERRED','canonicalConcept','Docker','sourceText',:'p1jd_req2','sourceTextSha256',:'p1h_h2','sourceOrdinal',1)
   )
 ) \gset p1job_
-select assessment_id from public.cv_engine_create_opportunity_assessment(:'p1job_snapshot_id'::uuid) \gset p1assessment_;
+select assessment_id from public.cv_engine_create_opportunity_assessment(:'p1job_snapshot_id'::uuid) \gset p1assessment_
 
 select * from public.cv_engine_create_presentation_plan(
   'TARGETED',null,:'p1job_snapshot_id'::uuid,:'p1assessment_assessment_id'::uuid,
   jsonb_build_array(jsonb_build_object('evidenceId', :'ev_docker_evidence_id', 'evidenceRevision', 1)),
   '[]'::jsonb,
   jsonb_build_array(jsonb_build_object('sectionKey','skills','ordinal',1,'evidenceRefs',jsonb_build_array(jsonb_build_object('evidenceId', :'ev_docker_evidence_id', 'evidenceRevision', 1))))
-) \gset targeted_;
+) \gset targeted_
 
 select set_config('p1.targeted_plan_id', :'targeted_presentation_plan_id', false);
 
@@ -252,7 +252,7 @@ select * from public.cv_engine_create_presentation_revision(
   ),
   'Developer with experience building Java and Spring Boot REST APIs and Docker container delivery.',
   array['SUMMARY_SYNTHESIS','CONCISION'],'USER_EDIT'
-) \gset summary_;
+) \gset summary_
 
 select set_config('p1.summary_revision_id', :'summary_presentation_revision_id', false);
 select * from public.cv_engine_approve_presentation_revision(:'summary_presentation_revision_id'::uuid);
@@ -321,18 +321,18 @@ set role authenticated;
 set request.jwt.claim.sub='00000000-0000-4000-8000-000000000202';
 select evidence_id from public.cv_engine_create_career_evidence(
   'PROJECT','MANUAL','VERIFIED','Built a privacy lifecycle regression fixture.',null
-) \gset delete_ev_;
+) \gset delete_ev_
 select * from public.cv_engine_create_presentation_plan(
   'GENERAL',null,null,null,
   jsonb_build_array(jsonb_build_object('evidenceId', :'delete_ev_evidence_id', 'evidenceRevision', 1)),
   '[]'::jsonb,
   jsonb_build_array(jsonb_build_object('sectionKey','experience','ordinal',1,'evidenceRefs',jsonb_build_array(jsonb_build_object('evidenceId', :'delete_ev_evidence_id', 'evidenceRevision', 1))))
-) \gset delete_plan_;
+) \gset delete_plan_
 select * from public.cv_engine_create_presentation_revision(
   :'delete_plan_presentation_plan_id'::uuid,'CLAIM',
   jsonb_build_array(jsonb_build_object('evidenceId', :'delete_ev_evidence_id', 'evidenceRevision', 1)),
   'Built a privacy lifecycle regression fixture.','{}'::text[],'DETERMINISTIC'
-) \gset delete_revision_;
+) \gset delete_revision_
 select * from public.cv_engine_approve_presentation_revision(:'delete_revision_presentation_revision_id'::uuid);
 
 do $$
