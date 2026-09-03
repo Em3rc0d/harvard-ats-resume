@@ -1,0 +1,294 @@
+\set ON_ERROR_STOP on
+
+set role authenticated;
+set request.jwt.claim.sub='00000000-0000-4000-8000-000000000101';
+
+select evidence_id from public.cv_engine_create_career_evidence(
+  'PROJECT','MANUAL','VERIFIED','Built Java and Spring Boot REST APIs for internal systems.',null
+) \gset ev_api_
+select evidence_id from public.cv_engine_create_career_evidence(
+  'SKILL','MANUAL','VERIFIED','Docker container delivery',null
+) \gset ev_docker_
+select evidence_id from public.cv_engine_create_career_evidence(
+  'ACHIEVEMENT','MANUAL','NEEDS_REVIEW','Unverified claim that must never enter a trusted presentation.',null
+) \gset ev_unverified_
+
+create temporary table p1_general_plan as
+select * from public.cv_engine_create_presentation_plan(
+  'GENERAL', null, null, null,
+  jsonb_build_array(
+    jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1),
+    jsonb_build_object('evidenceId', :'ev_docker_evidence_id', 'evidenceRevision', 1)
+  ),
+  '[]'::jsonb,
+  jsonb_build_array(
+    jsonb_build_object(
+      'sectionKey','experience','ordinal',1,
+      'evidenceRefs',jsonb_build_array(
+        jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1),
+        jsonb_build_object('evidenceId', :'ev_docker_evidence_id', 'evidenceRevision', 1)
+      )
+    )
+  )
+) \gset plan_;
+
+do $$
+begin
+  if not exists (
+    select 1 from public.presentation_plans
+    where id=:'plan_presentation_plan_id'::uuid
+      and owner_user_id='00000000-0000-4000-8000-000000000101'::uuid
+      and mode='GENERAL'
+      and plan_sha256=:'plan_plan_sha256'
+  ) then raise exception 'P1_PLAN_NOT_DURABLE'; end if;
+
+  if (select count(*) from public.presentation_plan_evidence where plan_id=:'plan_presentation_plan_id'::uuid and selection='SELECTED') <> 2 then
+    raise exception 'P1_PLAN_EVIDENCE_RECEIPTS_MISSING';
+  end if;
+end $$;
+
+-- An unverified revision cannot enter selected trusted presentation evidence.
+do $$
+begin
+  begin
+    perform * from public.cv_engine_create_presentation_plan(
+      'GENERAL',null,null,null,
+      jsonb_build_array(jsonb_build_object('evidenceId', :'ev_unverified_evidence_id', 'evidenceRevision', 1)),
+      '[]'::jsonb,
+      jsonb_build_array(jsonb_build_object('sectionKey','experience','ordinal',1,'evidenceRefs',jsonb_build_array(jsonb_build_object('evidenceId', :'ev_unverified_evidence_id', 'evidenceRevision', 1))))
+    );
+    raise exception 'P1_UNVERIFIED_EVIDENCE_WAS_ACCEPTED';
+  exception when others then
+    if sqlerrm <> 'P1_SELECTED_EVIDENCE_NOT_VERIFIED' then raise; end if;
+  end;
+end $$;
+
+-- Source-exact revisions are accepted by deterministic validation but still need explicit approval.
+select * from public.cv_engine_create_presentation_revision(
+  :'plan_presentation_plan_id'::uuid,
+  'CLAIM',
+  jsonb_build_array(jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1)),
+  'Built Java and Spring Boot REST APIs for internal systems.',
+  '{}'::text[],
+  'DETERMINISTIC'
+) \gset exact_;
+
+do $$
+begin
+  if :'exact_review_status' <> 'ACCEPTED' then raise exception 'P1_SOURCE_EXACT_NOT_ACCEPTED'; end if;
+  if not exists (
+    select 1 from public.presentation_revisions
+    where id=:'exact_presentation_revision_id'::uuid
+      and status='PROPOSED'
+      and semantic_status='SOURCE_EXACT'
+      and overall_status='ACCEPTED'
+      and approved_by_user_at is null
+  ) then raise exception 'P1_SOURCE_EXACT_STATE_INVALID'; end if;
+end $$;
+
+select * from public.cv_engine_approve_presentation_revision(:'exact_presentation_revision_id'::uuid) \gset exact_approved_;
+
+do $$
+begin
+  if :'exact_approved_status' <> 'APPROVED' or :'exact_approved_semantic_status' <> 'SOURCE_EXACT' then
+    raise exception 'P1_SOURCE_EXACT_APPROVAL_FAILED';
+  end if;
+end $$;
+
+-- A safe rewrite remains REVIEW_REQUIRED until the user explicitly approves it.
+select * from public.cv_engine_create_presentation_revision(
+  :'plan_presentation_plan_id'::uuid,
+  'CLAIM',
+  jsonb_build_array(jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1)),
+  'Built REST APIs with Java and Spring Boot for internal systems.',
+  array['CLARITY','REORDER'],
+  'USER_EDIT'
+) \gset rewrite_;
+
+do $$
+begin
+  if :'rewrite_review_status' <> 'REVIEW_REQUIRED' then raise exception 'P1_REWRITE_DID_NOT_REQUIRE_REVIEW'; end if;
+  if not exists (
+    select 1 from public.presentation_revisions
+    where id=:'rewrite_presentation_revision_id'::uuid
+      and deterministic_status='PASS'
+      and semantic_status='REVIEW_REQUIRED'
+      and overall_status='REVIEW_REQUIRED'
+  ) then raise exception 'P1_REWRITE_REVIEW_STATE_INVALID'; end if;
+end $$;
+
+select * from public.cv_engine_approve_presentation_revision(:'rewrite_presentation_revision_id'::uuid) \gset rewrite_approved_;
+
+do $$
+begin
+  if :'rewrite_approved_status' <> 'APPROVED' or :'rewrite_approved_semantic_status' <> 'MANUAL_EVIDENCE_REVIEW_PASS' then
+    raise exception 'P1_EXPLICIT_REWRITE_APPROVAL_FAILED';
+  end if;
+  if not exists (
+    select 1 from public.presentation_revision_evidence
+    where presentation_revision_id=:'rewrite_presentation_revision_id'::uuid
+      and evidence_id=:'ev_api_evidence_id'::uuid
+      and evidence_revision=1
+      and evidence_text_sha256=encode(digest(evidence_canonical_text,'sha256'),'hex')
+  ) then raise exception 'P1_REWRITE_PROVENANCE_MISSING'; end if;
+end $$;
+
+-- Once approved, neither wording nor status can be rewritten.
+reset role;
+do $$
+begin
+  begin
+    update public.presentation_revisions
+      set proposed_text='tampered'
+      where id=:'rewrite_presentation_revision_id'::uuid;
+    raise exception 'P1_APPROVED_REVISION_MUTATED';
+  exception when others then
+    if sqlerrm <> 'P1_PRESENTATION_REVISION_IMMUTABLE' then raise; end if;
+  end;
+end $$;
+set role authenticated;
+set request.jwt.claim.sub='00000000-0000-4000-8000-000000000101';
+
+-- Unsupported numbers are rejected inside the database RPC, not trusted from client-side validation.
+do $$
+begin
+  begin
+    perform * from public.cv_engine_create_presentation_revision(
+      :'plan_presentation_plan_id'::uuid,'CLAIM',
+      jsonb_build_array(jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1)),
+      'Built Java APIs that reduced latency by 35%.',array['CLARITY'],'USER_EDIT'
+    );
+    raise exception 'P1_UNSUPPORTED_NUMBER_ACCEPTED';
+  exception when others then
+    if sqlerrm <> 'P1_UNSUPPORTED_QUANTITATIVE_TOKEN:35%' then raise; end if;
+  end;
+end $$;
+
+-- Unsupported strengthening is rejected inside the database RPC.
+do $$
+begin
+  begin
+    perform * from public.cv_engine_create_presentation_revision(
+      :'plan_presentation_plan_id'::uuid,'CLAIM',
+      jsonb_build_array(jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1)),
+      'Led and architected Java and Spring Boot REST APIs for internal systems.',array['ACTIVE_VOICE'],'USER_EDIT'
+    );
+    raise exception 'P1_UNSUPPORTED_STRENGTHENING_ACCEPTED';
+  exception when others then
+    if sqlerrm not in ('P1_UNSUPPORTED_STRENGTHENING:led','P1_UNSUPPORTED_STRENGTHENING:architected') then raise; end if;
+  end;
+end $$;
+
+-- Build a TARGETED context whose market truth includes Kubernetes while candidate evidence does not.
+select E'Requirements:\n- Kubernetes\n- Docker' description,
+       '- Kubernetes' req1,
+       '- Docker' req2 \gset p1jd_
+select public.cv_engine_sha256(:'p1jd_description') raw_hash,
+       public.cv_engine_sha256(:'p1jd_req1') h1,
+       public.cv_engine_sha256(:'p1jd_req2') h2 \gset p1h_
+select public.cv_engine_sha256('TOOL'||chr(31)||'REQUIRED'||chr(31)||'kubernetes'||chr(31)||:'p1h_h1'||chr(31)||'0') k1,
+       public.cv_engine_sha256('TOOL'||chr(31)||'PREFERRED'||chr(31)||'docker'||chr(31)||:'p1h_h2'||chr(31)||'1') k2 \gset p1k_
+select public.cv_engine_sha256('MANUAL_JOB_DESCRIPTION'||chr(31)||'platform engineer'||chr(31)||''||chr(31)||:'p1h_raw_hash'||chr(31)||'b2-deterministic-job-intelligence-v1'||chr(31)||:'p1k_k1'||','||:'p1k_k2') sk \gset p1s_
+select snapshot_id from public.cv_engine_create_job_snapshot(
+  :'p1s_sk','Platform Engineer','',:'p1jd_description',:'p1h_raw_hash','b2-deterministic-job-intelligence-v1',
+  jsonb_build_array(
+    jsonb_build_object('semanticKey',:'p1k_k1','category','TOOL','importance','REQUIRED','canonicalConcept','Kubernetes','sourceText',:'p1jd_req1','sourceTextSha256',:'p1h_h1','sourceOrdinal',0),
+    jsonb_build_object('semanticKey',:'p1k_k2','category','TOOL','importance','PREFERRED','canonicalConcept','Docker','sourceText',:'p1jd_req2','sourceTextSha256',:'p1h_h2','sourceOrdinal',1)
+  )
+) \gset p1job_
+select assessment_id from public.cv_engine_create_opportunity_assessment(:'p1job_snapshot_id'::uuid) \gset p1assessment_;
+
+select * from public.cv_engine_create_presentation_plan(
+  'TARGETED',null,:'p1job_snapshot_id'::uuid,:'p1assessment_assessment_id'::uuid,
+  jsonb_build_array(jsonb_build_object('evidenceId', :'ev_docker_evidence_id', 'evidenceRevision', 1)),
+  '[]'::jsonb,
+  jsonb_build_array(jsonb_build_object('sectionKey','skills','ordinal',1,'evidenceRefs',jsonb_build_array(jsonb_build_object('evidenceId', :'ev_docker_evidence_id', 'evidenceRevision', 1))))
+) \gset targeted_;
+
+-- Market truth must not backfill candidate truth.
+do $$
+begin
+  begin
+    perform * from public.cv_engine_create_presentation_revision(
+      :'targeted_presentation_plan_id'::uuid,'CLAIM',
+      jsonb_build_array(jsonb_build_object('evidenceId', :'ev_docker_evidence_id', 'evidenceRevision', 1)),
+      'Docker and Kubernetes container delivery',array['KEYWORD_ALIGNMENT'],'USER_EDIT'
+    );
+    raise exception 'P1_MARKET_TERM_PROMOTED';
+  exception when others then
+    if sqlerrm <> 'P1_MARKET_TERM_PROMOTED_TO_CANDIDATE:Kubernetes' then raise; end if;
+  end;
+end $$;
+
+-- Multi-evidence summaries retain exact revision snapshots.
+select * from public.cv_engine_create_presentation_revision(
+  :'plan_presentation_plan_id'::uuid,'SUMMARY',
+  jsonb_build_array(
+    jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1),
+    jsonb_build_object('evidenceId', :'ev_docker_evidence_id', 'evidenceRevision', 1)
+  ),
+  'Developer with experience building Java and Spring Boot REST APIs and Docker container delivery.',
+  array['SUMMARY_SYNTHESIS','CONCISION'],'USER_EDIT'
+) \gset summary_;
+select * from public.cv_engine_approve_presentation_revision(:'summary_presentation_revision_id'::uuid) \gset summary_approved_;
+
+do $$
+begin
+  if (select count(*) from public.presentation_revision_evidence where presentation_revision_id=:'summary_presentation_revision_id'::uuid) <> 2 then
+    raise exception 'P1_MULTI_EVIDENCE_SUMMARY_PROVENANCE_FAILED';
+  end if;
+end $$;
+
+-- Cross-user read and mutation attempts are denied by owner scope/RPC ownership checks.
+set request.jwt.claim.sub='00000000-0000-4000-8000-000000000202';
+do $$
+begin
+  if exists(select 1 from public.presentation_plans where id=:'plan_presentation_plan_id'::uuid) then raise exception 'P1_CROSS_USER_PLAN_READ'; end if;
+  if exists(select 1 from public.presentation_revisions where id=:'rewrite_presentation_revision_id'::uuid) then raise exception 'P1_CROSS_USER_REVISION_READ'; end if;
+  begin
+    perform * from public.cv_engine_approve_presentation_revision(:'rewrite_presentation_revision_id'::uuid);
+    raise exception 'P1_CROSS_USER_APPROVAL_SUCCEEDED';
+  exception when others then
+    if sqlerrm <> 'P1_PRESENTATION_REVISION_NOT_FOUND' then raise; end if;
+  end;
+end $$;
+
+-- Direct writes are denied to authenticated users.
+do $$
+begin
+  begin
+    insert into public.presentation_plans(owner_user_id,mode,renderer_profile,selected_evidence_refs,sections,plan_sha256)
+    values('00000000-0000-4000-8000-000000000202','GENERAL','ATS_SINGLE_COLUMN_V1','[]'::jsonb,'[]'::jsonb,repeat('a',64));
+    raise exception 'P1_DIRECT_INSERT_ALLOWED';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+reset role;
+
+-- Anonymous execution is denied.
+set role anon;
+set request.jwt.claim.sub='';
+do $$
+begin
+  begin
+    perform * from public.cv_engine_approve_presentation_revision(:'rewrite_presentation_revision_id'::uuid);
+    raise exception 'P1_ANON_RPC_ALLOWED';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+-- Fresh privileged connection/state can read the exact durable historical artifact.
+do $$
+begin
+  if not exists(
+    select 1 from public.presentation_revisions
+    where id=:'rewrite_presentation_revision_id'::uuid
+      and status='APPROVED'
+      and proposed_text='Built REST APIs with Java and Spring Boot for internal systems.'
+      and proposed_sha256=encode(digest(proposed_text,'sha256'),'hex')
+  ) then raise exception 'P1_DURABLE_READBACK_FAILED'; end if;
+end $$;
+
+select 'P1_PRESENTATION_PERSISTENCE_PASS' as result;
