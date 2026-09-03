@@ -100,6 +100,10 @@ select (select observation_id from b7_ready_capture) observation_id,
        (select space_item_id from b7_ready_select) space_item_id,
        (select job_snapshot_id from b7_ready_job) job_snapshot_id;
 
+-- The anonymous attack needs only the opaque fixture identifiers. Granting
+-- SELECT on this session-local temp table does not widen any product permission.
+grant select on b7_user_a_ids to anon;
+
 -- Direct client writes and historical rewrites are forbidden.
 do $$
 declare ids record;
