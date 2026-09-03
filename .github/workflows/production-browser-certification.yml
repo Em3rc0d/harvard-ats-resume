@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     env:
       CERT_ARTIFACT_DIR: artifacts/production-certification
-      CERT_HARNESS_REVISION: "4"
+      CERT_HARNESS_REVISION: "5"
     steps:
       - name: Checkout certification branch
         uses: actions/checkout@v4
@@ -59,15 +59,19 @@ jobs:
           print(out)
           PY
 
-      - name: Normalize deterministic harness selectors
+      - name: Normalize functional browser waits and selectors
         run: |
           python3 - <<'PY'
           from pathlib import Path
           path = Path('tests/e2e/production-certification.mjs')
           text = path.read_text()
-          old = "selectOption({ label: /Backend Engineer/ })"
-          assert text.count(old) == 2, 'Expected exactly two deterministic Job Snapshot selectors'
-          path.write_text(text.replace(old, "selectOption({ index: 1 })"))
+          old_select = "selectOption({ label: /Backend Engineer/ })"
+          old_reload = "page.reload({ waitUntil: 'networkidle' })"
+          assert text.count(old_select) == 2, 'Expected exactly two deterministic Job Snapshot selectors'
+          assert text.count(old_reload) == 1, 'Expected exactly one returning-user reload wait'
+          text = text.replace(old_select, "selectOption({ index: 1 })")
+          text = text.replace(old_reload, "page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 })")
+          path.write_text(text)
           PY
 
       - name: Execute exact-production browser journey
