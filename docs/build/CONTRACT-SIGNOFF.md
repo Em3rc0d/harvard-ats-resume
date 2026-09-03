@@ -1,4 +1,4 @@
-# CV Engine — Contract Sign-off v1.0
+# CV Engine — Contract Sign-off v1.1
 
 Status: **SIGNED**
 
@@ -17,15 +17,27 @@ SIGNED CONTRACT != CLOSED BUILD NODE
 ## Product and truth contracts — SIGNED
 
 ```text
-Career Evidence     candidate authority
-Job Snapshot        market truth
-Career Target       intent
-Assessment          derived analysis
-ResumeVersion       deterministic presentation projection
-AI output           bounded proposal
+Career Evidence       candidate authority / what is true
+Job Snapshot          market truth
+Career Target         intent
+Assessment            derived analysis
+PresentationPlan      contextual selection / ordering / emphasis
+PresentationRevision  how verified truth is expressed
+ResumeVersion         deterministic compiled projection
+AI output             bounded proposal
 ```
 
 No downstream node may collapse these boundaries into one generic resume-data authority.
+
+The product must optimize both sides of the core equation:
+
+```text
+PROFESSIONAL_STRENGTH
+AND
+DEFENSIBLE_TRUTH
+```
+
+Optimizing one by weakening the other is a product failure.
 
 ## First-run / trust contract — SIGNED
 
@@ -67,6 +79,8 @@ Signed invariants:
 - PostgreSQL is durable authority;
 - Redis is not career truth;
 - Career Evidence is revisioned;
+- approved PresentationRevisions referenced by historical ResumeVersions are immutable;
+- PresentationRevision is not an alternate Career Evidence authority;
 - historical snapshots/ResumeVersions are immutable when committed as historical artifacts;
 - trusted mutations are atomic;
 - optimistic concurrency prevents silent overwrite;
@@ -111,11 +125,11 @@ Signed invariants:
 - provider/processor inventory;
 - incident handling and deletion/export behavior must be evidenced before release.
 
-## B2 contract — SIGNED, IMPLEMENTATION BLOCKED
+## B2 contract — SIGNED
 
 Career Target and Job truth remain distinct. Job requirements are deterministic market-side structures and can never create Career Evidence.
 
-## B3 contract — SIGNED, IMPLEMENTATION BLOCKED
+## B3 contract — SIGNED
 
 Assessment must expose evidence-backed states:
 
@@ -129,29 +143,65 @@ BLOCKER
 
 `UNKNOWN` is never silently scored as a pass. Explanations must identify supporting assertions/evidence or explicitly state the absence of support. Hiring probability theater is forbidden.
 
-## B4 contract — SIGNED, IMPLEMENTATION BLOCKED
+## B4 contract — SIGNED
 
-Trusted ResumeVersion creation is deterministic/application-owned, immutable after creation, provenance-bearing and transactional. Optional AI may rewrite presentation only inside evidence-preserving validation boundaries.
+Trusted ResumeVersion creation is deterministic/application-owned, immutable after creation, provenance-bearing and transactional.
 
-## B5 contract — SIGNED, IMPLEMENTATION BLOCKED
+B4's exact-source-text composition remains a valid safe baseline. It is not the final P1 presentation model.
+
+## B5 contract — SIGNED
 
 Import is convenience. Mechanical extraction and deterministic source boundaries precede AI. Unsupported/ambiguous facts are never accepted as candidate truth. Failure degrades to manual Career Evidence entry.
 
-## B6 contract — SIGNED, IMPLEMENTATION BLOCKED
+## B6 contract — SIGNED
 
 Gemini is primary, Ollama fallback, both untrusted until the same application-owned validator accepts the bounded result. Retry/deadline/cost chains are finite and provider outage cannot fabricate completion.
 
-## B7 contract — SIGNED, IMPLEMENTATION BLOCKED
+`INLINE_WORDING_OPTIMIZATION` is a bounded proposal capability, not presentation authority.
+
+## B7 contract — SIGNED
 
 Opportunity Space and market intelligence extend the trusted core without contaminating candidate truth. Market observations retain source/provenance/history and remain distinguishable from candidate evidence and derived recommendations.
 
-## B8 contract — SIGNED, IMPLEMENTATION BLOCKED
+## P1 contract — SIGNED / IMPLEMENTATION AUTHORIZED
+
+Authority: `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`.
+
+Signed product principle:
+
+> CV Engine must convert defensible career truth into the strongest professional presentation possible for a context, while preserving the ability to demonstrate why every resulting claim remains defensible.
+
+Signed invariants:
+
+- Career Evidence remains the truth authority;
+- PresentationPlan owns selection, ordering, grouping and emphasis only;
+- PresentationRevision owns expression, not truth;
+- a Job Description may influence prioritization/terminology but cannot create candidate facts;
+- no unsupported metric, skill, employer, date, title, outcome, scope, ownership or seniority may be introduced;
+- presentation may not silently strengthen epistemic force;
+- every rendered trusted claim maps to exact verified evidence ID/revision/hash;
+- synthesized summary sentences retain multi-evidence provenance;
+- AI may propose but may not approve;
+- meaningful presentation changes require explicit user approval;
+- approved revisions referenced by historical ResumeVersions are immutable;
+- final ResumeVersion assembly remains deterministic;
+- DOCX/PDF/TXT/provenance JSON must derive from the same semantic ResumeVersion;
+- cross-format claim text/order must not silently diverge;
+- no-cloud/AI-outage paths degrade to deterministic/manual source-preserving presentation;
+- CV Engine does not claim mathematical semantic-equivalence proof for arbitrary natural-language paraphrases;
+- CV Engine may claim traceable lineage only when validation, approval and provenance receipts exist.
+
+P1 is release-blocking for CVENGINE_V1_0_0.
+
+## B8 contract — SIGNED
 
 Production qualification requires identified-runtime evidence: browser E2E, security regression, fault injection, backup/restore, export/delete, provider fallback, secret canary, performance/capacity and deployment receipts.
 
+Final B8 certification additionally requires P1 presentation/export regressions and identified-runtime export evidence.
+
 ## Final engineering sign-off
 
-The architecture and product contracts are sufficiently coherent to stop redesigning and continue construction.
+The architecture and product contracts are coherent enough to continue construction with P1 as the active product node.
 
 The only valid reasons to reopen a signed contract are:
 
@@ -159,10 +209,11 @@ The only valid reasons to reopen a signed contract are:
 2. a provider/platform fact materially changes;
 3. an explicit product-scope revision is accepted and versioned.
 
-Absent one of those triggers:
+The current P1 addition is an explicit product-scope revision under rule 3. It does not erase prior closure evidence; it adds a new release requirement.
 
 ```text
 CONTRACTS = SIGNED
+ACTIVE_PRODUCT_NODE = P1
 CONSTRUCTION = CONTINUE
 RELEASE_READY = NO
 ```
