@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  B9_RESUME_PLANNER_VERSION,
   ResumePlanSchema,
   type CreateResumePlanInput,
   type ResumePlan,
@@ -65,7 +64,7 @@ export async function loadResumePlan(
     mode: plan.mode,
     jobSnapshotId: plan.job_snapshot_id ?? null,
     opportunityAssessmentId: plan.opportunity_assessment_id ?? null,
-    plannerVersion: B9_RESUME_PLANNER_VERSION,
+    plannerVersion: plan.planner_version,
     sectionOrder: plan.section_order,
     densityPolicy: plan.density_policy,
     careerEvidenceFingerprintSha256: plan.career_evidence_fingerprint_sha256,
