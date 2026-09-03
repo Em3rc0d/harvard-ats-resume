@@ -215,6 +215,39 @@ export function validatePresentationProposal(input: PresentationGuardInput): Pre
   return PresentationValidationReceiptSchema.parse(receipt);
 }
 
+function completeSemanticReview(
+  receiptInput: PresentationValidationReceipt,
+  method: "MODEL_ASSISTED_PASS" | "MANUAL_EVIDENCE_REVIEW_PASS",
+  checkedAt?: string,
+): PresentationValidationReceipt {
+  const receipt = PresentationValidationReceiptSchema.parse(receiptInput);
+
+  if (receipt.deterministicStatus !== "PASS" || receipt.findings.length > 0) {
+    throw new Error("P1_SEMANTIC_REVIEW_CANNOT_OVERRIDE_DETERMINISTIC_FAILURE");
+  }
+
+  return PresentationValidationReceiptSchema.parse({
+    ...receipt,
+    semanticStatus: method,
+    overallStatus: "ACCEPTED",
+    checkedAt: checkedAt ?? new Date().toISOString(),
+  });
+}
+
+export function completeManualEvidenceReview(
+  receipt: PresentationValidationReceipt,
+  checkedAt?: string,
+) {
+  return completeSemanticReview(receipt, "MANUAL_EVIDENCE_REVIEW_PASS", checkedAt);
+}
+
+export function completeModelAssistedSemanticReview(
+  receipt: PresentationValidationReceipt,
+  checkedAt?: string,
+) {
+  return completeSemanticReview(receipt, "MODEL_ASSISTED_PASS", checkedAt);
+}
+
 export function presentationTextSha256(value: string) {
   return sha256(value);
 }
