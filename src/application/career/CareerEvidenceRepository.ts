@@ -5,6 +5,7 @@ import {
   type CreateManualCareerEvidenceInput,
   type ReviseCareerEvidenceInput,
 } from "../../domain/career/CareerEvidenceMutation";
+import { normalizeCareerEvidenceDatabaseTimestamp } from "./DatabaseTimestamp";
 
 type EvidenceRow = {
   id: string;
@@ -34,8 +35,8 @@ function mapCurrent(row: EvidenceRow, revision: RevisionRow): CareerEvidenceCurr
     verificationStatus: revision.verification_status,
     canonicalText: revision.canonical_text,
     revision: revision.revision_number,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: normalizeCareerEvidenceDatabaseTimestamp(row.created_at),
+    updatedAt: normalizeCareerEvidenceDatabaseTimestamp(row.updated_at),
   });
 }
 
