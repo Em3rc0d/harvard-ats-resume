@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 20
     env:
       CERT_ARTIFACT_DIR: artifacts/production-certification
+      CERT_HARNESS_REVISION: "2"
     steps:
       - name: Checkout certification branch
         uses: actions/checkout@v4
