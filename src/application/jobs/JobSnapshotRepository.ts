@@ -4,6 +4,7 @@ import {
   type CreateManualJobSnapshotInput,
   type JobSnapshot,
 } from "../../domain/jobs/JobSnapshot";
+import { normalizeB2DatabaseTimestamp } from "../b2/DatabaseTimestamp";
 import { analyzeManualJobDescription } from "./DeterministicJobIntelligence";
 
 type SnapshotRow = {
@@ -60,8 +61,8 @@ async function mapSnapshot(client: SupabaseClient, row: SnapshotRow): Promise<Jo
     rawDescriptionSha256: row.raw_description_sha256,
     analyzerVersion: row.analyzer_version,
     requirements,
-    capturedAt: row.captured_at,
-    createdAt: row.created_at,
+    capturedAt: normalizeB2DatabaseTimestamp(row.captured_at),
+    createdAt: normalizeB2DatabaseTimestamp(row.created_at),
   });
 }
 
