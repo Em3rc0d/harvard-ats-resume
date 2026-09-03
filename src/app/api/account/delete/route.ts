@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthenticatedSupabaseContext } from "../../../../application/auth/requireAuthenticatedUser";
+import { b8AccountLifecycleError } from "../../../../interfaces/http/b8AccountResponse";
 
 const CONFIRMATION = "DELETE_MY_ACCOUNT";
 
@@ -12,14 +13,13 @@ export async function DELETE(request: Request) {
   try {
     const { client } = await requireAuthenticatedSupabaseContext();
     const result = await client.rpc("cv_engine_delete_account");
-    if (result.error) throw new Error(`B8_ACCOUNT_DELETE_FAILED:${result.error.message}`);
+    if (result.error || result.data !== true) throw new Error("B8_ACCOUNT_DELETE_RPC_FAILED");
     await client.auth.signOut({ scope: "local" }).catch(() => undefined);
     return NextResponse.json(
-      { deleted: result.data === true },
+      { deleted: true },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "B8_ACCOUNT_DELETE_FAILED";
-    return NextResponse.json({ error: message }, { status: message.includes("AUTH") ? 401 : 500 });
+    return b8AccountLifecycleError(error, "DELETE");
   }
 }

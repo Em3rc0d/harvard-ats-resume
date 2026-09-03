@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuthenticatedSupabaseContext } from "../../../../application/auth/requireAuthenticatedUser";
+import { AuthenticationRequiredError, requireAuthenticatedSupabaseContext } from "../../../../application/auth/requireAuthenticatedUser";
 
 export async function GET() {
   try {
@@ -15,7 +15,14 @@ export async function GET() {
       noCloudTrustedCoreAvailable: true,
       aiOptional: true,
     }, { headers: { "Cache-Control": "private, no-store" } });
-  } catch {
-    return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
+    }
+    const message = error instanceof Error ? error.message : "AI_STATUS_UNAVAILABLE";
+    if (message.includes("SUPABASE_PUBLIC_CONFIG_MISSING")) {
+      return NextResponse.json({ error: "DURABLE_STORE_NOT_CONFIGURED" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+    }
+    return NextResponse.json({ error: "AI_STATUS_UNAVAILABLE" }, { status: 500, headers: { "Cache-Control": "private, no-store" } });
   }
 }
