@@ -202,10 +202,17 @@ declare
   v_reason text;
   v_assessment uuid;
 begin
-  select count(*), min(evidence_id), min(selection_reason)
-    into v_count, v_evidence, v_reason
+  select count(*) into v_count
   from public.resume_plan_items
   where resume_plan_id = (select targeted_plan_id from b9_plan_context);
+
+  select evidence_id, selection_reason
+    into v_evidence, v_reason
+  from public.resume_plan_items
+  where resume_plan_id = (select targeted_plan_id from b9_plan_context)
+  order by ordinal
+  limit 1;
+
   select opportunity_assessment_id into v_assessment
   from public.resume_plans where id = (select targeted_plan_id from b9_plan_context);
 
