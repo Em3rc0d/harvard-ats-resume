@@ -264,6 +264,18 @@ begin
   end if;
 end $$;
 
+-- Account export must include the complete P1 durable surface.
+do $$
+declare
+  v_export jsonb := public.cv_engine_export_account();
+begin
+  if v_export->>'schemaVersion' <> 'p1-account-export-v2' then raise exception 'P1_EXPORT_SCHEMA_NOT_PROMOTED'; end if;
+  if jsonb_array_length(v_export->'presentationPlans') < 2 then raise exception 'P1_EXPORT_PLANS_MISSING'; end if;
+  if jsonb_array_length(v_export->'presentationPlanEvidence') < 3 then raise exception 'P1_EXPORT_PLAN_EVIDENCE_MISSING'; end if;
+  if jsonb_array_length(v_export->'presentationRevisions') < 3 then raise exception 'P1_EXPORT_REVISIONS_MISSING'; end if;
+  if jsonb_array_length(v_export->'presentationRevisionEvidence') < 4 then raise exception 'P1_EXPORT_REVISION_EVIDENCE_MISSING'; end if;
+end $$;
+
 -- Cross-user read and mutation attempts are denied by owner scope/RPC ownership checks.
 set request.jwt.claim.sub='00000000-0000-4000-8000-000000000202';
 do $$
@@ -304,7 +316,46 @@ begin
 end $$;
 reset role;
 
--- Privileged durable readback preserves the exact historical artifact.
+-- Privacy lifecycle: a second user's P1 history must export and erase through the authorized account path.
+set role authenticated;
+set request.jwt.claim.sub='00000000-0000-4000-8000-000000000202';
+select evidence_id from public.cv_engine_create_career_evidence(
+  'PROJECT','MANUAL','VERIFIED','Built a privacy lifecycle regression fixture.',null
+) \gset delete_ev_;
+select * from public.cv_engine_create_presentation_plan(
+  'GENERAL',null,null,null,
+  jsonb_build_array(jsonb_build_object('evidenceId', :'delete_ev_evidence_id', 'evidenceRevision', 1)),
+  '[]'::jsonb,
+  jsonb_build_array(jsonb_build_object('sectionKey','experience','ordinal',1,'evidenceRefs',jsonb_build_array(jsonb_build_object('evidenceId', :'delete_ev_evidence_id', 'evidenceRevision', 1))))
+) \gset delete_plan_;
+select * from public.cv_engine_create_presentation_revision(
+  :'delete_plan_presentation_plan_id'::uuid,'CLAIM',
+  jsonb_build_array(jsonb_build_object('evidenceId', :'delete_ev_evidence_id', 'evidenceRevision', 1)),
+  'Built a privacy lifecycle regression fixture.','{}'::text[],'DETERMINISTIC'
+) \gset delete_revision_;
+select * from public.cv_engine_approve_presentation_revision(:'delete_revision_presentation_revision_id'::uuid);
+
+do $$
+declare
+  v_export jsonb := public.cv_engine_export_account();
+begin
+  if jsonb_array_length(v_export->'presentationPlans') <> 1 then raise exception 'P1_DELETE_FIXTURE_EXPORT_PLAN_MISSING'; end if;
+  if jsonb_array_length(v_export->'presentationRevisions') <> 1 then raise exception 'P1_DELETE_FIXTURE_EXPORT_REVISION_MISSING'; end if;
+end $$;
+
+select public.cv_engine_delete_account();
+reset role;
+
+do $$
+begin
+  if exists(select 1 from auth.users where id='00000000-0000-4000-8000-000000000202'::uuid) then raise exception 'P1_ACCOUNT_DELETE_USER_SURVIVED'; end if;
+  if exists(select 1 from public.presentation_plans where owner_user_id='00000000-0000-4000-8000-000000000202'::uuid) then raise exception 'P1_ACCOUNT_DELETE_PLAN_SURVIVED'; end if;
+  if exists(select 1 from public.presentation_plan_evidence where owner_user_id='00000000-0000-4000-8000-000000000202'::uuid) then raise exception 'P1_ACCOUNT_DELETE_PLAN_EVIDENCE_SURVIVED'; end if;
+  if exists(select 1 from public.presentation_revisions where owner_user_id='00000000-0000-4000-8000-000000000202'::uuid) then raise exception 'P1_ACCOUNT_DELETE_REVISION_SURVIVED'; end if;
+  if exists(select 1 from public.presentation_revision_evidence where owner_user_id='00000000-0000-4000-8000-000000000202'::uuid) then raise exception 'P1_ACCOUNT_DELETE_REVISION_EVIDENCE_SURVIVED'; end if;
+end $$;
+
+-- Privileged durable readback preserves the first user's exact historical artifact.
 do $$
 begin
   if not exists(
