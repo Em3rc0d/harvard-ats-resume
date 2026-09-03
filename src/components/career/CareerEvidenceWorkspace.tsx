@@ -3,11 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AIAccessMode } from "../../domain/ai/AIAccess";
 import type { CareerEvidenceCurrent } from "../../domain/career/CareerEvidenceMutation";
+import type { PresentationRevision } from "../../domain/presentation/PresentationRevision";
 import type { z } from "zod";
 import { CareerEvidenceKindSchema } from "../../domain/career/CareerEvidence";
 import { useAIAccessSession } from "../providers/AIAccessSessionProvider";
 
 type CareerEvidenceKind = z.infer<typeof CareerEvidenceKindSchema>;
+type PresentationReview = Readonly<{
+  revision: PresentationRevision;
+  sourceText: string;
+}>;
 
 const KINDS: ReadonlyArray<{ value: CareerEvidenceKind; label: string }> = [
   { value: "EMPLOYMENT", label: "Employment" },
@@ -28,6 +33,26 @@ type CareerEvidenceWorkspaceProps = {
   onSignOut: () => Promise<void>;
 };
 
+function reviewIndex(reviews: PresentationReview[]) {
+  const indexed: Record<string, PresentationReview> = {};
+
+  for (const review of reviews) {
+    const current = indexed[review.revision.evidenceId];
+    if (!current) {
+      indexed[review.revision.evidenceId] = review;
+      continue;
+    }
+    if (
+      current.revision.status !== "PROPOSED"
+      && review.revision.status === "PROPOSED"
+    ) {
+      indexed[review.revision.evidenceId] = review;
+    }
+  }
+
+  return indexed;
+}
+
 export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvidenceWorkspaceProps) {
   const { readByokCredential } = useAIAccessSession();
   const [evidence, setEvidence] = useState<CareerEvidenceCurrent[]>([]);
@@ -41,22 +66,34 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
   const [editText, setEditText] = useState("");
   const [editVerified, setEditVerified] = useState(false);
   const [presentationNotices, setPresentationNotices] = useState<Record<string, string>>({});
+  const [presentationReviews, setPresentationReviews] = useState<Record<string, PresentationReview>>({});
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadInitialEvidence() {
-      const response = await fetch("/api/career/evidence", { cache: "no-store" });
-      const body = await response.json().catch(() => null);
+      const [evidenceResponse, presentationResponse] = await Promise.all([
+        fetch("/api/career/evidence", { cache: "no-store" }),
+        fetch("/api/presentation/revisions", { cache: "no-store" }),
+      ]);
+      const [evidenceBody, presentationBody] = await Promise.all([
+        evidenceResponse.json().catch(() => null),
+        presentationResponse.json().catch(() => null),
+      ]);
       if (cancelled) return;
 
-      if (!response.ok) {
-        setError(body?.error ?? "CAREER_EVIDENCE_LOAD_FAILED");
+      if (!evidenceResponse.ok) {
+        setError(evidenceBody?.error ?? "CAREER_EVIDENCE_LOAD_FAILED");
         setLoading(false);
         return;
       }
 
-      setEvidence(Array.isArray(body?.evidence) ? body.evidence : []);
+      setEvidence(Array.isArray(evidenceBody?.evidence) ? evidenceBody.evidence : []);
+      if (presentationResponse.ok && Array.isArray(presentationBody?.reviews)) {
+        setPresentationReviews(reviewIndex(presentationBody.reviews));
+      } else if (!presentationResponse.ok) {
+        setError(presentationBody?.error ?? "PRESENTATION_REVIEW_LIST_FAILED");
+      }
       setLoading(false);
     }
 
@@ -138,11 +175,12 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
     setEvidence((current) =>
       current.map((candidate) => (candidate.id === item.id ? body.evidence : candidate)),
     );
-    setPresentationNotices((current) => {
-      const next = { ...current };
-      delete next[item.id];
-      return next;
-    });
+    setPresentationNotices((current) => ({
+      ...current,
+      [item.id]: presentationReviews[item.id]?.revision.status === "PROPOSED"
+        ? "Career Evidence changed. The existing wording proposal can no longer be approved; reject it or generate a new proposal."
+        : "Career Evidence revision saved.",
+    }));
     setEditingId(null);
     setEditText("");
     setBusy(false);
@@ -191,9 +229,62 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
       return;
     }
 
+    setPresentationReviews((current) => ({
+      ...current,
+      [item.id]: {
+        revision: body.revision,
+        sourceText: item.canonicalText,
+      },
+    }));
     setPresentationNotices((current) => ({
       ...current,
-      [item.id]: "Validated wording suggestion ready for review.",
+      [item.id]: "Validated wording suggestion ready for explicit review.",
+    }));
+    setBusy(false);
+  }
+
+  async function resolveWording(
+    item: CareerEvidenceCurrent,
+    review: PresentationReview,
+    decision: "APPROVE" | "REJECT",
+  ) {
+    setBusy(true);
+    setError(null);
+
+    const response = await fetch(`/api/presentation/revisions/${review.revision.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    const body = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      if (body?.error === "PRESENTATION_SOURCE_STALE") {
+        setPresentationNotices((current) => ({
+          ...current,
+          [item.id]: "Approval blocked because Career Evidence changed after this proposal was created. Generate a new wording proposal from the current verified revision.",
+        }));
+      } else if (body?.error === "PRESENTATION_ALREADY_RESOLVED") {
+        setPresentationNotices((current) => ({
+          ...current,
+          [item.id]: "This wording proposal was already resolved. Reload to see its terminal state.",
+        }));
+      } else {
+        setError(body?.error ?? "PRESENTATION_RESOLUTION_FAILED");
+      }
+      setBusy(false);
+      return;
+    }
+
+    setPresentationReviews((current) => ({
+      ...current,
+      [item.id]: { ...review, revision: body.revision },
+    }));
+    setPresentationNotices((current) => ({
+      ...current,
+      [item.id]: decision === "APPROVE"
+        ? "Presentation wording approved. Career Evidence remains unchanged."
+        : "Presentation wording rejected. Career Evidence remains unchanged.",
     }));
     setBusy(false);
   }
@@ -213,6 +304,11 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
 
     setEvidence((current) => current.filter((candidate) => candidate.id !== item.id));
     setPresentationNotices((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
+    setPresentationReviews((current) => {
       const next = { ...current };
       delete next[item.id];
       return next;
@@ -289,49 +385,118 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
             </div>
           ) : null}
 
-          {evidence.map((item) => (
-            <article className="panel evidence-card" key={item.id}>
-              <div className="evidence-meta">
-                <span>{KINDS.find((kindItem) => kindItem.value === item.kind)?.label ?? item.kind}</span>
-                <span>Revision {item.revision}</span>
-                <span className={item.verificationStatus === "VERIFIED" ? "verified" : "review"}>
-                  {item.verificationStatus === "VERIFIED" ? "Defensible" : "Needs review"}
-                </span>
-              </div>
+          {evidence.map((item) => {
+            const review = presentationReviews[item.id];
+            const reviewIsStale = Boolean(
+              review
+              && (
+                review.revision.evidenceRevision !== item.revision
+                || item.verificationStatus !== "VERIFIED"
+              ),
+            );
 
-              {editingId === item.id ? (
-                <div className="stack">
-                  <textarea rows={5} maxLength={10_000} value={editText} onChange={(event) => setEditText(event.target.value)} />
-                  <label className="acknowledgement compact-check">
-                    <input checked={editVerified} type="checkbox" onChange={(event) => setEditVerified(event.target.checked)} />
-                    <span>I can defend this revised statement as true.</span>
-                  </label>
-                  <div className="split-actions">
-                    <button className="primary" disabled={busy} type="button" onClick={() => void saveRevision(item)}>Save revision</button>
-                    <button className="secondary" type="button" onClick={() => setEditingId(null)}>Cancel</button>
+            return (
+              <article className="panel evidence-card" key={item.id}>
+                <div className="evidence-meta">
+                  <span>{KINDS.find((kindItem) => kindItem.value === item.kind)?.label ?? item.kind}</span>
+                  <span>Revision {item.revision}</span>
+                  <span className={item.verificationStatus === "VERIFIED" ? "verified" : "review"}>
+                    {item.verificationStatus === "VERIFIED" ? "Defensible" : "Needs review"}
+                  </span>
+                </div>
+
+                {editingId === item.id ? (
+                  <div className="stack">
+                    <textarea rows={5} maxLength={10_000} value={editText} onChange={(event) => setEditText(event.target.value)} />
+                    <label className="acknowledgement compact-check">
+                      <input checked={editVerified} type="checkbox" onChange={(event) => setEditVerified(event.target.checked)} />
+                      <span>I can defend this revised statement as true.</span>
+                    </label>
+                    <div className="split-actions">
+                      <button className="primary" disabled={busy} type="button" onClick={() => void saveRevision(item)}>Save revision</button>
+                      <button className="secondary" type="button" onClick={() => setEditingId(null)}>Cancel</button>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <p className="evidence-text">{item.canonicalText}</p>
-              )}
+                ) : (
+                  <p className="evidence-text">{item.canonicalText}</p>
+                )}
 
-              {editingId !== item.id ? (
-                <div className="split-actions">
-                  <button className="secondary" disabled={busy} type="button" onClick={() => beginEdit(item)}>Edit as new revision</button>
-                  {item.verificationStatus === "VERIFIED" && aiWordingEnabled ? (
-                    <button className="secondary" disabled={busy} type="button" onClick={() => void improveWording(item)}>
-                      Improve wording
-                    </button>
-                  ) : null}
-                  <button className="text-button danger-text" disabled={busy} type="button" onClick={() => void removeEvidence(item)}>Delete</button>
-                </div>
-              ) : null}
+                {editingId !== item.id ? (
+                  <div className="split-actions">
+                    <button className="secondary" disabled={busy} type="button" onClick={() => beginEdit(item)}>Edit as new revision</button>
+                    {item.verificationStatus === "VERIFIED" && aiWordingEnabled ? (
+                      <button className="secondary" disabled={busy} type="button" onClick={() => void improveWording(item)}>
+                        Improve wording
+                      </button>
+                    ) : null}
+                    <button className="text-button danger-text" disabled={busy} type="button" onClick={() => void removeEvidence(item)}>Delete</button>
+                  </div>
+                ) : null}
 
-              {presentationNotices[item.id] ? (
-                <p className="status" role="status">{presentationNotices[item.id]}</p>
-              ) : null}
-            </article>
-          ))}
+                {review ? (
+                  <section className="presentation-review" aria-label="Presentation wording review">
+                    <div className="presentation-review-header">
+                      <div>
+                        <p className="eyebrow">Presentation · B9</p>
+                        <h3>Review wording before it can be used.</h3>
+                      </div>
+                      <span className="build-label">{review.revision.status}</span>
+                    </div>
+
+                    <p className="fine-print">
+                      Validator PASS · source evidence r{review.revision.evidenceRevision} · {review.revision.provenance.provider}/{review.revision.provenance.model}
+                    </p>
+
+                    <div className="presentation-diff">
+                      <article>
+                        <strong>Before · Career Evidence</strong>
+                        <p>{review.sourceText}</p>
+                      </article>
+                      <article>
+                        <strong>After · Presentation proposal</strong>
+                        <p>{review.revision.proposedText}</p>
+                      </article>
+                    </div>
+
+                    {reviewIsStale && review.revision.status === "PROPOSED" ? (
+                      <p className="status error" role="alert">
+                        Source changed after this proposal was created. Approval is disabled; rejection remains available.
+                      </p>
+                    ) : null}
+
+                    {review.revision.status === "PROPOSED" ? (
+                      <div className="split-actions">
+                        <button
+                          className="primary"
+                          disabled={busy || reviewIsStale}
+                          type="button"
+                          onClick={() => void resolveWording(item, review, "APPROVE")}
+                        >
+                          Approve wording
+                        </button>
+                        <button
+                          className="secondary"
+                          disabled={busy}
+                          type="button"
+                          onClick={() => void resolveWording(item, review, "REJECT")}
+                        >
+                          Reject wording
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="status">
+                        Terminal decision: {review.revision.status}. Career Evidence was not modified.
+                      </p>
+                    )}
+                  </section>
+                ) : null}
+
+                {presentationNotices[item.id] ? (
+                  <p className="status" role="status">{presentationNotices[item.id]}</p>
+                ) : null}
+              </article>
+            );
+          })}
         </section>
       </div>
 

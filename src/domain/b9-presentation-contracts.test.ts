@@ -81,4 +81,24 @@ describe("B9 PresentationRevision contracts", () => {
     expect(migration).toContain("revoke all on public.presentation_revisions from public, anon, authenticated");
     expect(migration).toContain("grant select on public.presentation_revisions to authenticated");
   });
+
+  it("wires explicit B9.3 before/after review without automatic approval", () => {
+    const workspace = readFileSync("src/components/career/CareerEvidenceWorkspace.tsx", "utf8");
+    const resolutionRoute = readFileSync(
+      "src/app/api/presentation/revisions/[presentationRevisionId]/route.ts",
+      "utf8",
+    );
+    const reviewRoute = readFileSync("src/app/api/presentation/revisions/route.ts", "utf8");
+
+    expect(workspace).toContain("Before · Career Evidence");
+    expect(workspace).toContain("After · Presentation proposal");
+    expect(workspace).toContain("Approve wording");
+    expect(workspace).toContain("Reject wording");
+    expect(workspace).toContain("review.revision.evidenceRevision !== item.revision");
+    expect(workspace).toContain("Career Evidence remains unchanged");
+    expect(resolutionRoute).toContain("ResolvePresentationRevisionInputSchema");
+    expect(resolutionRoute).toContain("PRESENTATION_SOURCE_STALE");
+    expect(reviewRoute).toContain("career_evidence_revisions");
+    expect(workspace).not.toContain("decision: \"APPROVE\" });\n    void");
+  });
 });
