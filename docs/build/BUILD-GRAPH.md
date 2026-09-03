@@ -22,7 +22,9 @@ B5                             CLOSED
 B6                             CLOSED
 B7                             CLOSED
 B8                             CLOSED
-B9                             SIGNED_IMPLEMENTATION_NOT_STARTED
+B9.1                           CLOSED
+B9.2                           IN_PROGRESS
+B9                             BLOCKED_BY_B9_2_TO_B9_6
 CVENGINE_V1_0_0                BLOCKED_BY_B9
 ```
 
@@ -53,17 +55,18 @@ UPLOAD_TO_IMPROVED_CV = NOT_PROVEN
 ## Closed-node receipts
 
 ```text
-PF0   docs/vnext/04-BUILD-READINESS-AUDIT.md
-B0    docs/build/B0-FOUNDATION-STATUS.md
-B0.5  docs/build/B0.5-CLOSURE.md
-B1    docs/build/B1-CLOSURE.md
-B2    docs/build/B2-CLOSURE.md
-B3    docs/build/B3-CLOSURE.md
-B4    docs/build/B4-CLOSURE.md
-B5    docs/build/B5-CLOSURE.md
-B6    docs/build/B6-CLOSURE.md
-B7    docs/build/B7-CLOSURE.md
-B8    docs/build/B8-CLOSURE.md
+PF0    docs/vnext/04-BUILD-READINESS-AUDIT.md
+B0     docs/build/B0-FOUNDATION-STATUS.md
+B0.5   docs/build/B0.5-CLOSURE.md
+B1     docs/build/B1-CLOSURE.md
+B2     docs/build/B2-CLOSURE.md
+B3     docs/build/B3-CLOSURE.md
+B4     docs/build/B4-CLOSURE.md
+B5     docs/build/B5-CLOSURE.md
+B6     docs/build/B6-CLOSURE.md
+B7     docs/build/B7-CLOSURE.md
+B8     docs/build/B8-CLOSURE.md
+B9.1   docs/build/B9.1-CLOSURE.md
 ```
 
 All CLOSED nodes satisfy the canonical equation applicable to their scope:
@@ -81,17 +84,21 @@ NODE_CLOSED =
 ## B9 — Presentation Engine
 
 Contract: `docs/build/B9-PRESENTATION-ENGINE-CONTRACT.md`
+Implementation plan: `docs/build/B9-IMPLEMENTATION-PLAN.md`
 
 Status:
 
 ```text
 CONTRACT_SIGNED              PASS
-IMPLEMENTATION               NOT_STARTED
-WIRING                       NOT_STARTED
-EXECUTABLE_TESTS             NOT_STARTED
+B9.1_PRESENTATION_REVISION   CLOSED
+B9.2_VALIDATOR_AI_WIRING     IN_PROGRESS
+B9.3_APPROVAL_UX             NOT_STARTED
+B9.4_RESUME_PLAN             NOT_STARTED
+B9.5_FINAL_RENDERERS         NOT_STARTED
+B9.6_CERTIFICATION           NOT_STARTED
 REAL_BROWSER_E2E             NOT_STARTED
 PRIVATE_REAL_CV_DOGFOOD      NOT_STARTED
-STATUS                       SIGNED_IMPLEMENTATION_NOT_STARTED
+STATUS                       IMPLEMENTATION_IN_PROGRESS
 ```
 
 B9 owns the downstream boundary:
@@ -112,41 +119,59 @@ ResumeArtifact
 
 B9 must not weaken B4 source/provenance authority. It adds a separately validated and user-approved presentation layer.
 
+### B9.1 evidence
+
+Exact B9.1 qualification head:
+
+```text
+2f8a9da2bcb261e37ad73b407136671ba9e37ffb
+10 exact-head workflows
+10 SUCCESS
+0 FAILURE
+```
+
+Inherited B8 blocked two flawed candidates before B9.1 closed:
+
+- anonymous function EXECUTE surface from PostgreSQL default grants;
+- account-export schema-version regression.
+
+Both were fixed without weakening inherited gates.
+
 ### Required B9 closure predicates
 
 ```text
-PRESENTATION_REVISION_DOMAIN
-SOURCE_REVISION_IMMUTABLE_BINDING
-WORDING_AI_CAPABILITY_PHYSICALLY_WIRED
-NO_AI_PATH_PRESERVES_SOURCE_WORDING
-BEFORE_AFTER_REVIEW_UI
-NO_DEFAULT_APPROVAL
-FACT_ADDITION_REJECTION
-METRIC_ADDITION_REJECTION
-METRIC_CHANGE_REJECTION
-SENIORITY_STRENGTHENING_REJECTION
-SKILL_ADDITION_REJECTION
-STALE_SOURCE_REVISION_GUARD
-APPROVAL_DURABLE
-REJECTION_DURABLE
-GENERAL_RESUME_PLAN
-TARGETED_RESUME_PLAN
-JOB_TRUTH_NEVER_BECOMES_CANDIDATE_CLAIM
-PROFESSIONAL_SUMMARY_PROVENANCE
-CONTENT_SELECTION_PROVENANCE
-ATS_SAFE_SINGLE_COLUMN_RENDERER
-DOCX_EXPORT
-PDF_EXPORT
-TXT_EXPORT
-PROVENANCE_JSON_EXPORT
-DOCX_PDF_CANONICAL_CONTENT_PARITY
-CROSS_USER_IDOR_DENIAL
-ANONYMOUS_MUTATION_DENIAL
-AI_SECRET_CANARY
-PROVIDER_FAILURE_DEGRADATION
-REAL_BROWSER_UPLOAD_TO_FINAL_ARTIFACT_E2E
-PRIVATE_REAL_CV_DOGFOOD
-NO_OPEN_TRUTH_CONTRADICTIONS
+PRESENTATION_REVISION_DOMAIN                         PASS
+SOURCE_REVISION_IMMUTABLE_BINDING                    PASS
+WORDING_AI_CAPABILITY_PHYSICALLY_WIRED               IN_PROGRESS
+NO_AI_PATH_PRESERVES_SOURCE_WORDING                  PENDING
+BEFORE_AFTER_REVIEW_UI                               PENDING
+NO_DEFAULT_APPROVAL                                  PASS
+FACT_ADDITION_REJECTION                              PENDING
+METRIC_ADDITION_REJECTION                            PENDING
+METRIC_CHANGE_REJECTION                              PENDING
+SENIORITY_STRENGTHENING_REJECTION                    PENDING
+SKILL_ADDITION_REJECTION                             PENDING
+STALE_SOURCE_REVISION_GUARD                          PASS
+APPROVAL_DURABLE                                     PASS
+REJECTION_DURABLE                                    PASS
+GENERAL_RESUME_PLAN                                  PENDING
+TARGETED_RESUME_PLAN                                 PENDING
+JOB_TRUTH_NEVER_BECOMES_CANDIDATE_CLAIM             PENDING
+PROFESSIONAL_SUMMARY_PROVENANCE                      PENDING
+CONTENT_SELECTION_PROVENANCE                         PENDING
+ATS_SAFE_SINGLE_COLUMN_RENDERER                      PENDING
+DOCX_EXPORT                                          PENDING
+PDF_EXPORT                                           PENDING
+TXT_EXPORT                                           PENDING
+PROVENANCE_JSON_EXPORT                               PENDING
+DOCX_PDF_CANONICAL_CONTENT_PARITY                    PENDING
+CROSS_USER_IDOR_DENIAL                               PASS_FOR_B9_1
+ANONYMOUS_MUTATION_DENIAL                            PASS_FOR_B9_1
+AI_SECRET_CANARY                                     PENDING_B9_AI_PATH
+PROVIDER_FAILURE_DEGRADATION                         PENDING
+REAL_BROWSER_UPLOAD_TO_FINAL_ARTIFACT_E2E            PENDING
+PRIVATE_REAL_CV_DOGFOOD                              PENDING
+NO_OPEN_TRUTH_CONTRADICTIONS                         PENDING
 ```
 
 ## B9 golden path
