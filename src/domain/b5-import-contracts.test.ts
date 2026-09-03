@@ -84,6 +84,15 @@ describe("B5 trusted import contracts", () => {
     expect(AcceptImportProposalInputSchema.safeParse({ kind: "OTHER" }).success).toBe(false);
   });
 
+  it("does not silently default imported review proposals to PROJECT in the UI", () => {
+    const ui = readFileSync("src/components/import/ResumeImportWorkspace.tsx", "utf8");
+    expect(ui).toContain("SELECT_EVIDENCE_KIND_REQUIRED");
+    expect(ui).toContain("Select evidence type");
+    expect(ui).toContain("disabled={busy || !kindByProposal[proposal.id]}");
+    expect(ui).not.toContain('kindByProposal[proposalId] ?? "PROJECT"');
+    expect(ui).not.toContain('kindByProposal[proposal.id] ?? "PROJECT"');
+  });
+
   it("does not define durable raw source-byte storage", () => {
     const migration = readFileSync("supabase/migrations/20260901023000_b5_resume_import.sql", "utf8");
     const route = readFileSync("src/app/api/imports/resume/route.ts", "utf8");

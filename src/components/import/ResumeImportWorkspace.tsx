@@ -43,12 +43,18 @@ export function ResumeImportWorkspace() {
   }
 
   async function resolveProposal(receiptId: string, proposalId: string, action: "accept" | "dismiss") {
-    setBusy(true);
     setError(null);
+    const selectedKind = kindByProposal[proposalId];
+    if (action === "accept" && !selectedKind) {
+      setError("SELECT_EVIDENCE_KIND_REQUIRED");
+      return;
+    }
+
+    setBusy(true);
     const init: RequestInit = { method: "POST" };
     if (action === "accept") {
       init.headers = { "Content-Type": "application/json" };
-      init.body = JSON.stringify({ kind: kindByProposal[proposalId] ?? "PROJECT" });
+      init.body = JSON.stringify({ kind: selectedKind });
     }
     const response = await fetch(`/api/imports/proposals/${proposalId}/${action}`, init);
     const body = await response.json().catch(() => null);
@@ -77,30 +83,38 @@ export function ResumeImportWorkspace() {
           </label>
           <button className="primary" type="button" disabled={!file || busy} onClick={() => void upload()}>Extract review proposals</button>
           <p className="muted">Maximum 5 MB. PDF support is deliberately limited to mechanically extractable selectable text; unsupported encodings/filters, encrypted files and scanned images do not silently pass.</p>
+          <p className="muted">Every accepted proposal requires an explicit evidence type. CV Engine never defaults imported text to PROJECT or marks imported evidence VERIFIED.</p>
         </section>
 
         <section className="evidence-list" aria-live="polite">
           {imports.length === 0 ? <div className="panel empty-state"><h2>No imports yet.</h2><p className="muted">Import is optional. Manual Career Evidence remains the authoritative fallback.</p></div> : null}
-          {imports.map((receipt) => <article className="panel evidence-card" key={receipt.id}>
-            <div className="evidence-meta"><span>{receipt.mediaType}</span><span>{receipt.status}</span><span>{receipt.proposalCount} proposals</span></div>
-            <h2>{receipt.sourceName}</h2>
-            <p className="muted">Source SHA-256 {receipt.sourceSha256.slice(0, 12)}… · raw source not persisted</p>
-            {receipt.warningCode ? <p className="status">{receipt.warningCode} — use manual Career Evidence when extraction cannot be defended.</p> : null}
-            <div className="stack">
-              {receipt.proposals.map((proposal) => <div key={proposal.id} className="panel">
-                <div className="evidence-meta"><span>Line {proposal.sourceLine}</span><span>{proposal.status}</span></div>
-                <p>{proposal.canonicalText}</p>
-                {proposal.status === "PENDING" ? <div className="split-actions">
-                  <select aria-label={`Evidence kind for proposal ${proposal.ordinal}`} value={kindByProposal[proposal.id] ?? "PROJECT"} onChange={(event) => setKindByProposal((current) => ({ ...current, [proposal.id]: event.target.value as CareerEvidenceKind }))}>
-                    {kinds.map((kind) => <option key={kind} value={kind}>{kind}</option>)}
-                  </select>
-                  <button className="primary" disabled={busy} type="button" onClick={() => void resolveProposal(receipt.id, proposal.id, "accept")}>Accept as NEEDS_REVIEW</button>
-                  <button className="secondary" disabled={busy} type="button" onClick={() => void resolveProposal(receipt.id, proposal.id, "dismiss")}>Dismiss</button>
-                </div> : null}
-                {proposal.acceptedEvidenceId ? <p className="muted">Created Career Evidence {proposal.acceptedEvidenceId}. Review it in Career Evidence before marking VERIFIED.</p> : null}
-              </div>)}
-            </div>
-          </article>)}
+          {imports.map((receipt) => {
+            const pendingCount = receipt.proposals.filter((proposal) => proposal.status === "PENDING").length;
+            const acceptedCount = receipt.proposals.filter((proposal) => proposal.status === "ACCEPTED").length;
+            const dismissedCount = receipt.proposals.filter((proposal) => proposal.status === "DISMISSED").length;
+            return <article className="panel evidence-card" key={receipt.id}>
+              <div className="evidence-meta"><span>{receipt.mediaType}</span><span>{receipt.status}</span><span>{receipt.proposalCount} proposals</span></div>
+              <h2>{receipt.sourceName}</h2>
+              <p className="muted">Source SHA-256 {receipt.sourceSha256.slice(0, 12)}… · raw source not persisted</p>
+              <p className="muted">Review state: {pendingCount} pending · {acceptedCount} accepted · {dismissedCount} dismissed.</p>
+              {receipt.warningCode ? <p className="status">{receipt.warningCode} — use manual Career Evidence when extraction cannot be defended.</p> : null}
+              <div className="stack">
+                {receipt.proposals.map((proposal) => <div key={proposal.id} className="panel">
+                  <div className="evidence-meta"><span>Line {proposal.sourceLine}</span><span>{proposal.status}</span></div>
+                  <p>{proposal.canonicalText}</p>
+                  {proposal.status === "PENDING" ? <div className="split-actions">
+                    <select aria-label={`Evidence kind for proposal ${proposal.ordinal}`} value={kindByProposal[proposal.id] ?? ""} onChange={(event) => setKindByProposal((current) => ({ ...current, [proposal.id]: event.target.value as CareerEvidenceKind }))}>
+                      <option value="" disabled>Select evidence type</option>
+                      {kinds.map((kind) => <option key={kind} value={kind}>{kind}</option>)}
+                    </select>
+                    <button className="primary" disabled={busy || !kindByProposal[proposal.id]} type="button" onClick={() => void resolveProposal(receipt.id, proposal.id, "accept")}>Accept as NEEDS_REVIEW</button>
+                    <button className="secondary" disabled={busy} type="button" onClick={() => void resolveProposal(receipt.id, proposal.id, "dismiss")}>Dismiss</button>
+                  </div> : null}
+                  {proposal.acceptedEvidenceId ? <p className="muted">Created Career Evidence {proposal.acceptedEvidenceId}. Review it in Career Evidence before marking VERIFIED.</p> : null}
+                </div>)}
+              </div>
+            </article>;
+          })}
         </section>
       </div>
       {error ? <p className="status error" role="alert">{error}</p> : null}

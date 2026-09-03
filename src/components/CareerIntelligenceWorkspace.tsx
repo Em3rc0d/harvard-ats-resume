@@ -19,7 +19,7 @@ export function CareerIntelligenceWorkspace({ aiAccessMode, onSignOut }: Props) 
     <main className="first-run-shell">
       <header className="brand-bar">
         <div><span className="brand-mark">C</span><div><strong>CV Engine</strong><span>Evidence · import · intent · market truth · assessment · opportunity space · trusted resume</span></div></div>
-        <span className="build-label">vNext · B7</span>
+        <span className="build-label">vNext · B8 RC</span>
       </header>
       <nav className="split-actions" aria-label="CV Engine truth, import, analysis, opportunity and resume surfaces">
         <button className={surface === "EVIDENCE" ? "primary" : "secondary"} type="button" onClick={() => setSurface("EVIDENCE")}>Career Evidence</button>

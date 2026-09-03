@@ -26,4 +26,10 @@ describe("B8 release hardening contracts", () => {
     expect(route).toContain("platformGeminiConfigured");
     expect(route).not.toContain("publishableKey,");
   });
+
+  it("does not expose a stale pre-B8 build label in the release UI", () => {
+    const workspace = readFileSync("src/components/CareerIntelligenceWorkspace.tsx", "utf8");
+    expect(workspace).toContain("vNext · B8 RC");
+    expect(workspace).not.toContain("vNext · B7");
+  });
 });
