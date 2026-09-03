@@ -145,11 +145,18 @@ begin
   ) then raise exception 'P1_EXPLICIT_REWRITE_APPROVAL_FAILED'; end if;
 
   if not exists (
-    select 1 from public.presentation_revision_evidence
-    where presentation_revision_id=current_setting('p1.rewrite_revision_id')::uuid
-      and evidence_id=current_setting('p1.ev_api_id')::uuid
-      and evidence_revision=1
-      and evidence_text_sha256=public.cv_engine_sha256(evidence_canonical_text)
+    select 1 from public.presentation_revision_evidence revision_evidence
+    where revision_evidence.presentation_revision_id=current_setting('p1.rewrite_revision_id')::uuid
+      and revision_evidence.evidence_id=current_setting('p1.ev_api_id')::uuid
+      and revision_evidence.evidence_revision=1
+      and revision_evidence.evidence_text_sha256=(
+        select plan_evidence.evidence_text_sha256
+        from public.presentation_plan_evidence plan_evidence
+        where plan_evidence.plan_id=current_setting('p1.plan_id')::uuid
+          and plan_evidence.selection='SELECTED'
+          and plan_evidence.evidence_id=current_setting('p1.ev_api_id')::uuid
+          and plan_evidence.evidence_revision=1
+      )
   ) then raise exception 'P1_REWRITE_PROVENANCE_MISSING'; end if;
 end $$;
 
