@@ -132,7 +132,7 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
       <div className="step-indicator" aria-label="First-run progress">
         <span className={step === "TRUST" ? "active" : step === "BOOTSTRAP" ? "" : "done"}>1 Trust</span>
         <span className={step === "AUTH" ? "active" : step === "TRUST" || step === "BOOTSTRAP" ? "" : "done"}>2 Account</span>
-        <span className={step === "AI_ACCESS" ? "active" : step === "READY" ? "done" : ""}>3 AI access</span>
+        <span className={step === "AI_ACCESS" ? "active" : ""}>3 AI access</span>
       </div>
       {step === "BOOTSTRAP" ? <section className="panel"><p className="muted">Restoring your durable CV Engine state…</p></section> : null}
       {step === "TRUST" ? <TrustDisclosurePanel onAcknowledge={acknowledgeDisclosure} /> : null}
