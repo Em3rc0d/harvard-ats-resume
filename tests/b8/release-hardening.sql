@@ -42,7 +42,8 @@ begin
       'cv_engine_b3_overlap',
       'cv_engine_p1_normalize',
       'cv_engine_p1_quantitative_tokens',
-      'cv_engine_p1_has_term'
+      'cv_engine_p1_has_term',
+      'cv_engine_p1_market_only_tokens'
     )
     and not exists (
       select 1 from unnest(coalesce(p.proconfig, '{}'::text[])) cfg
@@ -78,7 +79,8 @@ begin
   end if;
   if has_function_privilege('authenticated', 'public.cv_engine_p1_normalize(text)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public.cv_engine_p1_quantitative_tokens(text)', 'EXECUTE')
-     or has_function_privilege('authenticated', 'public.cv_engine_p1_has_term(text,text)', 'EXECUTE') then
+     or has_function_privilege('authenticated', 'public.cv_engine_p1_has_term(text,text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.cv_engine_p1_market_only_tokens(uuid,uuid)', 'EXECUTE') then
     raise exception 'B8_P1_INTERNAL_HELPER_EXPOSED';
   end if;
 end;
@@ -90,7 +92,7 @@ select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000808
 -- Seed owner-bound durable truth through the same public RPC used by the app.
 select evidence_id from public.cv_engine_create_career_evidence(
   'PROJECT', 'MANUAL', 'VERIFIED', 'B8 lifecycle export evidence', null
-) \gset b8_ev_;
+) \gset b8_ev_
 
 -- P1 must participate in the same export/delete lifecycle as the older durable core.
 select * from public.cv_engine_create_presentation_plan(
@@ -103,7 +105,7 @@ select * from public.cv_engine_create_presentation_plan(
       'evidenceRefs',jsonb_build_array(jsonb_build_object('evidenceId', :'b8_ev_evidence_id', 'evidenceRevision', 1))
     )
   )
-) \gset b8_plan_;
+) \gset b8_plan_
 select * from public.cv_engine_create_presentation_revision(
   :'b8_plan_presentation_plan_id'::uuid,
   'CLAIM',
@@ -111,7 +113,7 @@ select * from public.cv_engine_create_presentation_revision(
   'B8 lifecycle export evidence',
   '{}'::text[],
   'DETERMINISTIC'
-) \gset b8_revision_;
+) \gset b8_revision_
 select * from public.cv_engine_approve_presentation_revision(:'b8_revision_presentation_revision_id'::uuid);
 
 create temp table b8_export_receipt(payload jsonb) on commit preserve rows;
