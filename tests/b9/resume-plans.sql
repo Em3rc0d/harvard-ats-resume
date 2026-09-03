@@ -66,9 +66,22 @@ create temporary table b9_plan_context(
   general_plan_id uuid,
   targeted_plan_id uuid,
   job_snapshot_id uuid,
-  assessment_id uuid
+  assessment_id uuid,
+  project_evidence_id uuid,
+  skill_evidence_id uuid,
+  approved_presentation_revision_id uuid
 ) on commit preserve rows;
-insert into b9_plan_context(general_plan_id) values (:'general_resume_plan_id'::uuid);
+insert into b9_plan_context(
+  general_plan_id,
+  project_evidence_id,
+  skill_evidence_id,
+  approved_presentation_revision_id
+) values (
+  :'general_resume_plan_id'::uuid,
+  :'ev_project_evidence_id'::uuid,
+  :'ev_skill_evidence_id'::uuid,
+  :'approved_presentation_revision_id'::uuid
+);
 
 do $$
 declare
@@ -82,13 +95,13 @@ begin
     into v_project_text, v_project_presentation
   from public.resume_plan_items
   where resume_plan_id = (select general_plan_id from b9_plan_context)
-    and evidence_id = :'ev_project_evidence_id'::uuid;
+    and evidence_id = (select project_evidence_id from b9_plan_context);
 
   select rendered_text, presentation_revision_id
     into v_skill_text, v_skill_presentation
   from public.resume_plan_items
   where resume_plan_id = (select general_plan_id from b9_plan_context)
-    and evidence_id = :'ev_skill_evidence_id'::uuid;
+    and evidence_id = (select skill_evidence_id from b9_plan_context);
 
   select count(*) into v_count
   from public.resume_plan_items
@@ -96,7 +109,7 @@ begin
 
   if v_count <> 2
      or v_project_text <> 'Built and tested a deterministic evidence pipeline.'
-     or v_project_presentation <> :'approved_presentation_revision_id'::uuid
+     or v_project_presentation <> (select approved_presentation_revision_id from b9_plan_context)
      or v_skill_text <> 'Kubernetes'
      or v_skill_presentation is not null then
     raise exception 'B9_RESUME_PLAN_APPROVAL_BOUNDARY_FAILED count=% project=% project_pr=% skill=% skill_pr=%',
@@ -197,9 +210,9 @@ begin
   from public.resume_plans where id = (select targeted_plan_id from b9_plan_context);
 
   if v_count <> 1
-     or v_evidence <> :'ev_skill_evidence_id'::uuid
+     or v_evidence <> (select skill_evidence_id from b9_plan_context)
      or v_reason <> 'TARGET_MATCH'
-     or v_assessment <> :'assessment_assessment_id'::uuid then
+     or v_assessment <> (select assessment_id from b9_plan_context) then
     raise exception 'B9_TARGETED_PLAN_SELECTION_FAILED count=% evidence=% reason=% assessment=%',
       v_count, v_evidence, v_reason, v_assessment;
   end if;
