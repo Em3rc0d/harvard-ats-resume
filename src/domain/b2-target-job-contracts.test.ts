@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { normalizeB2DatabaseTimestamp } from "../application/b2/DatabaseTimestamp";
 import { careerTargetSemanticKey } from "../application/targets/CareerTargetIdentity";
 import { analyzeManualJobDescription } from "../application/jobs/DeterministicJobIntelligence";
 import { CareerEvidenceSchema } from "./career/CareerEvidence";
@@ -23,6 +24,11 @@ describe("B2 target and job truth contracts", () => {
     expect(TRUTH_AUTHORITY.INTENT).toBe("CAREER_TARGET");
     expect(TRUTH_AUTHORITY.MARKET_FACT).toBe("JOB_SNAPSHOT");
     expect(TRUTH_AUTHORITY.CANDIDATE_FACT).toBe("CAREER_EVIDENCE");
+  });
+
+  it("normalizes the real Supabase timestamptz offset before strict domain parsing", () => {
+    expect(normalizeB2DatabaseTimestamp("2026-09-03T17:40:37.713862+00:00")).toBe("2026-09-03T17:40:37.713Z");
+    expect(() => normalizeB2DatabaseTimestamp("not-a-timestamp")).toThrow("B2_READBACK_INVALID_TIMESTAMP");
   });
 
   it("gives semantically equal Career Targets the same identity", () => {
