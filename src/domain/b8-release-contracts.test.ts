@@ -17,10 +17,13 @@ describe("B8 release hardening contracts", () => {
     expect(route).not.toContain("ownerUserId");
   });
 
-  it("makes the deployed commit observable", () => {
+  it("makes the deployed commit and safe runtime configuration observable", () => {
     const route = readFileSync("src/app/api/runtime/route.ts", "utf8");
     expect(route).toContain("VERCEL_GIT_COMMIT_SHA");
     expect(route).toContain("exactHeadObservable");
     expect(route).toContain("b8-release-hardening-v1");
+    expect(route).toContain("supabaseConfigured");
+    expect(route).toContain("platformGeminiConfigured");
+    expect(route).not.toContain("publishableKey,");
   });
 });
