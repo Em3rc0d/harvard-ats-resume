@@ -21,7 +21,7 @@ B4                             CLOSED
 B5                             CLOSED
 B6                             CLOSED
 B7                             CLOSED
-B8                             READY_TO_BUILD
+B8                             IMPLEMENTED_CERTIFICATION_PENDING
 CVENGINE_V1_0_0                BLOCKED_BY_B8
 ```
 
@@ -54,12 +54,12 @@ Authority: `docs/vnext/04-BUILD-READINESS-AUDIT.md`.
 CLEAN_APP_BASELINE   PASS
 LOCKFILE             PASS
 TYPECHECK            PASS
-LINT                 PASS
-UNIT_TEST            PASS
+LINT                  PASS
+UNIT_TEST             PASS
 NEXT_BUILD            PASS
-CI_EXACT_HEAD        PASS
-NO_LEGACY_COPY       PASS
-STATUS               CLOSED
+CI_EXACT_HEAD         PASS
+NO_LEGACY_COPY        PASS
+STATUS                CLOSED
 ```
 
 Receipt: `docs/build/B0-FOUNDATION-STATUS.md`.
@@ -218,7 +218,7 @@ PDF_BOUNDED_MECHANICAL_EXTRACTION       PASS
 DOCX_BOUNDED_MECHANICAL_EXTRACTION      PASS
 UNSUPPORTED_DOCUMENT_FAIL_CLOSED        PASS
 RAW_SOURCE_BYTES_NOT_DURABLE            PASS
-SOURCE_AND_TEXT_HASH_RECEIPTS            PASS
+SOURCE_AND_TEXT_HASH_RECEIPTS           PASS
 DETERMINISTIC_REVIEW_PROPOSALS          PASS
 IMPORT_REPLAY_IDEMPOTENCE               PASS
 EXPLICIT_USER_REVIEW                    PASS
@@ -317,24 +317,33 @@ Receipt: `docs/build/B7-CLOSURE.md`.
 ## B8 — Release hardening
 
 Contract: `SIGNED`.
-Implementation: `READY_TO_BUILD`.
+Implementation: `IMPLEMENTED — certification pending`.
 
-Required release evidence:
+Current B8 implementation adds:
 
 ```text
-canonical personas
-golden datasets
-fault injection
-browser E2E
-runtime identity
-security regression
-RLS/IDOR certification
-provider fallback certification
-secret canary
-backup/restore drill
-export/delete lifecycle
-performance/capacity evidence
-production deployment receipts
+SUPABASE_API_ACL_DENY_BY_DEFAULT
+ANON_RPC_EXECUTION_DENIAL
+FUNCTION_SEARCH_PATH_HARDENING
+ACCOUNT_EXPORT_LIFECYCLE
+ACCOUNT_DELETE_LIFECYCLE
+RUNTIME_EXACT_HEAD_IDENTITY
+GOLDEN_ASSESSMENT_PERSONA_GATE
+BOUNDED_CAPACITY_SMOKE
+B8_RELEASE_WORKFLOW
+```
+
+Required before promotion to CLOSED:
+
+```text
+all inherited GitHub gates green on exact B8 head
+B8 release gate green on exact B8 head
+Supabase production migration applied
+Supabase security advisor blocker cleared
+runtime deployment receipt
+production smoke
+browser acceptance / E2E
+backup/restore evidence
 ```
 
 ## v1.0.0 release equation
