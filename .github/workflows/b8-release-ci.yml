@@ -51,5 +51,55 @@ jobs:
         run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b8/release-hardening.sql
       - name: Execute B8 bounded capacity smoke
         run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b8/capacity.sql
+      - name: Execute physical backup and restore drill
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_digest=$(psql "$DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c "
+            select md5(string_agg(name || ':' || n::text, ',' order by name))
+            from (
+              select 'auth.users' name, count(*) n from auth.users union all
+              select 'career_vaults', count(*) from public.career_vaults union all
+              select 'career_evidence', count(*) from public.career_evidence union all
+              select 'career_evidence_revisions', count(*) from public.career_evidence_revisions union all
+              select 'career_targets', count(*) from public.career_targets union all
+              select 'job_snapshots', count(*) from public.job_snapshots union all
+              select 'job_requirements', count(*) from public.job_requirements union all
+              select 'match_reports', count(*) from public.match_reports union all
+              select 'requirement_matches', count(*) from public.requirement_matches union all
+              select 'opportunity_assessments', count(*) from public.opportunity_assessments union all
+              select 'resume_versions', count(*) from public.resume_versions union all
+              select 'resume_claims', count(*) from public.resume_claims union all
+              select 'import_receipts', count(*) from public.import_receipts union all
+              select 'import_proposals', count(*) from public.import_proposals union all
+              select 'market_observations', count(*) from public.market_observations union all
+              select 'opportunity_space_items', count(*) from public.opportunity_space_items
+            ) q;")
+          pg_dump "$DATABASE_URL" --format=custom --file=/tmp/cvengine-b8.dump
+          createdb -h 127.0.0.1 -U postgres cvengine_restore
+          pg_restore --exit-on-error --no-owner --dbname=postgresql://postgres:postgres@127.0.0.1:5432/cvengine_restore /tmp/cvengine-b8.dump
+          restore_digest=$(psql postgresql://postgres:postgres@127.0.0.1:5432/cvengine_restore -X -At -v ON_ERROR_STOP=1 -c "
+            select md5(string_agg(name || ':' || n::text, ',' order by name))
+            from (
+              select 'auth.users' name, count(*) n from auth.users union all
+              select 'career_vaults', count(*) from public.career_vaults union all
+              select 'career_evidence', count(*) from public.career_evidence union all
+              select 'career_evidence_revisions', count(*) from public.career_evidence_revisions union all
+              select 'career_targets', count(*) from public.career_targets union all
+              select 'job_snapshots', count(*) from public.job_snapshots union all
+              select 'job_requirements', count(*) from public.job_requirements union all
+              select 'match_reports', count(*) from public.match_reports union all
+              select 'requirement_matches', count(*) from public.requirement_matches union all
+              select 'opportunity_assessments', count(*) from public.opportunity_assessments union all
+              select 'resume_versions', count(*) from public.resume_versions union all
+              select 'resume_claims', count(*) from public.resume_claims union all
+              select 'import_receipts', count(*) from public.import_receipts union all
+              select 'import_proposals', count(*) from public.import_proposals union all
+              select 'market_observations', count(*) from public.market_observations union all
+              select 'opportunity_space_items', count(*) from public.opportunity_space_items
+            ) q;")
+          test -n "$source_digest"
+          test "$source_digest" = "$restore_digest"
+          psql postgresql://postgres:postgres@127.0.0.1:5432/cvengine_restore -X -v ON_ERROR_STOP=1 -c "select public.cv_engine_sha256('restore') = encode(digest('restore','sha256'),'hex') as restored_hash_ok;"
       - name: Verify fresh connection remains healthy
         run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -c "select public.cv_engine_sha256('b8') = encode(digest('b8','sha256'),'hex') as hash_ok;"
