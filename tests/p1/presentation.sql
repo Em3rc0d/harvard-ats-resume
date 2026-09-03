@@ -53,7 +53,6 @@ begin
   end if;
 end $$;
 
--- An unverified revision cannot enter selected trusted presentation evidence.
 do $$
 begin
   begin
@@ -69,7 +68,6 @@ begin
   end;
 end $$;
 
--- Source-exact revisions are accepted by deterministic validation but still need explicit approval.
 select * from public.cv_engine_create_presentation_revision(
   :'plan_presentation_plan_id'::uuid,
   'CLAIM',
@@ -107,7 +105,6 @@ begin
   ) then raise exception 'P1_SOURCE_EXACT_APPROVAL_FAILED'; end if;
 end $$;
 
--- A safe rewrite remains REVIEW_REQUIRED until the user explicitly approves it.
 select * from public.cv_engine_create_presentation_revision(
   :'plan_presentation_plan_id'::uuid,
   'CLAIM',
@@ -160,7 +157,6 @@ begin
   ) then raise exception 'P1_REWRITE_PROVENANCE_MISSING'; end if;
 end $$;
 
--- Once approved, neither wording nor status can be rewritten.
 reset role;
 do $$
 begin
@@ -176,7 +172,6 @@ end $$;
 set role authenticated;
 set request.jwt.claim.sub='00000000-0000-4000-8000-000000000101';
 
--- Unsupported numbers are rejected inside the database RPC, not trusted from client-side validation.
 do $$
 begin
   begin
@@ -191,7 +186,6 @@ begin
   end;
 end $$;
 
--- Punctuation must not bypass unsupported strengthening detection.
 do $$
 begin
   begin
@@ -206,8 +200,9 @@ begin
   end;
 end $$;
 
--- Build a TARGETED context whose market truth includes Kubernetes while candidate evidence does not.
--- canonicalConcept intentionally contains extra words to ensure market token extraction is not phrase-literal.
+-- Fixture-only hash preparation runs outside the authenticated client role because
+-- cv_engine_sha256 is intentionally an internal helper with no client EXECUTE grant.
+reset role;
 select E'Requirements:\n- Kubernetes\n- Docker' description,
        '- Kubernetes' req1,
        '- Docker' req2 \gset p1jd_
@@ -217,6 +212,9 @@ select public.cv_engine_sha256(:'p1jd_description') raw_hash,
 select public.cv_engine_sha256('TOOL'||chr(31)||'REQUIRED'||chr(31)||'kubernetes is required.'||chr(31)||:'p1h_h1'||chr(31)||'0') k1,
        public.cv_engine_sha256('TOOL'||chr(31)||'PREFERRED'||chr(31)||'docker'||chr(31)||:'p1h_h2'||chr(31)||'1') k2 \gset p1k_
 select public.cv_engine_sha256('MANUAL_JOB_DESCRIPTION'||chr(31)||'platform engineer'||chr(31)||''||chr(31)||:'p1h_raw_hash'||chr(31)||'b2-deterministic-job-intelligence-v1'||chr(31)||:'p1k_k1'||','||:'p1k_k2') sk \gset p1s_
+set role authenticated;
+set request.jwt.claim.sub='00000000-0000-4000-8000-000000000101';
+
 select snapshot_id from public.cv_engine_create_job_snapshot(
   :'p1s_sk','Platform Engineer','',:'p1jd_description',:'p1h_raw_hash','b2-deterministic-job-intelligence-v1',
   jsonb_build_array(
@@ -235,7 +233,6 @@ select * from public.cv_engine_create_presentation_plan(
 
 select set_config('p1.targeted_plan_id', :'targeted_presentation_plan_id', false);
 
--- Market truth must not backfill candidate truth, even with punctuation around the keyword.
 do $$
 begin
   begin
@@ -250,7 +247,6 @@ begin
   end;
 end $$;
 
--- Multi-evidence summaries retain exact revision snapshots.
 select * from public.cv_engine_create_presentation_revision(
   :'plan_presentation_plan_id'::uuid,'SUMMARY',
   jsonb_build_array(
@@ -271,7 +267,6 @@ begin
   end if;
 end $$;
 
--- Account export must include the complete P1 durable surface.
 do $$
 declare
   v_export jsonb := public.cv_engine_export_account();
@@ -283,7 +278,6 @@ begin
   if jsonb_array_length(v_export->'presentationRevisionEvidence') < 4 then raise exception 'P1_EXPORT_REVISION_EVIDENCE_MISSING'; end if;
 end $$;
 
--- Cross-user read and mutation attempts are denied by owner scope/RPC ownership checks.
 set request.jwt.claim.sub='00000000-0000-4000-8000-000000000202';
 do $$
 begin
@@ -297,7 +291,6 @@ begin
   end;
 end $$;
 
--- Direct writes are denied to authenticated users.
 do $$
 begin
   begin
@@ -309,8 +302,6 @@ begin
 end $$;
 
 reset role;
-
--- Anonymous execution is denied.
 set role anon;
 set request.jwt.claim.sub='';
 do $$
@@ -323,7 +314,6 @@ begin
 end $$;
 reset role;
 
--- Privacy lifecycle: a second user's P1 history must export and erase through the authorized account path.
 set role authenticated;
 set request.jwt.claim.sub='00000000-0000-4000-8000-000000000202';
 select evidence_id from public.cv_engine_create_career_evidence(
@@ -362,7 +352,6 @@ begin
   if exists(select 1 from public.presentation_revision_evidence where owner_user_id='00000000-0000-4000-8000-000000000202'::uuid) then raise exception 'P1_ACCOUNT_DELETE_REVISION_EVIDENCE_SURVIVED'; end if;
 end $$;
 
--- Privileged durable readback preserves the first user's exact historical artifact.
 do $$
 begin
   if not exists(
