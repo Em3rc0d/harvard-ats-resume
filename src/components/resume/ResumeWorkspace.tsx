@@ -7,7 +7,7 @@ import type { ResumeMode, ResumeVersion } from "../../domain/resume/ResumeVersio
 export function ResumeWorkspace() {
   const [jobs, setJobs] = useState<JobSnapshot[]>([]);
   const [resumes, setResumes] = useState<ResumeVersion[]>([]);
-  const [mode, setMode] = useState<ResumeMode>("GENERAL");
+  const [mode, setMode] = useState<ResumeMode | "">("");
   const [jobSnapshotId, setJobSnapshotId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,11 +19,8 @@ export function ResumeWorkspace() {
       fetch("/api/resumes", { cache: "no-store" }).then(async (response) => ({ response, body: await response.json().catch(() => null) })),
     ]).then(([jobResult, resumeResult]) => {
       if (cancelled) return;
-      if (jobResult.response.ok) {
-        const loadedJobs = Array.isArray(jobResult.body?.jobs) ? jobResult.body.jobs : [];
-        setJobs(loadedJobs);
-        setJobSnapshotId(loadedJobs[0]?.id ?? "");
-      }
+      if (jobResult.response.ok) setJobs(Array.isArray(jobResult.body?.jobs) ? jobResult.body.jobs : []);
+      else setError(jobResult.body?.error ?? "JOB_SNAPSHOT_LOAD_FAILED");
       if (resumeResult.response.ok) setResumes(Array.isArray(resumeResult.body?.resumes) ? resumeResult.body.resumes : []);
       else setError(resumeResult.body?.error ?? "RESUME_VERSION_LOAD_FAILED");
     });
@@ -31,7 +28,14 @@ export function ResumeWorkspace() {
   }, []);
 
   async function createResume() {
-    if (mode === "TARGETED" && !jobSnapshotId) return;
+    if (!mode) {
+      setError("SELECT_RESUME_MODE_REQUIRED");
+      return;
+    }
+    if (mode === "TARGETED" && !jobSnapshotId) {
+      setError("SELECT_JOB_SNAPSHOT_REQUIRED");
+      return;
+    }
     setBusy(true);
     setError(null);
     const response = await fetch("/api/resumes", {
@@ -61,7 +65,8 @@ export function ResumeWorkspace() {
       <div className="workspace-grid">
         <section className="panel stack">
           <label>Resume mode
-            <select value={mode} onChange={(event) => setMode(event.target.value as ResumeMode)}>
+            <select value={mode} onChange={(event) => { setMode(event.target.value as ResumeMode | ""); setJobSnapshotId(""); }}>
+              <option value="">Select resume mode</option>
               <option value="GENERAL">General</option>
               <option value="TARGETED">Targeted to captured job</option>
             </select>
@@ -72,10 +77,10 @@ export function ResumeWorkspace() {
               {jobs.map((job) => <option key={job.id} value={job.id}>{job.roleTitle}{job.company ? ` · ${job.company}` : ""}</option>)}
             </select>
           </label> : null}
-          <button className="primary" disabled={busy || (mode === "TARGETED" && !jobSnapshotId)} type="button" onClick={() => void createResume()}>
+          <button className="primary" disabled={busy || !mode || (mode === "TARGETED" && !jobSnapshotId)} type="button" onClick={() => void createResume()}>
             Create trusted ResumeVersion
           </button>
-          <p className="muted">General uses all current VERIFIED evidence. Targeted uses only VERIFIED evidence explicitly supporting MATCH/POTENTIAL_MATCH in the current evidence assessment.</p>
+          <p className="muted">Choose the projection explicitly. General uses all current VERIFIED evidence. Targeted requires an explicitly selected Job Snapshot and uses only VERIFIED evidence supporting its current assessment.</p>
         </section>
 
         <section className="evidence-list" aria-live="polite">

@@ -13,9 +13,9 @@ export function CareerTargetWorkspace() {
   const [jobFamily, setJobFamily] = useState("");
   const [locations, setLocations] = useState("");
   const [industries, setIndustries] = useState("");
-  const [seniority, setSeniority] = useState("MID");
-  const [workModel, setWorkModel] = useState("REMOTE");
-  const [employmentType, setEmploymentType] = useState("FULL_TIME");
+  const [seniority, setSeniority] = useState("");
+  const [workModel, setWorkModel] = useState("");
+  const [employmentType, setEmploymentType] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,8 +38,11 @@ export function CareerTargetWorkspace() {
       body: JSON.stringify({
         targetRole: role,
         ...(jobFamily.trim() ? { jobFamily } : {}),
-        preferredSeniorities: [seniority], preferredLocations: csv(locations),
-        workModels: [workModel], employmentTypes: [employmentType], industries: csv(industries),
+        preferredSeniorities: seniority ? [seniority] : [],
+        preferredLocations: csv(locations),
+        workModels: workModel ? [workModel] : [],
+        employmentTypes: employmentType ? [employmentType] : [],
+        industries: csv(industries),
         relocationPreference: "UNSPECIFIED", priority: "PRIMARY", activate: true,
       }),
     });
@@ -47,7 +50,7 @@ export function CareerTargetWorkspace() {
     if (!response.ok) { setError(body?.error ?? "CAREER_TARGET_SAVE_FAILED"); setBusy(false); return; }
     const target = body.target as CareerTarget;
     setTargets((current) => [target, ...current.filter((item) => item.id !== target.id)].map((item) => ({ ...item, isActive: item.id === target.id })));
-    setRole(""); setJobFamily(""); setBusy(false);
+    setRole(""); setJobFamily(""); setSeniority(""); setWorkModel(""); setEmploymentType(""); setBusy(false);
   }
 
   async function activate(targetId: string) {
@@ -64,15 +67,15 @@ export function CareerTargetWorkspace() {
       <div className="workspace-header"><div>
         <p className="eyebrow">Career Target · Intent</p>
         <h1 id="career-target-title">Choose a direction without rewriting your truth.</h1>
-        <p className="lead">Career Target records what you want. It never becomes proof that you have a skill, credential, seniority, or experience.</p>
+        <p className="lead">Career Target records what you want. Optional preferences stay unspecified until you choose them; CV Engine does not assume seniority, work model, or employment type.</p>
       </div></div>
       <div className="workspace-grid">
         <section className="panel stack">
           <label>Target role<input value={role} maxLength={300} onChange={(event) => setRole(event.target.value)} placeholder="Backend Engineer" /></label>
           <label>Job family<input value={jobFamily} maxLength={200} onChange={(event) => setJobFamily(event.target.value)} placeholder="Software Engineering" /></label>
-          <label>Preferred seniority<select value={seniority} onChange={(event) => setSeniority(event.target.value)}><option>MID</option><option>JUNIOR</option><option>SENIOR</option><option>LEAD</option><option>STAFF</option></select></label>
-          <label>Work model<select value={workModel} onChange={(event) => setWorkModel(event.target.value)}><option>REMOTE</option><option>HYBRID</option><option>ONSITE</option></select></label>
-          <label>Employment type<select value={employmentType} onChange={(event) => setEmploymentType(event.target.value)}><option>FULL_TIME</option><option>CONTRACT</option><option>INTERNSHIP</option><option>PART_TIME</option></select></label>
+          <label>Preferred seniority<select value={seniority} onChange={(event) => setSeniority(event.target.value)}><option value="">No preference</option><option>INTERN</option><option>JUNIOR</option><option>MID</option><option>SENIOR</option><option>LEAD</option><option>STAFF</option><option>PRINCIPAL</option><option>MANAGER</option><option>DIRECTOR</option><option>EXECUTIVE</option></select></label>
+          <label>Work model<select value={workModel} onChange={(event) => setWorkModel(event.target.value)}><option value="">No preference</option><option>REMOTE</option><option>HYBRID</option><option>ONSITE</option></select></label>
+          <label>Employment type<select value={employmentType} onChange={(event) => setEmploymentType(event.target.value)}><option value="">No preference</option><option>FULL_TIME</option><option>CONTRACT</option><option>INTERNSHIP</option><option>PART_TIME</option><option>TEMPORARY</option></select></label>
           <label>Preferred locations<input value={locations} onChange={(event) => setLocations(event.target.value)} placeholder="Lima, Remote" /></label>
           <label>Industries<input value={industries} onChange={(event) => setIndustries(event.target.value)} placeholder="Fintech, SaaS" /></label>
           <button className="primary" disabled={busy || !role.trim()} type="button" onClick={() => void saveTarget()}>Save and activate target</button>

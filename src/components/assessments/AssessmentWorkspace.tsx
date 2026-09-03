@@ -57,11 +57,7 @@ export function AssessmentWorkspace() {
     ]).then(([jobResult, assessmentResult]) => {
       if (cancelled) return;
       if (!jobResult.response.ok) setError(jobResult.body?.error ?? "JOB_SNAPSHOT_LOAD_FAILED");
-      else {
-        const loadedJobs = Array.isArray(jobResult.body?.jobs) ? jobResult.body.jobs : [];
-        setJobs(loadedJobs);
-        setJobSnapshotId((current) => current || loadedJobs[0]?.id || "");
-      }
+      else setJobs(Array.isArray(jobResult.body?.jobs) ? jobResult.body.jobs : []);
       if (!assessmentResult.response.ok) setError(assessmentResult.body?.error ?? "ASSESSMENT_LOAD_FAILED");
       else setAssessments(Array.isArray(assessmentResult.body?.assessments) ? assessmentResult.body.assessments : []);
     });
@@ -71,7 +67,10 @@ export function AssessmentWorkspace() {
   const jobById = useMemo(() => new Map(jobs.map((job) => [job.id, job])), [jobs]);
 
   async function assess() {
-    if (!jobSnapshotId) return;
+    if (!jobSnapshotId) {
+      setError("SELECT_JOB_SNAPSHOT_REQUIRED");
+      return;
+    }
     setBusy(true);
     setError(null);
     const response = await fetch("/api/assessments", {
@@ -91,6 +90,10 @@ export function AssessmentWorkspace() {
   }
 
   async function explain(bundle: AssessmentBundle) {
+    if (mode === "NO_CLOUD_AI" || !mode) {
+      setError("AI_EXPLANATION_DISABLED_FOR_CURRENT_ACCESS_MODE");
+      return;
+    }
     const id = bundle.assessment.id;
     const byok = mode === "BYOK_GEMINI" ? readByokCredential() : null;
     if (mode === "BYOK_GEMINI" && !byok) {
@@ -143,7 +146,7 @@ export function AssessmentWorkspace() {
           <button className="primary" disabled={busy || !jobSnapshotId} type="button" onClick={() => void assess()}>
             Create evidence assessment
           </button>
-          <p className="muted">The browser supplies only the Job Snapshot ID. Ownership, evidence fingerprint, matches and recommendations are derived inside the trusted persistence boundary.</p>
+          <p className="muted">Choose the Job Snapshot explicitly. CV Engine never assumes the first captured job is the one you want to assess.</p>
           <p className="muted">AI access mode: <strong>{mode ?? "not configured"}</strong>. AI remains optional; trusted assessment and ResumeVersion paths work without it.</p>
         </section>
 
@@ -162,8 +165,8 @@ export function AssessmentWorkspace() {
               <p className="muted"><strong>{label(bundle.assessment.action)}</strong> · {bundle.assessment.scopeBoundary}</p>
 
               <div className="stack">
-                <button className="secondary" type="button" disabled={aiBusyId === bundle.assessment.id} onClick={() => void explain(bundle)}>
-                  {aiBusyId === bundle.assessment.id ? "Generating bounded explanation…" : "Explain with optional AI"}
+                <button className="secondary" type="button" disabled={aiBusyId === bundle.assessment.id || mode === "NO_CLOUD_AI" || !mode} onClick={() => void explain(bundle)}>
+                  {aiBusyId === bundle.assessment.id ? "Generating bounded explanation…" : mode === "NO_CLOUD_AI" || !mode ? "AI explanation unavailable in this mode" : "Explain with optional AI"}
                 </button>
                 {explanation ? <div className="panel">
                   <strong>AI explanation · proposal only</strong>

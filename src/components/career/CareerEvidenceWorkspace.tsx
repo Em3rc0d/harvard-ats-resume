@@ -29,7 +29,7 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [kind, setKind] = useState<CareerEvidenceKind>("EMPLOYMENT");
+  const [kind, setKind] = useState<CareerEvidenceKind | "">("");
   const [canonicalText, setCanonicalText] = useState("");
   const [verified, setVerified] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -66,7 +66,10 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
   }, [evidence]);
 
   async function createEvidence() {
-    if (!canonicalText.trim()) return;
+    if (!kind || !canonicalText.trim()) {
+      setError(!kind ? "SELECT_EVIDENCE_KIND_REQUIRED" : null);
+      return;
+    }
     setBusy(true);
     setError(null);
 
@@ -88,6 +91,7 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
     }
 
     setEvidence((current) => [body.evidence, ...current]);
+    setKind("");
     setCanonicalText("");
     setVerified(false);
     setBusy(false);
@@ -179,7 +183,8 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
 
           <label>
             Evidence type
-            <select value={kind} onChange={(event) => setKind(event.target.value as CareerEvidenceKind)}>
+            <select value={kind} onChange={(event) => setKind(event.target.value as CareerEvidenceKind | "")}>
+              <option value="" disabled>Select evidence type</option>
               {KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </label>
@@ -200,7 +205,7 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
             <span>I can defend this statement as true.</span>
           </label>
 
-          <button className="primary" disabled={busy || !canonicalText.trim()} type="button" onClick={createEvidence}>
+          <button className="primary" disabled={busy || !kind || !canonicalText.trim()} type="button" onClick={createEvidence}>
             Save Career Evidence
           </button>
         </section>
@@ -211,7 +216,7 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
             <div className="panel empty-state">
               <p className="eyebrow">Career Vault</p>
               <h2>No evidence yet.</h2>
-              <p className="muted">Start manually. Resume import arrives later as a convenience layer, not as the truth authority.</p>
+              <p className="muted">Start manually or import a resume for review. Neither path silently invents a truth category.</p>
             </div>
           ) : null}
 
