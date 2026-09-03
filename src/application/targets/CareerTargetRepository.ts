@@ -4,6 +4,7 @@ import {
   type CareerTarget,
   type CreateCareerTargetInput,
 } from "../../domain/targets/CareerTarget";
+import { normalizeB2DatabaseTimestamp } from "../b2/DatabaseTimestamp";
 import { canonicalizeCareerTargetInput, careerTargetSemanticKey } from "./CareerTargetIdentity";
 
 type TargetRow = {
@@ -41,8 +42,8 @@ function mapTarget(row: TargetRow): CareerTarget {
     relocationPreference: row.relocation_preference,
     priority: row.priority,
     isActive: row.is_active,
-    activatedAt: row.activated_at,
-    createdAt: row.created_at,
+    activatedAt: row.activated_at ? normalizeB2DatabaseTimestamp(row.activated_at) : null,
+    createdAt: normalizeB2DatabaseTimestamp(row.created_at),
   });
 }
 
