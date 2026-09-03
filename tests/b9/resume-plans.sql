@@ -11,6 +11,7 @@ on conflict do nothing;
 select public.cv_engine_sha256('Built a deterministic evidence pipeline.') project_source_hash,
        public.cv_engine_sha256('Built and tested a deterministic evidence pipeline.') project_proposal_hash,
        public.cv_engine_sha256('Kubernetes') kubernetes_hash,
+       public.cv_engine_sha256('Kubernetes platform engineering') kubernetes_proposal_hash,
        public.cv_engine_sha256('Kubernetes is required.') req_source_hash,
        public.cv_engine_sha256(E'Requirements:\n- Kubernetes is required.') jd_hash
 \gset h_
@@ -54,7 +55,7 @@ select presentation_revision_id from public.cv_engine_record_presentation_propos
   1,
   :'h_kubernetes_hash',
   'Kubernetes platform engineering',
-  public.cv_engine_sha256('Kubernetes platform engineering'),
+  :'h_kubernetes_proposal_hash',
   'gemini','gemini-3.5-flash-lite','b6-ai-runtime-v1',1,false,'PLATFORM',
   'b9-plan-unapproved','b9-presentation-validator-v1',
   '{"status":"PASS","reasonCodes":[]}'::jsonb
