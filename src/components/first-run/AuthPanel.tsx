@@ -39,10 +39,15 @@ export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
     setBusy(true);
     setStatus(null);
 
+    const redirectTo = `${window.location.origin}/auth/callback`;
     const result =
       mode === "SIGN_IN"
         ? await client.auth.signInWithPassword({ email, password })
-        : await client.auth.signUp({ email, password });
+        : await client.auth.signUp({
+            email,
+            password,
+            options: { emailRedirectTo: redirectTo },
+          });
 
     setBusy(false);
 
