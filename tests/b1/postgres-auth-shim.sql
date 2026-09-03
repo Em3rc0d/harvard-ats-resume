@@ -14,6 +14,9 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'anon') then
     create role anon noinherit;
   end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role noinherit bypassrls;
+  end if;
 end;
 $$;
 
@@ -25,8 +28,8 @@ as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
 $$;
 
-grant usage on schema auth to authenticated, anon;
-grant execute on function auth.uid() to authenticated, anon;
+grant usage on schema auth to authenticated, anon, service_role;
+grant execute on function auth.uid() to authenticated, anon, service_role;
 
 insert into auth.users (id) values
   ('00000000-0000-4000-8000-000000000101'),
