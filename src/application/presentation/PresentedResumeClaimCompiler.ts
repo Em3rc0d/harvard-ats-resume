@@ -25,7 +25,7 @@ function evidenceFingerprint(revision: PresentationRevision) {
 export function compilePresentedResumeClaim(
   revisionInput: PresentationRevision,
   ordinal: number,
-  claimId = randomUUID(),
+  claimId: string = randomUUID(),
 ): PresentedResumeClaim {
   const revision = PresentationRevisionSchema.parse(revisionInput);
 
