@@ -17,7 +17,6 @@ select set_config('p1.ev_api_id', :'ev_api_evidence_id', false);
 select set_config('p1.ev_docker_id', :'ev_docker_evidence_id', false);
 select set_config('p1.ev_unverified_id', :'ev_unverified_evidence_id', false);
 
-create temporary table p1_general_plan as
 select * from public.cv_engine_create_presentation_plan(
   'GENERAL', null, null, null,
   jsonb_build_array(
@@ -112,7 +111,7 @@ end $$;
 select * from public.cv_engine_create_presentation_revision(
   :'plan_presentation_plan_id'::uuid,
   'CLAIM',
-  jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1)::jsonb || '[]'::jsonb,
+  jsonb_build_array(jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1)),
   'Built REST APIs with Java and Spring Boot for internal systems.',
   array['CLARITY','REORDER'],
   'USER_EDIT'
