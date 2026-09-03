@@ -1,0 +1,39 @@
+name: P1 Presentation PostgreSQL Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  p1-presentation-gate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cvengine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d cvengine"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cvengine
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap auth shim
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/b1/postgres-auth-shim.sql
+      - name: Apply all migrations
+        run: |
+          for migration in $(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | sort); do
+            echo "Applying $migration"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Run P1 presentation persistence gate
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/p1/presentation.sql
