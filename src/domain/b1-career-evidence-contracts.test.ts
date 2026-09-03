@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { normalizeCareerEvidenceDatabaseTimestamp } from "../application/career/DatabaseTimestamp";
 import { CareerEvidenceSourceSchema } from "./career/CareerEvidence";
 import { ReviseCareerEvidenceInputSchema } from "./career/CareerEvidenceMutation";
 
@@ -26,6 +27,19 @@ describe("B1 Career Evidence contracts", () => {
       verificationStatus: "VERIFIED",
     });
     expect(valid.success).toBe(true);
+  });
+
+  it("normalizes PostgreSQL timestamptz readback before strict domain parsing", () => {
+    expect(normalizeCareerEvidenceDatabaseTimestamp("2026-09-03 19:58:15.056547+00")).toBe(
+      "2026-09-03T19:58:15.056Z",
+    );
+    expect(() => normalizeCareerEvidenceDatabaseTimestamp("not-a-timestamp")).toThrow(
+      "CAREER_EVIDENCE_READBACK_INVALID_TIMESTAMP",
+    );
+
+    const repository = read("src/application/career/CareerEvidenceRepository.ts");
+    expect(repository).toContain("normalizeCareerEvidenceDatabaseTimestamp(row.created_at)");
+    expect(repository).toContain("normalizeCareerEvidenceDatabaseTimestamp(row.updated_at)");
   });
 
   it("enforces owner-scoped RLS on the Career Vault and evidence tables", () => {
