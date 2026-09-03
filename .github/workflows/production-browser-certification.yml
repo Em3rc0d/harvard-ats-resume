@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     env:
       CERT_ARTIFACT_DIR: artifacts/production-certification
-      CERT_HARNESS_REVISION: "6"
+      CERT_HARNESS_REVISION: "7-diagnostic-pre-delete"
     steps:
       - name: Checkout certification branch
         uses: actions/checkout@v4
@@ -77,7 +77,36 @@ jobs:
           path.write_text(text)
           PY
 
-      - name: Execute exact-production browser journey
+      - name: Instrument pre-delete 5xx boundary
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/e2e/production-certification.mjs')
+          text = path.read_text()
+          text = text.replace(
+              "const CORE_EMAIL = 'cvengine-cert-a44ec836@invalid.example';",
+              "const CORE_EMAIL = 'cvengine-cert-ai-a44ec836@invalid.example';",
+          )
+          text = text.replace(
+              "const CORE_PASSWORD = 'CVEngine-Cert-a44ec836-2026!';",
+              "const CORE_PASSWORD = 'CVEngine-Cert-AI-a44ec836-2026!';",
+          )
+          needle = "fiveHundreds.push(`${response.status()} ${response.request().method()} ${response.url()}`);"
+          replacement = """const line = `${response.status()} ${response.request().method()} ${response.url()}`;
+      fiveHundreds.push(line);
+      void response.text().then((body) => console.error(`CVENGINE_5XX ${new Date().toISOString()} ${line} body=${body}`)).catch((error) => console.error(`CVENGINE_5XX_BODY_READ_FAILED ${line} ${String(error)}`));"""
+          assert needle in text, '5xx guard instrumentation anchor missing'
+          text = text.replace(needle, replacement)
+          delete_call = "    await exportAndDeleteAccount(page, 'core-account-export.json');"
+          assert delete_call in text, 'core delete anchor missing'
+          text = text.replace(delete_call, "    await screenshot(page, '04b-pre-delete-boundary');\n    await page.waitForTimeout(1000);")
+          platform_call = "  await platformGemini(browser);"
+          assert platform_call in text, 'platform phase anchor missing'
+          text = text.replace(platform_call, "  console.log('CVENGINE_DIAGNOSTIC_PRE_DELETE_COMPLETE=YES');")
+          path.write_text(text)
+          PY
+
+      - name: Execute pre-delete diagnostic journey
         run: node tests/e2e/production-certification.mjs
 
       - name: Upload certification receipts
