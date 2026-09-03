@@ -21,332 +21,175 @@ B4                             CLOSED
 B5                             CLOSED
 B6                             CLOSED
 B7                             CLOSED
-B8                             IMPLEMENTED_CERTIFICATION_PENDING
-CVENGINE_V1_0_0                BLOCKED_BY_B8
+B8                             CLOSED
+B9                             SIGNED_IMPLEMENTATION_NOT_STARTED
+CVENGINE_V1_0_0                BLOCKED_BY_B9
 ```
 
-## Contract status
+## Accepted scope revision
 
-All current rebuild contracts through B8 are signed in `docs/build/CONTRACT-SIGNOFF.md`.
+The trusted-core release through B8 was physically certified in Production at:
 
 ```text
-CONTRACTS_SIGNED = YES
-RELEASE_READY    = NO
+fa331f9b88c1f5a0d9e4ef3fa4960a4fd3394989
 ```
 
-A signed contract is frozen specification; it does not imply the corresponding implementation node is complete.
+Subsequent real-CV dogfood exposed a product-definition gap: deterministic provenance-backed ResumeVersion generation is not equivalent to end-to-end professional CV improvement.
 
-## PF0
+The accepted stronger product promise is now:
+
+> CV Engine must convert defensible Career Evidence into the strongest professional presentation it can support, while remaining able to prove that every material statement is still grounded in candidate truth.
+
+Under `CLOSURE-PROTOCOL.md`, this does not rewrite B1–B8. It creates B9 Presentation Engine.
+
+Therefore the current release ledger is intentionally reopened:
+
+```text
+RELEASE_READY         = NO
+PRODUCTION_QUALIFIED  = NO
+UPLOAD_TO_IMPROVED_CV = NOT_PROVEN
+```
+
+## Closed-node receipts
+
+```text
+PF0   docs/vnext/04-BUILD-READINESS-AUDIT.md
+B0    docs/build/B0-FOUNDATION-STATUS.md
+B0.5  docs/build/B0.5-CLOSURE.md
+B1    docs/build/B1-CLOSURE.md
+B2    docs/build/B2-CLOSURE.md
+B3    docs/build/B3-CLOSURE.md
+B4    docs/build/B4-CLOSURE.md
+B5    docs/build/B5-CLOSURE.md
+B6    docs/build/B6-CLOSURE.md
+B7    docs/build/B7-CLOSURE.md
+B8    docs/build/B8-CLOSURE.md
+```
+
+All CLOSED nodes satisfy the canonical equation applicable to their scope:
+
+```text
+NODE_CLOSED =
+    CONTRACT_SIGNED
+ && IMPLEMENTED
+ && WIRED
+ && EXECUTABLY_TESTED
+ && PHYSICALLY_PROVEN_WHERE_REQUIRED
+ && NO_OPEN_CONTRADICTIONS
+```
+
+## B9 — Presentation Engine
+
+Contract: `docs/build/B9-PRESENTATION-ENGINE-CONTRACT.md`
+
+Status:
 
 ```text
 CONTRACT_SIGNED              PASS
-DECISIONS_FROZEN             PASS
-IMPLEMENTATION_AUTHORIZED    PASS
-PRODUCTION_QUALIFIED         NOT_APPLICABLE_AT_PF0
-STATUS                       CLOSED
+IMPLEMENTATION               NOT_STARTED
+WIRING                       NOT_STARTED
+EXECUTABLE_TESTS             NOT_STARTED
+REAL_BROWSER_E2E             NOT_STARTED
+PRIVATE_REAL_CV_DOGFOOD      NOT_STARTED
+STATUS                       SIGNED_IMPLEMENTATION_NOT_STARTED
 ```
 
-Authority: `docs/vnext/04-BUILD-READINESS-AUDIT.md`.
-
-## B0 — Repository and contracts
+B9 owns the downstream boundary:
 
 ```text
-CLEAN_APP_BASELINE   PASS
-LOCKFILE             PASS
-TYPECHECK            PASS
-LINT                  PASS
-UNIT_TEST             PASS
-NEXT_BUILD            PASS
-CI_EXACT_HEAD         PASS
-NO_LEGACY_COPY        PASS
-STATUS                CLOSED
+CareerEvidence
+    = WHAT IS TRUE
+
+PresentationRevision
+    = HOW AN APPROVED FACT MAY BE EXPRESSED
+
+ResumePlan
+    = WHICH APPROVED FACTS/PRESENTATIONS ARE USED AND IN WHAT ORDER
+
+ResumeArtifact
+    = THE FINAL RENDERED DOCUMENT
 ```
 
-Receipt: `docs/build/B0-FOUNDATION-STATUS.md`.
+B9 must not weaken B4 source/provenance authority. It adds a separately validated and user-approved presentation layer.
 
-## B0.5 — First-run trust + AI access foundation
+### Required B9 closure predicates
 
 ```text
-TRUST_DISCLOSURE                 PASS
-EXPLICIT_ACKNOWLEDGEMENT         PASS
-AUTHENTICATED_SESSION_BOUNDARY   PASS
-CONSENT_RECEIPT                  PASS
-AI_MODE_SELECTION                PASS
-NO_CLOUD_PATH                    PASS
-BYOK_MEMORY_ONLY_STORE           PASS
-PLATFORM_KEY_SERVER_ONLY_SCHEMA  PASS
-BYOK_REMOTE_HTTP_REFUSAL         PASS
-LOOPBACK_HTTP_EXCEPTION          PASS
-AI_GATEWAY_FOUNDATION_INTERFACE  PASS
-MODEL_ROUTE_FOUNDATION           PASS
-EXECUTABLE_CONTRACT_TESTS        PASS
-CONSTRUCTION_CI                  PASS
-STATUS                           CLOSED
+PRESENTATION_REVISION_DOMAIN
+SOURCE_REVISION_IMMUTABLE_BINDING
+WORDING_AI_CAPABILITY_PHYSICALLY_WIRED
+NO_AI_PATH_PRESERVES_SOURCE_WORDING
+BEFORE_AFTER_REVIEW_UI
+NO_DEFAULT_APPROVAL
+FACT_ADDITION_REJECTION
+METRIC_ADDITION_REJECTION
+METRIC_CHANGE_REJECTION
+SENIORITY_STRENGTHENING_REJECTION
+SKILL_ADDITION_REJECTION
+STALE_SOURCE_REVISION_GUARD
+APPROVAL_DURABLE
+REJECTION_DURABLE
+GENERAL_RESUME_PLAN
+TARGETED_RESUME_PLAN
+JOB_TRUTH_NEVER_BECOMES_CANDIDATE_CLAIM
+PROFESSIONAL_SUMMARY_PROVENANCE
+CONTENT_SELECTION_PROVENANCE
+ATS_SAFE_SINGLE_COLUMN_RENDERER
+DOCX_EXPORT
+PDF_EXPORT
+TXT_EXPORT
+PROVENANCE_JSON_EXPORT
+DOCX_PDF_CANONICAL_CONTENT_PARITY
+CROSS_USER_IDOR_DENIAL
+ANONYMOUS_MUTATION_DENIAL
+AI_SECRET_CANARY
+PROVIDER_FAILURE_DEGRADATION
+REAL_BROWSER_UPLOAD_TO_FINAL_ARTIFACT_E2E
+PRIVATE_REAL_CV_DOGFOOD
+NO_OPEN_TRUTH_CONTRADICTIONS
 ```
 
-Receipt: `docs/build/B0.5-CLOSURE.md`.
-
-## B1 — Career Evidence core
+## B9 golden path
 
 ```text
-CAREER_EVIDENCE_DOMAIN           PASS
-OWNER_SCOPED_SCHEMA              PASS
-REVISIONED_STORAGE_MODEL         PASS
-RLS_DEFINED                      PASS
-OPTIMISTIC_CONCURRENCY           PASS
-MANUAL_CREATE                    PASS
-LIST_CURRENT                     PASS
-REVISE                           PASS
-DELETE                           PASS
-AUTHENTICATED_API_WIRING         PASS
-CAREER_EVIDENCE_UI               PASS
-STATIC_CONTRACT_TESTS            PASS
-CLEAN_DB_MIGRATION_GATE          PASS
-REAL_RLS_A_VS_B_GATE             PASS
-ANONYMOUS_DENIAL_GATE            PASS
-REVISION_HISTORY_GATE            PASS
-STALE_REVISION_CONFLICT_GATE     PASS
-CONCURRENT_REVISION_RACE_GATE    PASS
-ATOMIC_ROLLBACK_GATE             PASS
-DURABLE_READBACK_GATE            PASS
-JOB_DESCRIPTION_REJECTION_GATE   PASS
-CONSTRUCTION_CI                  PASS
-STATUS                           CLOSED
+NEW USER
+↓
+Trust + Auth + AI choice
+↓
+Upload supported CV
+↓
+Review/import candidate facts
+↓
+Verify Career Evidence
+↓
+Generate wording proposals
+↓
+Review BEFORE / AFTER
+↓
+Approve safe PresentationRevisions
+↓
+Choose Career Target
+↓
+General OR captured Job
+↓
+Assessment if targeted
+↓
+Generate ResumePlan
+↓
+Preview final resume
+↓
+Download DOCX
+↓
+Download PDF
+↓
+Download TXT / provenance JSON
+↓
+Reload
+↓
+Historical artifact remains reproducible and traceable
 ```
 
-Receipt: `docs/build/B1-CLOSURE.md`.
-
-## B2 — Target and Job truth
-
-```text
-CAREER_TARGET_DOMAIN                    PASS
-TARGET_SEMANTIC_IDENTITY                PASS
-MULTIPLE_TARGET_DIRECTIONS              PASS
-ONE_ACTIVE_TARGET_PER_OWNER             PASS
-JOB_SNAPSHOT_DOMAIN                     PASS
-JOB_REQUIREMENT_DOMAIN                  PASS
-DETERMINISTIC_JOB_INTELLIGENCE          PASS
-CANDIDATE_VS_MARKET_TRUTH_SEPARATION    PASS
-SOURCE_TEXT_PROVENANCE                  PASS
-DB_HASH_AND_SEMANTIC_KEY_VERIFICATION   PASS
-CLIENT_TRUST_BOUNDARY                   PASS
-OWNER_SCOPED_RLS                        PASS
-CROSS_USER_IDOR_DENIAL                  PASS
-ANONYMOUS_MUTATION_DENIAL               PASS
-IMMUTABLE_JOB_TRUTH                     PASS
-ATOMIC_JOB_PERSISTENCE                  PASS
-AUTHENTICATED_API_WIRING                PASS
-B2_UI_PATH                              PASS
-STATIC_CONTRACT_TESTS                   PASS
-CLEAN_DB_MIGRATION_GATE                 PASS
-PHYSICAL_TARGET_GATE                    PASS
-PHYSICAL_JOB_TRUTH_GATE                 PASS
-FRESH_CONNECTION_READBACK               PASS
-B1_REGRESSION_GATE                      PASS
-CONSTRUCTION_CI                         PASS
-STATUS                                  CLOSED
-```
-
-Receipt: `docs/build/B2-CLOSURE.md`.
-
-## B3 — Evidence-backed Assessment
-
-```text
-REQUIREMENT_MATCH_DOMAIN                 PASS
-MATCH_POTENTIAL_UNKNOWN_ENGINE           PASS
-GAP_BLOCKER_EVIDENCE_GUARD               PASS
-UNKNOWN_ONLY_UNSUPPORTED_STATE           PASS
-MATCH_REPORT                              PASS
-OPPORTUNITY_ASSESSMENT                    PASS
-NO_HIRING_PROBABILITY_THEATER             PASS
-CAREER_EVIDENCE_PROVENANCE_SNAPSHOT       PASS
-SEMANTIC_REPLAY_IDEMPOTENCE               PASS
-HISTORICAL_ASSESSMENT_PRESERVATION        PASS
-CLIENT_TRUST_BOUNDARY                     PASS
-OWNER_SCOPED_RLS                          PASS
-CROSS_USER_IDOR_DENIAL                    PASS
-ANONYMOUS_RPC_DENIAL                      PASS
-DIRECT_CLIENT_WRITE_DENIAL                PASS
-CLEAN_DB_MIGRATION_GATE                   PASS
-FRESH_CONNECTION_READBACK                 PASS
-B1_REGRESSION_GATE                        PASS
-B2_REGRESSION_GATE                        PASS
-CONSTRUCTION_CI                           PASS
-STATUS                                    CLOSED
-```
-
-Receipt: `docs/build/B3-CLOSURE.md`.
-
-## B4 — ResumeVersion
-
-```text
-DETERMINISTIC_COMPOSITION                 PASS
-SOURCE_PRESERVING_TRUSTED_CLAIMS          PASS
-VERIFIED_EVIDENCE_ONLY                    PASS
-JOB_TRUTH_NEVER_BECOMES_CANDIDATE_CLAIM  PASS
-GENERAL_TARGETED_BOUNDARY                 PASS
-TARGETED_ASSESSMENT_PROVENANCE            PASS
-CLAIM_TO_EVIDENCE_ID_REVISION             PASS
-HASHED_PROVENANCE                         PASS
-MANIFEST_DOCUMENT_CLAIM_CONSISTENCY       PASS
-IMMUTABLE_RESUME_VERSION                  PASS
-IMMUTABLE_RESUME_CLAIMS                   PASS
-SEMANTIC_REPLAY_IDEMPOTENCE               PASS
-HISTORICAL_VERSION_PRESERVATION           PASS
-ATOMIC_VERSION_PLUS_CLAIMS                PASS
-FAULT_INJECTION_ROLLBACK                  PASS
-OWNER_SCOPED_RLS                          PASS
-CROSS_USER_READ_DENIAL                    PASS
-ANONYMOUS_RPC_DENIAL                      PASS
-DIRECT_CLIENT_WRITE_DENIAL                PASS
-TEXT_EXPORT                               PASS
-PROVENANCE_JSON_EXPORT                    PASS
-FRESH_CONNECTION_DURABLE_READBACK         PASS
-B1_REGRESSION                             PASS
-B2_REGRESSION                             PASS
-B3_REGRESSION                             PASS
-CONSTRUCTION                              PASS
-STATUS                                    CLOSED
-```
-
-Receipt: `docs/build/B4-CLOSURE.md`.
-
-## B5 — Trusted import convenience
-
-```text
-PDF_BOUNDED_MECHANICAL_EXTRACTION       PASS
-DOCX_BOUNDED_MECHANICAL_EXTRACTION      PASS
-UNSUPPORTED_DOCUMENT_FAIL_CLOSED        PASS
-RAW_SOURCE_BYTES_NOT_DURABLE            PASS
-SOURCE_AND_TEXT_HASH_RECEIPTS           PASS
-DETERMINISTIC_REVIEW_PROPOSALS          PASS
-IMPORT_REPLAY_IDEMPOTENCE               PASS
-EXPLICIT_USER_REVIEW                    PASS
-CLIENT_CANNOT_REPLACE_PROPOSAL_TEXT     PASS
-ACCEPTANCE_TRANSACTIONAL                PASS
-IMPORTED_RESUME_PROVENANCE              PASS
-ACCEPTED_STATUS_NEEDS_REVIEW            PASS
-IMPORT_NEVER_AUTO_VERIFIES              PASS
-DISMISSED_PROPOSAL_DENIAL               PASS
-HASH_MISMATCH_ATOMIC_ROLLBACK           PASS
-MANUAL_FALLBACK                         PASS
-OWNER_SCOPED_RLS                        PASS
-CROSS_USER_IDOR_DENIAL                  PASS
-ANONYMOUS_MUTATION_DENIAL               PASS
-B1_REGRESSION                           PASS
-B2_REGRESSION                           PASS
-B3_REGRESSION                           PASS
-B4_REGRESSION                           PASS
-CONSTRUCTION                            PASS
-STATUS                                  CLOSED
-```
-
-Receipt: `docs/build/B5-CLOSURE.md`.
-
-## B6 — AI assistance runtime
-
-```text
-GEMINI_PRIMARY_RUNTIME                  PASS
-CAPABILITY_MODEL_CASCADE               PASS
-OLLAMA_FALLBACK_PROTOCOL               PASS
-PLATFORM_BYOK_NO_CLOUD_MODES           PASS
-BYOK_REQUEST_SCOPED                    PASS
-NO_CLOUD_SKIPS_GEMINI                  PASS
-ATTEMPT_LIMITS                         PASS
-PER_ATTEMPT_TIMEOUT                    PASS
-WHOLE_OPERATION_DEADLINE               PASS
-INPUT_OUTPUT_TOKEN_BUDGETS             PASS
-PAID_COST_CAPS                         PASS
-PRICING_CONTRACT_EXPIRY_FAIL_CLOSED    PASS
-NORMALIZED_PROVIDER_FAILURES           PASS
-NON_SECRET_PROVENANCE                  PASS
-GEMINI_SECRET_CANARY                   PASS
-OLLAMA_NEVER_RECEIVES_GEMINI_SECRET    PASS
-PROVIDER_ERROR_SECRET_REDACTION        PASS
-SAFE_TOTAL_OUTAGE_DEGRADATION          PASS
-TRUSTED_CORE_AI_OPTIONAL               PASS
-ASSESSMENT_AI_EXPLANATION_WIRED        PASS
-SERVER_OWNED_SYSTEM_INSTRUCTIONS       PASS
-B1_B2_B3_B4_B5_REGRESSION             PASS
-CONSTRUCTION                           PASS
-B6_AI_RUNTIME_GATE                     PASS
-STATUS                                 CLOSED
-```
-
-Receipt: `docs/build/B6-CLOSURE.md`.
-
-## B7 — Opportunity Space / market extension
-
-```text
-MARKET_OBSERVATION_DOMAIN                 PASS
-JOB_SNAPSHOT_PROVENANCE                   PASS
-MARKET_HISTORY_IMMUTABLE                  PASS
-CAPTURE_REPLAY_IDEMPOTENT                 PASS
-ASSESSMENT_REQUIRED_BEFORE_SELECTION      PASS
-ASSESSMENT_JOB_IDENTITY_MATCH             PASS
-ASSESSMENT_SEMANTIC_KEY_PRESERVED         PASS
-SELECTION_REPLAY_IDEMPOTENT               PASS
-MULTI_OPPORTUNITY_COMPARISON              PASS
-DETERMINISTIC_CATEGORY_ORDERING           PASS
-NO_HIRING_PROBABILITY                     PASS
-NO_ATS_SCORE                              PASS
-MARKET_FLOW_NEVER_MUTATES_CANDIDATE_TRUTH PASS
-OWNER_SCOPED_RLS                          PASS
-CROSS_USER_READ_DENIAL                    PASS
-CROSS_USER_CAPTURE_DENIAL                 PASS
-CROSS_USER_SELECTION_DENIAL               PASS
-ANONYMOUS_RPC_DENIAL                      PASS
-DIRECT_CLIENT_WRITE_DENIAL                PASS
-HISTORICAL_REWRITE_DENIAL                 PASS
-FRESH_CONNECTION_READBACK                 PASS
-B1_B2_B3_B4_B5_REGRESSION                 PASS
-B6_AI_REGRESSION                          PASS
-CONSTRUCTION                              PASS
-STATUS                                    CLOSED
-```
-
-Final implementation head before promotion:
-
-```text
-head_sha      6b9334ad87f1fbf08a90befd5f150642da5b17f9
-exact_head    8/8 workflows success
-```
-
-Receipt: `docs/build/B7-CLOSURE.md`.
-
-## B8 — Release hardening
-
-Contract: `SIGNED`.
-Implementation: `IMPLEMENTED — certification pending`.
-
-Current B8 implementation adds:
-
-```text
-SUPABASE_API_ACL_DENY_BY_DEFAULT
-ANON_RPC_EXECUTION_DENIAL
-FUNCTION_SEARCH_PATH_HARDENING
-ACCOUNT_EXPORT_LIFECYCLE
-ACCOUNT_DELETE_LIFECYCLE
-RUNTIME_EXACT_HEAD_IDENTITY
-GOLDEN_ASSESSMENT_PERSONA_GATE
-BOUNDED_CAPACITY_SMOKE
-B8_RELEASE_WORKFLOW
-```
-
-Required before promotion to CLOSED:
-
-```text
-all inherited GitHub gates green on exact B8 head
-B8 release gate green on exact B8 head
-Supabase production migration applied
-Supabase security advisor blocker cleared
-runtime deployment receipt
-production smoke
-browser acceptance / E2E
-backup/restore evidence
-```
-
-## v1.0.0 release equation
+## v1.0.0 release equation — revised scope
 
 ```text
 CVENGINE_V1_0_0 =
@@ -360,13 +203,15 @@ CVENGINE_V1_0_0 =
   && B6_CLOSED
   && B7_CLOSED
   && B8_CLOSED
+  && B9_CLOSED
 ```
 
-Only then may the release ledger state:
+Only then may the current stronger product release ledger state:
 
 ```text
 RELEASE_READY = YES
 PRODUCTION_QUALIFIED = YES
+UPLOAD_TO_IMPROVED_CV = PROVEN
 ```
 
-The ledger promotion itself is valid only while its required GitHub checks remain green. New contradictory evidence reopens the affected node under `CLOSURE-PROTOCOL.md`.
+A future contradiction reopens only the affected node unless evidence proves an upstream contract itself invalid.
