@@ -21,7 +21,7 @@ export async function loadResumePlan(
   ownerUserId: string,
   resumePlanId: string,
 ): Promise<ResumePlan> {
-  const [planResult, itemsResult] = await Promise.all([
+  const [planResult, itemsResult, receiptsResult] = await Promise.all([
     client
       .from("resume_plans")
       .select("*")
@@ -34,10 +34,17 @@ export async function loadResumePlan(
       .eq("owner_user_id", ownerUserId)
       .eq("resume_plan_id", resumePlanId)
       .order("ordinal", { ascending: true }),
+    client
+      .from("resume_plan_source_receipts")
+      .select("*")
+      .eq("owner_user_id", ownerUserId)
+      .eq("resume_plan_id", resumePlanId)
+      .order("evidence_id", { ascending: true }),
   ]);
 
   if (planResult.error) throw new Error(`B9_RESUME_PLAN_READ_FAILED:${planResult.error.message}`);
   if (itemsResult.error) throw new Error(`B9_RESUME_PLAN_ITEMS_READ_FAILED:${itemsResult.error.message}`);
+  if (receiptsResult.error) throw new Error(`B9_RESUME_PLAN_RECEIPTS_READ_FAILED:${receiptsResult.error.message}`);
   if (!planResult.data) throw new Error("B9_RESUME_PLAN_NOT_FOUND");
 
   const plan = planResult.data as Record<string, unknown>;
@@ -57,6 +64,20 @@ export async function loadResumePlan(
       selectionReason: item.selection_reason,
     };
   });
+  const sourceReceipts = (receiptsResult.data ?? []).map((row) => {
+    const receipt = row as Record<string, unknown>;
+    return {
+      id: requiredString(receipt.id, "RECEIPT_ID"),
+      evidenceId: requiredString(receipt.evidence_id, "RECEIPT_EVIDENCE_ID"),
+      evidenceRevision: receipt.evidence_revision,
+      evidenceKind: receipt.evidence_kind,
+      evidenceTextSha256: receipt.evidence_text_sha256,
+      section: receipt.section,
+      decision: receipt.decision,
+      targetMatchStatus: receipt.target_match_status ?? null,
+      selectedItemId: receipt.selected_item_id ?? null,
+    };
+  });
 
   return ResumePlanSchema.parse({
     id: requiredString(plan.id, "PLAN_ID"),
@@ -70,6 +91,7 @@ export async function loadResumePlan(
     careerEvidenceFingerprintSha256: plan.career_evidence_fingerprint_sha256,
     semanticKey: plan.semantic_key,
     items,
+    sourceReceipts,
     createdAt: iso(plan.created_at),
   });
 }

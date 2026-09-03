@@ -90,6 +90,9 @@ declare
   v_skill_text text;
   v_skill_presentation uuid;
   v_count integer;
+  v_receipts integer;
+  v_included integer;
+  v_planner_version text;
 begin
   select rendered_text, presentation_revision_id
     into v_project_text, v_project_presentation
@@ -107,13 +110,26 @@ begin
   from public.resume_plan_items
   where resume_plan_id = (select general_plan_id from b9_plan_context);
 
+  select count(*), count(*) filter (where decision = 'INCLUDED')
+    into v_receipts, v_included
+  from public.resume_plan_source_receipts
+  where resume_plan_id = (select general_plan_id from b9_plan_context);
+
+  select planner_version into v_planner_version
+  from public.resume_plans
+  where id = (select general_plan_id from b9_plan_context);
+
   if v_count <> 2
+     or v_receipts <> 2
+     or v_included <> 2
+     or v_planner_version <> 'b9-deterministic-resume-plan-v2'
      or v_project_text <> 'Built and tested a deterministic evidence pipeline.'
      or v_project_presentation <> (select approved_presentation_revision_id from b9_plan_context)
      or v_skill_text <> 'Kubernetes'
      or v_skill_presentation is not null then
-    raise exception 'B9_RESUME_PLAN_APPROVAL_BOUNDARY_FAILED count=% project=% project_pr=% skill=% skill_pr=%',
-      v_count, v_project_text, v_project_presentation, v_skill_text, v_skill_presentation;
+    raise exception 'B9_RESUME_PLAN_APPROVAL_BOUNDARY_FAILED items=% receipts=% included=% version=% project=% project_pr=% skill=% skill_pr=%',
+      v_count, v_receipts, v_included, v_planner_version,
+      v_project_text, v_project_presentation, v_skill_text, v_skill_presentation;
   end if;
 end;
 $$;
@@ -132,7 +148,7 @@ begin
 end;
 $$;
 
--- Direct authenticated writes remain forbidden.
+-- Direct authenticated writes remain forbidden for plans and selection receipts.
 do $$
 begin
   begin
@@ -140,12 +156,25 @@ begin
       owner_user_id, mode, planner_version, section_order, density_policy,
       career_evidence_fingerprint_sha256, semantic_key
     ) values (
-      auth.uid(), 'GENERAL', 'b9-deterministic-resume-plan-v1',
+      auth.uid(), 'GENERAL', 'b9-deterministic-resume-plan-v2',
       '["PROFILE","EXPERIENCE","PROJECTS","EDUCATION","CERTIFICATIONS","SKILLS","LANGUAGES"]'::jsonb,
       '{"policyVersion":"b9-one-page-density-v1","targetPages":1,"maxItems":20}'::jsonb,
       repeat('a',64), repeat('b',64)
     );
     raise exception 'B9_DIRECT_RESUME_PLAN_INSERT_ALLOWED';
+  exception when insufficient_privilege then null;
+  end;
+
+  begin
+    insert into public.resume_plan_source_receipts(
+      resume_plan_id, owner_user_id, evidence_id, evidence_revision, evidence_kind,
+      evidence_text_sha256, section, decision, target_match_status, selected_item_id
+    ) values (
+      (select general_plan_id from b9_plan_context), auth.uid(),
+      (select project_evidence_id from b9_plan_context), 1, 'PROJECT',
+      repeat('a',64), 'PROJECTS', 'OMITTED_DENSITY', null, null
+    );
+    raise exception 'B9_DIRECT_RESUME_PLAN_RECEIPT_INSERT_ALLOWED';
   exception when insufficient_privilege then null;
   end;
 end;
@@ -201,6 +230,13 @@ declare
   v_evidence uuid;
   v_reason text;
   v_assessment uuid;
+  v_receipts integer;
+  v_included integer;
+  v_irrelevant integer;
+  v_skill_decision text;
+  v_skill_match text;
+  v_project_decision text;
+  v_project_match text;
 begin
   select count(*) into v_count
   from public.resume_plan_items
@@ -216,12 +252,38 @@ begin
   select opportunity_assessment_id into v_assessment
   from public.resume_plans where id = (select targeted_plan_id from b9_plan_context);
 
+  select count(*),
+         count(*) filter (where decision = 'INCLUDED'),
+         count(*) filter (where decision = 'OMITTED_TARGET_IRRELEVANT')
+    into v_receipts, v_included, v_irrelevant
+  from public.resume_plan_source_receipts
+  where resume_plan_id = (select targeted_plan_id from b9_plan_context);
+
+  select decision, target_match_status into v_skill_decision, v_skill_match
+  from public.resume_plan_source_receipts
+  where resume_plan_id = (select targeted_plan_id from b9_plan_context)
+    and evidence_id = (select skill_evidence_id from b9_plan_context);
+
+  select decision, target_match_status into v_project_decision, v_project_match
+  from public.resume_plan_source_receipts
+  where resume_plan_id = (select targeted_plan_id from b9_plan_context)
+    and evidence_id = (select project_evidence_id from b9_plan_context);
+
   if v_count <> 1
      or v_evidence <> (select skill_evidence_id from b9_plan_context)
      or v_reason <> 'TARGET_MATCH'
-     or v_assessment <> (select assessment_id from b9_plan_context) then
-    raise exception 'B9_TARGETED_PLAN_SELECTION_FAILED count=% evidence=% reason=% assessment=%',
-      v_count, v_evidence, v_reason, v_assessment;
+     or v_assessment <> (select assessment_id from b9_plan_context)
+     or v_receipts <> 2
+     or v_included <> 1
+     or v_irrelevant <> 1
+     or v_skill_decision <> 'INCLUDED'
+     or v_skill_match <> 'MATCH'
+     or v_project_decision <> 'OMITTED_TARGET_IRRELEVANT'
+     or v_project_match is not null then
+    raise exception 'B9_TARGETED_PLAN_SELECTION_FAILED count=% evidence=% reason=% assessment=% receipts=% included=% irrelevant=% skill_decision=% skill_match=% project_decision=% project_match=%',
+      v_count, v_evidence, v_reason, v_assessment,
+      v_receipts, v_included, v_irrelevant,
+      v_skill_decision, v_skill_match, v_project_decision, v_project_match;
   end if;
 end;
 $$;
@@ -249,17 +311,22 @@ begin
 end;
 $$;
 
--- A second user cannot read or reuse User A's plan/assessment bindings.
+-- A second user cannot read plans, receipts, or reuse User A's target bindings.
 reset role;
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000202';
 
 do $$
-declare v_visible integer; begin
+declare v_visible integer; v_receipts integer; begin
   select count(*) into v_visible
   from public.resume_plans
   where id = (select general_plan_id from b9_plan_context);
   if v_visible <> 0 then raise exception 'B9_RESUME_PLAN_RLS_CROSS_USER_READ_ALLOWED'; end if;
+
+  select count(*) into v_receipts
+  from public.resume_plan_source_receipts
+  where resume_plan_id = (select general_plan_id from b9_plan_context);
+  if v_receipts <> 0 then raise exception 'B9_RESUME_PLAN_RECEIPT_RLS_CROSS_USER_READ_ALLOWED'; end if;
 
   begin
     perform * from public.cv_engine_create_resume_plan(
@@ -283,11 +350,13 @@ declare v_export jsonb; begin
   v_export := public.cv_engine_export_account();
   if v_export->>'schemaVersion' <> 'b8-account-export-v1'
      or jsonb_array_length(v_export->'resumePlans') <> 2
-     or jsonb_array_length(v_export->'resumePlanItems') <> 3 then
-    raise exception 'B9_RESUME_PLAN_EXPORT_FAILED schema=% plans=% items=%',
+     or jsonb_array_length(v_export->'resumePlanItems') <> 3
+     or jsonb_array_length(v_export->'resumePlanSourceReceipts') <> 4 then
+    raise exception 'B9_RESUME_PLAN_EXPORT_FAILED schema=% plans=% items=% receipts=%',
       v_export->>'schemaVersion',
       jsonb_array_length(v_export->'resumePlans'),
-      jsonb_array_length(v_export->'resumePlanItems');
+      jsonb_array_length(v_export->'resumePlanItems'),
+      jsonb_array_length(v_export->'resumePlanSourceReceipts');
   end if;
 end;
 $$;
@@ -296,13 +365,15 @@ select public.cv_engine_delete_account();
 
 reset role;
 do $$
-declare v_plans integer; v_items integer; begin
+declare v_plans integer; v_items integer; v_receipts integer; begin
   select count(*) into v_plans from public.resume_plans
   where owner_user_id = '00000000-0000-4000-8000-000000000101'::uuid;
   select count(*) into v_items from public.resume_plan_items
   where owner_user_id = '00000000-0000-4000-8000-000000000101'::uuid;
-  if v_plans <> 0 or v_items <> 0 then
-    raise exception 'B9_RESUME_PLAN_ACCOUNT_DELETE_FAILED plans=% items=%', v_plans, v_items;
+  select count(*) into v_receipts from public.resume_plan_source_receipts
+  where owner_user_id = '00000000-0000-4000-8000-000000000101'::uuid;
+  if v_plans <> 0 or v_items <> 0 or v_receipts <> 0 then
+    raise exception 'B9_RESUME_PLAN_ACCOUNT_DELETE_FAILED plans=% items=% receipts=%', v_plans, v_items, v_receipts;
   end if;
 end;
 $$;
