@@ -112,7 +112,7 @@ end $$;
 select * from public.cv_engine_create_presentation_revision(
   :'plan_presentation_plan_id'::uuid,
   'CLAIM',
-  jsonb_build_array(jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1)),
+  jsonb_build_object('evidenceId', :'ev_api_evidence_id', 'evidenceRevision', 1)::jsonb || '[]'::jsonb,
   'Built REST APIs with Java and Spring Boot for internal systems.',
   array['CLARITY','REORDER'],
   'USER_EDIT'
@@ -185,14 +185,14 @@ begin
   end;
 end $$;
 
--- Unsupported strengthening is rejected inside the database RPC.
+-- Punctuation must not bypass unsupported strengthening detection.
 do $$
 begin
   begin
     perform * from public.cv_engine_create_presentation_revision(
       current_setting('p1.plan_id')::uuid,'CLAIM',
       jsonb_build_array(jsonb_build_object('evidenceId', current_setting('p1.ev_api_id'), 'evidenceRevision', 1)),
-      'Led and architected Java and Spring Boot REST APIs for internal systems.',array['ACTIVE_VOICE'],'USER_EDIT'
+      'Led, and architected Java and Spring Boot REST APIs for internal systems.',array['ACTIVE_VOICE'],'USER_EDIT'
     );
     raise exception 'P1_UNSUPPORTED_STRENGTHENING_ACCEPTED';
   exception when others then
@@ -201,19 +201,20 @@ begin
 end $$;
 
 -- Build a TARGETED context whose market truth includes Kubernetes while candidate evidence does not.
+-- canonicalConcept intentionally contains extra words to ensure market token extraction is not phrase-literal.
 select E'Requirements:\n- Kubernetes\n- Docker' description,
        '- Kubernetes' req1,
        '- Docker' req2 \gset p1jd_
 select public.cv_engine_sha256(:'p1jd_description') raw_hash,
        public.cv_engine_sha256(:'p1jd_req1') h1,
        public.cv_engine_sha256(:'p1jd_req2') h2 \gset p1h_
-select public.cv_engine_sha256('TOOL'||chr(31)||'REQUIRED'||chr(31)||'kubernetes'||chr(31)||:'p1h_h1'||chr(31)||'0') k1,
+select public.cv_engine_sha256('TOOL'||chr(31)||'REQUIRED'||chr(31)||'kubernetes is required.'||chr(31)||:'p1h_h1'||chr(31)||'0') k1,
        public.cv_engine_sha256('TOOL'||chr(31)||'PREFERRED'||chr(31)||'docker'||chr(31)||:'p1h_h2'||chr(31)||'1') k2 \gset p1k_
 select public.cv_engine_sha256('MANUAL_JOB_DESCRIPTION'||chr(31)||'platform engineer'||chr(31)||''||chr(31)||:'p1h_raw_hash'||chr(31)||'b2-deterministic-job-intelligence-v1'||chr(31)||:'p1k_k1'||','||:'p1k_k2') sk \gset p1s_
 select snapshot_id from public.cv_engine_create_job_snapshot(
   :'p1s_sk','Platform Engineer','',:'p1jd_description',:'p1h_raw_hash','b2-deterministic-job-intelligence-v1',
   jsonb_build_array(
-    jsonb_build_object('semanticKey',:'p1k_k1','category','TOOL','importance','REQUIRED','canonicalConcept','Kubernetes','sourceText',:'p1jd_req1','sourceTextSha256',:'p1h_h1','sourceOrdinal',0),
+    jsonb_build_object('semanticKey',:'p1k_k1','category','TOOL','importance','REQUIRED','canonicalConcept','Kubernetes is required.','sourceText',:'p1jd_req1','sourceTextSha256',:'p1h_h1','sourceOrdinal',0),
     jsonb_build_object('semanticKey',:'p1k_k2','category','TOOL','importance','PREFERRED','canonicalConcept','Docker','sourceText',:'p1jd_req2','sourceTextSha256',:'p1h_h2','sourceOrdinal',1)
   )
 ) \gset p1job_
@@ -228,18 +229,18 @@ select * from public.cv_engine_create_presentation_plan(
 
 select set_config('p1.targeted_plan_id', :'targeted_presentation_plan_id', false);
 
--- Market truth must not backfill candidate truth.
+-- Market truth must not backfill candidate truth, even with punctuation around the keyword.
 do $$
 begin
   begin
     perform * from public.cv_engine_create_presentation_revision(
       current_setting('p1.targeted_plan_id')::uuid,'CLAIM',
       jsonb_build_array(jsonb_build_object('evidenceId', current_setting('p1.ev_docker_id'), 'evidenceRevision', 1)),
-      'Docker and Kubernetes container delivery',array['KEYWORD_ALIGNMENT'],'USER_EDIT'
+      'Docker and Kubernetes, container delivery',array['KEYWORD_ALIGNMENT'],'USER_EDIT'
     );
     raise exception 'P1_MARKET_TERM_PROMOTED';
   exception when others then
-    if sqlerrm <> 'P1_MARKET_TERM_PROMOTED_TO_CANDIDATE:Kubernetes' then raise; end if;
+    if sqlerrm <> 'P1_MARKET_TERM_PROMOTED_TO_CANDIDATE:kubernetes' then raise; end if;
   end;
 end $$;
 
