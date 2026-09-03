@@ -1,6 +1,6 @@
 # CV Engine — Documentation Map for the Zero-Based Rebuild
 
-This file maps the accumulated documentation into the disciplined project structure we will use for the rebuild.
+This file maps the accumulated documentation into the disciplined project structure we use for the rebuild.
 
 ```text
 brainstorming
@@ -28,6 +28,7 @@ Primary material:
 - `docs/market-v0.1/MARKET-03-CAREER-TARGET.md`
 - `docs/market-v0.1/MARKET-04-OPPORTUNITY-SPACE.md`
 - `docs/market-v0.1/MARKET-V0.1-CLOSURE.md`
+- `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`
 
 Purpose:
 
@@ -36,7 +37,14 @@ Purpose:
 - Career Model as the asset;
 - Application Intelligence entry point;
 - Career Opportunity Intelligence destination;
+- strongest truthful professional presentation;
 - defensible differentiation instead of keyword theater.
+
+North-star product equation:
+
+```text
+TRUTH → POSITIONING → PRESENTATION → PROOF
+```
 
 ## 01 — Product design
 
@@ -48,6 +56,7 @@ Primary material:
 - `docs/market-v0.1/MARKET-04-OPPORTUNITY-SPACE.md`
 - `docs/release/RELEASE_SURFACE_AUDIT_v1.md`
 - `docs/vnext/00-FIRST-RUN-TRUST-AND-AI-ACCESS.md`
+- `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`
 
 Purpose:
 
@@ -58,6 +67,9 @@ Purpose:
 - Career Target;
 - specific-job vs general-resume flows;
 - explainable gaps;
+- source/proposal/diff presentation review;
+- explicit presentation approval;
+- professional ATS-safe document output;
 - trusted failure/degradation surfaces;
 - release-visible product behavior.
 
@@ -69,6 +81,7 @@ Primary authority:
 - `docs/vnext/README.md`
 - `docs/vnext/01-AI-PROVIDER-ROUTING.md`
 - `docs/vnext/02-BYOK-SECRET-HANDLING.md`
+- `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`
 - `docs/ats-v2/baseline/CURRENT_PRODUCT_CONTRACT.md`
 
 Supporting architecture:
@@ -98,9 +111,31 @@ Candidate truth != Job truth
 Candidate truth != Career intent
 Derived assessment != truth
 AI proposal != truth
+PresentationRevision != Career Evidence
+PresentationPlan != candidate truth
 Provider success != validation success
 ResumeVersion != Career Evidence
 API key != durable product state
+```
+
+P1 presentation architecture:
+
+```text
+Verified Career Evidence
+   ↓
+PresentationPlan
+   ↓
+Presentation proposal
+   ↓
+application-owned validation
+   ↓
+user approval
+   ↓
+APPROVED PresentationRevision
+   ↓
+deterministic ResumeVersion
+   ↓
+DOCX / PDF / TXT / provenance JSON
 ```
 
 New vNext AI architecture:
@@ -122,7 +157,7 @@ Ollama (fallback provider)
 application-owned validation
 ```
 
-Exact Gemini model routing remains pending until the user provides the model list and the models are benchmarked per capability.
+AI routing is an availability/cost/proposal layer, not a truth layer.
 
 ## 03 — Historical implementation plan / design decisions
 
@@ -140,20 +175,22 @@ These documents explain why many boundaries exist. They are valuable design hist
 Primary authority:
 
 - `REBUILD-CONTRACT.md`
+- `docs/build/BUILD-GRAPH.md`
 
-Build sequence:
+Current sequence/status:
 
 ```text
-B0   Repository + typed contracts
-B0.5 First-run trust + AI access foundation
-B1   Career Evidence core + durability
-B2   Career Target + Job truth
-B3   Evidence-backed Assessment
-B4   Deterministic ResumeVersion + provenance + export
-B5   Resume import convenience + reconciliation + fallback
-B6   Gemini-primary / Ollama-fallback AI assistance runtime
-B7   Opportunity Space / market extension
-B8   Release hardening
+B0   Repository + typed contracts                         CLOSED
+B0.5 First-run trust + AI access foundation              CLOSED
+B1   Career Evidence core + durability                    CLOSED
+B2   Career Target + Job truth                            CLOSED
+B3   Evidence-backed Assessment                           CLOSED
+B4   Deterministic ResumeVersion baseline                 CLOSED
+B5   Resume import convenience + reconciliation           CLOSED
+B6   Gemini-primary / Ollama-fallback AI runtime         CLOSED
+B7   Opportunity Space / market extension                 CLOSED
+P1   Truth-Preserving Professional Presentation           ACTIVE
+B8   Release hardening / final certification              BLOCKED_BY_P1
 ```
 
 Critical corrections from the first implementation:
@@ -163,6 +200,8 @@ Critical corrections from the first implementation:
 > AI provider routing is an availability/cost layer, not a truth layer. Gemini or Ollama success cannot bypass application-owned validation.
 
 > BYOK is transient secret material, never Career Vault/application state.
+
+> Exact source-text preservation is a safe fallback, not the final product experience. P1 must enable stronger wording and document presentation without weakening evidence lineage.
 
 ## 05 — Test architecture
 
@@ -179,12 +218,16 @@ Primary material:
 - `docs/vnext/00-FIRST-RUN-TRUST-AND-AI-ACCESS.md`
 - `docs/vnext/01-AI-PROVIDER-ROUTING.md`
 - `docs/vnext/02-BYOK-SECRET-HANDLING.md`
+- `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`
 
 Required layers in the rebuild:
 
 ```text
 domain tests
 truth-invariant tests
+presentation novelty/strengthening tests
+presentation provenance / approval tests
+cross-format export consistency tests
 application/API tests
 persistence + fault tests
 source-reconciliation fixtures
@@ -207,7 +250,7 @@ The first implementation did not consistently organize these under explicit quar
 - degradation matrix;
 - release/browser acceptance matrices.
 
-For the rebuild, this becomes explicit from the start:
+For the rebuild, this becomes explicit:
 
 ```text
 mining-site/
@@ -216,12 +259,17 @@ mining-site/
   quarry-ai-access-...
   quarry-ai-router-...
   quarry-byok-...
+  quarry-presentation-novelty-...
+  quarry-presentation-strengthening-...
+  quarry-export-parity-...
 
 golden-dataset/
   personas/
   resume-import/
   job-match/
   provenance/
+  presentation/
+  export-parity/
   provider-routing/
   secret-handling/
   fault-cases/
@@ -240,14 +288,16 @@ Historical evidence and constraints:
 
 Use these to design the new characterization system. Do not automatically inherit old runtime qualification into the new implementation.
 
-The new runtime characterization must separately identify:
+The runtime characterization must separately identify:
 
 - deterministic core health;
 - Gemini capability health;
 - resolved Gemini model per capability;
 - credential mode (platform/BYOK/local-only) without recording secrets;
 - Ollama capability health;
-- whether fallback was actually exercised.
+- whether fallback was actually exercised;
+- P1 export renderer identity;
+- claim parity across supported export formats.
 
 ## 08 — Release gates
 
@@ -257,6 +307,7 @@ Primary material:
 - `docs/release/BROWSER_ACCEPTANCE_MATRIX_v1.md`
 - `docs/release/RELEASE_SURFACE_AUDIT_v1.md`
 - `docs/ats-v2/baseline/EXECUTION_EVIDENCE.md`
+- `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`
 
 Release rule:
 
@@ -268,7 +319,7 @@ product ready
 
 The rebuild reaches release only when the full user story and its failure/degradation paths have executable receipts on an identified runtime.
 
-New vNext release evidence must include:
+Release evidence must include:
 
 - platform-key secret isolation;
 - BYOK non-persistence;
@@ -276,7 +327,11 @@ New vNext release evidence must include:
 - Gemini-primary routing receipts;
 - Gemini→Ollama fallback receipt;
 - complete-AI-outage degradation receipt;
-- cost/retry budget enforcement.
+- cost/retry budget enforcement;
+- P1 truth-preserving presentation regressions;
+- DOCX/PDF/TXT/provenance JSON parity;
+- real browser presentation review/approval flow;
+- identified-runtime export receipt.
 
 ## Historical implementation archive
 
@@ -284,9 +339,9 @@ New vNext release evidence must include:
 
 These files may contain stale runtime/model assumptions. They are kept to understand what was tried, not to dictate the new stack.
 
-## Working rule for the next phase
+## Working rule
 
-Before writing production application code, every B0–B8 block must have:
+Before production implementation of a new node, that node must have:
 
 1. a purpose;
 2. an input/output contract;
@@ -295,6 +350,6 @@ Before writing production application code, every B0–B8 block must have:
 5. at least one executable fixture or planned quarry;
 6. a clear definition of done.
 
-The Gemini model list must be documented and benchmark-mapped before B6 is considered implementation-ready.
+P1 now satisfies the contract-definition prerequisite in `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md` and is authorized for implementation.
 
-Then we build once, in dependency order, instead of repeatedly rebuilding architecture around symptoms.
+Then we build in dependency order instead of repeatedly rebuilding architecture around symptoms.
