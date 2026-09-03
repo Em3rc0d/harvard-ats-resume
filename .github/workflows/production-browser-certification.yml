@@ -1,0 +1,71 @@
+name: CV Engine Production Browser Certification
+
+on:
+  push:
+    branches:
+      - certification/e2e-4cfc422
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CERT_ARTIFACT_DIR: artifacts/production-certification
+    steps:
+      - name: Checkout certification branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Build minimal DOCX import fixture
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          out = Path('/tmp/cvengine-cert.docx')
+          content_types = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+            <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+            <Default Extension="xml" ContentType="application/xml"/>
+            <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+          </Types>'''
+          rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+          </Relationships>'''
+          document = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+            <w:p><w:r><w:t>CV Engine certification resume</w:t></w:r></w:p>
+            <w:p><w:r><w:t>Built a TypeScript and PostgreSQL service with Docker deployment.</w:t></w:r></w:p>
+            <w:sectPr/>
+          </w:body></w:document>'''
+          with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+              z.writestr('[Content_Types].xml', content_types)
+              z.writestr('_rels/.rels', rels)
+              z.writestr('word/document.xml', document)
+          print(out)
+          PY
+
+      - name: Execute exact-production browser journey
+        run: node tests/e2e/production-certification.mjs
+
+      - name: Upload certification receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cvengine-production-certification-${{ github.run_id }}
+          path: artifacts/production-certification
+          if-no-files-found: warn
+          retention-days: 1
