@@ -2,11 +2,23 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabasePublicConfig } from "../../../infrastructure/supabase/config";
 import { createSupabaseServerClient } from "../../../infrastructure/supabase/server";
 
+function sameOriginDestination(request: NextRequest, rawNext: string | null) {
+  const fallback = new URL("/", request.url);
+  if (!rawNext) return fallback;
+
+  try {
+    const candidate = new URL(rawNext, request.url);
+    return candidate.origin === fallback.origin ? candidate : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const config = getSupabasePublicConfig();
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/";
+  const destination = sameOriginDestination(request, url.searchParams.get("next"));
 
   if (!config) {
     return NextResponse.redirect(new URL("/?auth=not-configured", request.url));
@@ -23,5 +35,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/?auth=callback-failed", request.url));
   }
 
-  return NextResponse.redirect(new URL(next, request.url));
+  return NextResponse.redirect(destination);
 }
