@@ -21,6 +21,7 @@ jobs:
       CVENGINE_BASE_URL: https://harvard-ats-resume.vercel.app
       CVENGINE_EXPECTED_SHA: ${{ github.sha }}
       CVENGINE_E2E_OUTPUT_DIR: artifacts/b9-production-browser
+      CVENGINE_SYNTHETIC_EMAIL_DOMAIN: harvard-ats-resume.vercel.app
     steps:
       - name: Checkout exact release candidate
         uses: actions/checkout@v7
@@ -36,7 +37,21 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: Certify exact Production upload-to-artifact path
-        run: python tests/b9/production-browser-e2e.py
+        run: |
+          python - <<'PY'
+          import os
+          import runpy
+
+          harness = runpy.run_path("tests/b9/production-browser-e2e.py", run_name="cvengine_b9_browser")
+          domain = os.environ["CVENGINE_SYNTHETIC_EMAIL_DOMAIN"].strip().lower()
+          if domain in {"example.com", "example.net", "example.org"} or domain.endswith(".example"):
+              raise SystemExit("B9_BROWSER_RESERVED_EMAIL_DOMAIN")
+
+          run_id = os.environ.get("GITHUB_RUN_ID", "local")
+          run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+          harness["SYNTHETIC_EMAIL"] = f"cvengine-b9-{run_id}-{run_attempt}@{domain}"
+          raise SystemExit(harness["main"]())
+          PY
 
       - name: Upload sanitized browser receipt
         if: always()
