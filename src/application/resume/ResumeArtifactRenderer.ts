@@ -9,6 +9,8 @@ const SECTION_HEADINGS: Record<string, string> = {
   LANGUAGES: "Languages",
 };
 
+const URL_PATTERN_SOURCE = "https?:\\/\\/[^\\s|<>\\\"']+";
+
 export type ResumeSemanticLine = {
   kind: "NAME" | "META" | "HEADING" | "BODY" | "BULLET";
   text: string;
@@ -114,9 +116,50 @@ function zipStored(files: Array<{ name: string; data: Uint8Array }>) {
   ]);
 }
 
-function wordParagraph(line: ResumeSemanticLine) {
-  const text = xmlEscape(line.kind === "BULLET" ? `• ${line.text}` : line.text);
-  const bold = line.kind === "NAME" || line.kind === "HEADING" ? "<w:b/>" : "";
+type DocxTextSegment = { text: string; url: string | null };
+
+function extractUrls(value: string): string[] {
+  return Array.from(value.matchAll(new RegExp(URL_PATTERN_SOURCE, "g")), (match) => match[0]);
+}
+
+function splitTextByUrls(value: string): DocxTextSegment[] {
+  const segments: DocxTextSegment[] = [];
+  const pattern = new RegExp(URL_PATTERN_SOURCE, "g");
+  let cursor = 0;
+  for (const match of value.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    if (index > cursor) segments.push({ text: value.slice(cursor, index), url: null });
+    segments.push({ text: match[0], url: match[0] });
+    cursor = index + match[0].length;
+  }
+  if (cursor < value.length) segments.push({ text: value.slice(cursor), url: null });
+  return segments.length > 0 ? segments : [{ text: value, url: null }];
+}
+
+function collectDocxHyperlinks(lines: ResumeSemanticLine[]) {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  for (const line of lines) {
+    for (const url of extractUrls(line.text)) {
+      if (!seen.has(url)) {
+        seen.add(url);
+        urls.push(url);
+      }
+    }
+  }
+  return urls;
+}
+
+function wordRun(text: string, bold: boolean, size: string, hyperlinkId: string | null) {
+  const linkStyle = hyperlinkId ? '<w:color w:val="0563C1"/><w:u w:val="single"/>' : "";
+  const properties = `${bold ? "<w:b/>" : ""}${linkStyle}<w:sz w:val="${size}"/><w:szCs w:val="${size}"/>`;
+  const run = `<w:r><w:rPr>${properties}</w:rPr><w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r>`;
+  return hyperlinkId ? `<w:hyperlink r:id="${hyperlinkId}" w:history="1">${run}</w:hyperlink>` : run;
+}
+
+function wordParagraph(line: ResumeSemanticLine, hyperlinkIds: ReadonlyMap<string, string>) {
+  const sourceText = line.kind === "BULLET" ? `• ${line.text}` : line.text;
+  const bold = line.kind === "NAME" || line.kind === "HEADING";
   const size = line.kind === "NAME" ? "28" : line.kind === "HEADING" ? "22" : line.kind === "META" ? "19" : "20";
   const spacing = line.kind === "NAME"
     ? '<w:spacing w:after="40"/>'
@@ -125,19 +168,32 @@ function wordParagraph(line: ResumeSemanticLine) {
       : line.kind === "HEADING"
         ? '<w:spacing w:before="160" w:after="60"/>'
         : '<w:spacing w:after="40"/>';
-  return `<w:p><w:pPr>${spacing}</w:pPr><w:r><w:rPr>${bold}<w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+  const runs = splitTextByUrls(sourceText).map((segment) => wordRun(
+    segment.text,
+    bold,
+    size,
+    segment.url ? (hyperlinkIds.get(segment.url) ?? null) : null,
+  )).join("");
+  return `<w:p><w:pPr>${spacing}</w:pPr>${runs}</w:p>`;
 }
 
 export function renderResumeArtifactDocx(input: ResumeArtifact): Uint8Array {
   const artifact = ResumeArtifactSchema.parse(input);
   const lines = buildResumeSemanticLines(artifact);
   const encoder = new TextEncoder();
-  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${lines.map(wordParagraph).join("")}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr></w:body></w:document>`;
-  return zipStored([
+  const urls = collectDocxHyperlinks(lines);
+  const hyperlinkIds = new Map(urls.map((url, index) => [url, `rIdLink${index + 1}`]));
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${lines.map((line) => wordParagraph(line, hyperlinkIds)).join("")}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr></w:body></w:document>`;
+  const files: Array<{ name: string; data: Uint8Array }> = [
     { name: "[Content_Types].xml", data: encoder.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>') },
     { name: "_rels/.rels", data: encoder.encode('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>') },
     { name: "word/document.xml", data: encoder.encode(documentXml) },
-  ]);
+  ];
+  if (urls.length > 0) {
+    const relationships = `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${urls.map((url) => `<Relationship Id="${hyperlinkIds.get(url)}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${xmlEscape(url)}" TargetMode="External"/>`).join("")}</Relationships>`;
+    files.push({ name: "word/_rels/document.xml.rels", data: encoder.encode(relationships) });
+  }
+  return zipStored(files);
 }
 
 function cp1252(value: string): Uint8Array {
@@ -167,9 +223,25 @@ function wrapLine(text: string, width: number) {
   const lines: string[] = [];
   let current = "";
   for (const word of words) {
-    if (current.length === 0) current = word;
-    else if (`${current} ${word}`.length <= width) current += ` ${word}`;
-    else { lines.push(current); current = word; }
+    if (word.length > width) {
+      if (current) {
+        lines.push(current);
+        current = "";
+      }
+      let offset = 0;
+      while (word.length - offset > width) {
+        lines.push(word.slice(offset, offset + width));
+        offset += width;
+      }
+      current = word.slice(offset);
+    } else if (current.length === 0) {
+      current = word;
+    } else if (`${current} ${word}`.length <= width) {
+      current += ` ${word}`;
+    } else {
+      lines.push(current);
+      current = word;
+    }
   }
   if (current) lines.push(current);
   return lines.length > 0 ? lines : [""];
