@@ -35,6 +35,8 @@ describe("B9 production browser certification contract", () => {
     expect(wrapper).toContain('context.route("**/auth/v1/signup**", route_disposable_anonymous_signup)');
     expect(wrapper).toContain('page.expect_request("**/auth/v1/signup**", timeout=15_000)');
     expect(wrapper).toContain('anonymous_signup_intercepts["count"] += 1');
+    expect(wrapper).toContain('intercept_deadline = time.monotonic() + 2.0');
+    expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_INTERCEPT_TIMEOUT");
     expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_INTERCEPT_COUNT");
     expect(wrapper).toContain('route.continue_(post_data="{}")');
     expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_DISABLED");
