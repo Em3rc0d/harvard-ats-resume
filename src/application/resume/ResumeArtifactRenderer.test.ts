@@ -88,6 +88,34 @@ describe("B9 multi-format artifact renderers", () => {
     ]);
   });
 
+  it("preserves approved multiline evidence as one bullet plus canonical continuation lines in every export", () => {
+    const multiline = structuredClone(artifact);
+    multiline.content.sections[0]!.entries[0]!.renderedText = "Project Alpha\nBuilt API.\nAdded tests.";
+
+    const semantic = buildResumeSemanticLines(multiline);
+    const projectHeading = semantic.findIndex((line) => line.kind === "HEADING" && line.text === "Projects");
+    expect(semantic.slice(projectHeading, projectHeading + 4)).toEqual([
+      { kind: "HEADING", text: "Projects" },
+      { kind: "BULLET", text: "Project Alpha" },
+      { kind: "BODY", text: "Built API." },
+      { kind: "BODY", text: "Added tests." },
+    ]);
+
+    expect(renderResumeArtifactText(multiline)).toContain("Projects\n- Project Alpha\nBuilt API.\nAdded tests.");
+
+    const docx = new TextDecoder().decode(renderResumeArtifactDocx(multiline));
+    expect(docx).toContain("• Project Alpha");
+    expect(docx).toContain("Built API.");
+    expect(docx).toContain("Added tests.");
+    expect(docx.indexOf("• Project Alpha")).toBeLessThan(docx.indexOf("Built API."));
+    expect(docx.indexOf("Built API.")).toBeLessThan(docx.indexOf("Added tests."));
+
+    const pdf = new TextDecoder().decode(renderResumeArtifactPdf(multiline));
+    expect(pdf).toContain("(- Project Alpha) Tj");
+    expect(pdf).toContain("(Built API.) Tj");
+    expect(pdf).toContain("(Added tests.) Tj");
+  });
+
   it("renders valid OpenXML DOCX with exact Unicode header and claims", () => {
     const bytes = renderResumeArtifactDocx(artifact);
     expect(Array.from(bytes.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04]);

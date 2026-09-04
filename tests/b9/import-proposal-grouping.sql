@@ -3,7 +3,7 @@
 reset role;
 insert into auth.users(id) values ('00000000-0000-4000-8000-000000000404') on conflict do nothing;
 select public.cv_engine_sha256('synthetic-grouping-source') source_hash,
-       public.cv_engine_sha256(E'Project Alpha\nBuilt API.\nAdded tests.\nUnrelated skill') extracted_hash,
+       public.cv_engine_sha256(E'Project Alpha\nBuilt API.\nAdded tests.\n\nUnrelated skill') extracted_hash,
        public.cv_engine_sha256('Project Alpha') p1_hash,
        public.cv_engine_sha256('Built API.') p2_hash,
        public.cv_engine_sha256('Added tests.') p3_hash,
@@ -20,7 +20,7 @@ select receipt_id from public.cv_engine_record_resume_import(
     jsonb_build_object('ordinal',1,'sourceLine',1,'canonicalText','Project Alpha','sourceTextSha256',:'h_p1_hash'),
     jsonb_build_object('ordinal',2,'sourceLine',2,'canonicalText','Built API.','sourceTextSha256',:'h_p2_hash'),
     jsonb_build_object('ordinal',3,'sourceLine',3,'canonicalText','Added tests.','sourceTextSha256',:'h_p3_hash'),
-    jsonb_build_object('ordinal',4,'sourceLine',4,'canonicalText','Unrelated skill','sourceTextSha256',:'h_p4_hash')
+    jsonb_build_object('ordinal',4,'sourceLine',5,'canonicalText','Unrelated skill','sourceTextSha256',:'h_p4_hash')
   )
 ) \gset receipt_
 
@@ -41,6 +41,7 @@ create temporary table b9_import_group_context(
 insert into b9_import_group_context(p1,p2,p3,p4,receipt_id)
 values (:'p1_id'::uuid,:'p2_id'::uuid,:'p3_id'::uuid,:'p4_id'::uuid,:'receipt_receipt_id'::uuid);
 
+-- Non-consecutive review ordinals are rejected.
 do $$
 begin
   begin
@@ -49,6 +50,21 @@ begin
       'PROJECT'
     );
     raise exception 'B9_IMPORT_NONCONTIGUOUS_GROUP_ALLOWED';
+  exception when check_violation then null;
+  end;
+end;
+$$;
+
+-- More importantly: proposal ordinals 3 and 4 are adjacent, but source lines 3 and 5
+-- are separated by a real document gap and therefore must not be grouped.
+do $$
+begin
+  begin
+    perform * from public.cv_engine_accept_import_proposal_group(
+      array[(select p3 from b9_import_group_context),(select p4 from b9_import_group_context)],
+      'PROJECT'
+    );
+    raise exception 'B9_IMPORT_SOURCE_LINE_GAP_ALLOWED';
   exception when check_violation then null;
   end;
 end;

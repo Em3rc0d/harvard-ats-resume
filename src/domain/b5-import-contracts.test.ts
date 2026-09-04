@@ -92,14 +92,18 @@ describe("B5 trusted import contracts", () => {
     expect(AcceptImportProposalGroupInputSchema.safeParse({ proposalIds: ids, kind: "PROJECT", canonicalText: "Injected" }).success).toBe(false);
   });
 
-  it("keeps grouped import acceptance explicit, contiguous and source-preserving", () => {
-    const migration = readFileSync("supabase/migrations/20260904030200_b9_import_proposal_grouping.sql", "utf8");
+  it("keeps grouped import acceptance explicit, source-line contiguous and source-preserving", () => {
+    const groupingMigration = readFileSync("supabase/migrations/20260904030200_b9_import_proposal_grouping.sql", "utf8");
+    const sourceLineFix = readFileSync("supabase/migrations/20260904030300_b9_import_group_source_line_fix.sql", "utf8");
     const ui = readFileSync("src/components/import/ResumeImportWorkspace.tsx", "utf8");
-    expect(migration).toContain("B5_IMPORT_GROUP_NONCONTIGUOUS");
-    expect(migration).toContain("B5_IMPORT_GROUP_RECEIPT_MISMATCH");
-    expect(migration).toContain("string_agg(ip.canonical_text, E'\\n' order by ip.ordinal)");
-    expect(migration).toContain("'NEEDS_REVIEW'");
-    expect(ui).toContain("Accept contiguous source lines as one evidence block");
+    expect(groupingMigration).toContain("B5_IMPORT_GROUP_RECEIPT_MISMATCH");
+    expect(sourceLineFix).toContain("B5_IMPORT_GROUP_SOURCE_LINES_NONCONTIGUOUS");
+    expect(sourceLineFix).toContain("min(ip.source_line)");
+    expect(sourceLineFix).toContain("max(ip.source_line)");
+    expect(sourceLineFix).toContain("string_agg(ip.canonical_text, E'\\n' order by ip.source_line, ip.ordinal)");
+    expect(sourceLineFix).toContain("'NEEDS_REVIEW'");
+    expect(ui).toContain("proposal.sourceLine === selected[index - 1]!.sourceLine + 1");
+    expect(ui).toContain("blank-line gaps are treated as structural boundaries");
     expect(ui).toContain("SELECT_CONTIGUOUS_IMPORT_LINES_REQUIRED");
     expect(ui).toContain('fetch("/api/imports/proposals/accept-group"');
   });

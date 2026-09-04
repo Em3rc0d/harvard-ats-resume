@@ -16,6 +16,15 @@ export type ResumeSemanticLine = {
   text: string;
 };
 
+function appendMultilineBullet(lines: ResumeSemanticLine[], text: string) {
+  const sourceLines = text.replace(/\r\n?/g, "\n").split("\n");
+  const first = sourceLines[0] ?? "";
+  lines.push({ kind: "BULLET", text: first });
+  for (const continuation of sourceLines.slice(1)) {
+    lines.push({ kind: "BODY", text: continuation });
+  }
+}
+
 export function buildResumeSemanticLines(input: ResumeArtifact): ResumeSemanticLine[] {
   const artifact = ResumeArtifactSchema.parse(input);
   const lines: ResumeSemanticLine[] = [];
@@ -35,7 +44,7 @@ export function buildResumeSemanticLines(input: ResumeArtifact): ResumeSemanticL
     if (section.layout === "INLINE_LIST") {
       lines.push({ kind: "BODY", text: section.entries.map((entry) => entry.renderedText).join(" | ") });
     } else {
-      for (const entry of section.entries) lines.push({ kind: "BULLET", text: entry.renderedText });
+      for (const entry of section.entries) appendMultilineBullet(lines, entry.renderedText);
     }
   }
   return lines;

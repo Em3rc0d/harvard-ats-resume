@@ -61,8 +61,8 @@ export function ResumeImportWorkspace() {
     const kind = groupKindByReceipt[receipt.id];
     const selected = receipt.proposals
       .filter((proposal) => proposalIds.includes(proposal.id) && proposal.status === "PENDING")
-      .sort((left, right) => left.ordinal - right.ordinal);
-    const contiguous = selected.length >= 2 && selected.every((proposal, index) => index === 0 || proposal.ordinal === selected[index - 1]!.ordinal + 1);
+      .sort((left, right) => left.sourceLine - right.sourceLine || left.ordinal - right.ordinal);
+    const contiguous = selected.length >= 2 && selected.every((proposal, index) => index === 0 || proposal.sourceLine === selected[index - 1]!.sourceLine + 1);
     if (!kind) { setError("SELECT_EVIDENCE_KIND_REQUIRED"); return; }
     if (!contiguous) { setError("SELECT_CONTIGUOUS_IMPORT_LINES_REQUIRED"); return; }
 
@@ -133,8 +133,8 @@ export function ResumeImportWorkspace() {
             const acceptedCount = receipt.proposals.filter((proposal) => proposal.status === "ACCEPTED").length;
             const dismissedCount = receipt.proposals.filter((proposal) => proposal.status === "DISMISSED").length;
             const selectedIds = groupIdsByReceipt[receipt.id] ?? [];
-            const selected = receipt.proposals.filter((proposal) => selectedIds.includes(proposal.id) && proposal.status === "PENDING").sort((left, right) => left.ordinal - right.ordinal);
-            const groupContiguous = selected.length >= 2 && selected.every((proposal, index) => index === 0 || proposal.ordinal === selected[index - 1]!.ordinal + 1);
+            const selected = receipt.proposals.filter((proposal) => selectedIds.includes(proposal.id) && proposal.status === "PENDING").sort((left, right) => left.sourceLine - right.sourceLine || left.ordinal - right.ordinal);
+            const groupContiguous = selected.length >= 2 && selected.every((proposal, index) => index === 0 || proposal.sourceLine === selected[index - 1]!.sourceLine + 1);
             return <article className="panel evidence-card" key={receipt.id}>
               <div className="evidence-meta"><span>{receipt.mediaType}</span><span>{receipt.status}</span><span>{receipt.proposalCount} proposals</span></div>
               <h2>{receipt.sourceName}</h2>
@@ -143,13 +143,13 @@ export function ResumeImportWorkspace() {
               {receipt.warningCode ? <p className="status">{receipt.warningCode} — use manual Career Evidence when extraction cannot be defended.</p> : null}
               {pendingCount >= 2 ? <div className="panel stack">
                 <strong>Accept contiguous source lines as one evidence block</strong>
-                <p className="muted">Use this for a project, job, education entry or other fact that spans several adjacent extracted lines. CV Engine concatenates the exact source wording in source order; it does not summarize or classify the block for you.</p>
+                <p className="muted">Use this for a project, job, education entry or other fact that spans several adjacent source lines. CV Engine concatenates the exact source wording in source-line order; blank-line gaps are treated as structural boundaries and are not crossed automatically.</p>
                 <select aria-label={`Evidence kind for grouped proposals ${receipt.id}`} value={groupKindByReceipt[receipt.id] ?? ""} onChange={(event) => setGroupKindByReceipt((current) => ({ ...current, [receipt.id]: event.target.value as CareerEvidenceKind }))}>
                   <option value="" disabled>Select evidence type for block</option>
                   {kinds.map((kind) => <option key={kind} value={kind}>{kind}</option>)}
                 </select>
                 <button className="secondary" disabled={busy || !groupKindByReceipt[receipt.id] || !groupContiguous} type="button" onClick={() => void acceptGroup(receipt)}>Accept selected contiguous lines as one NEEDS_REVIEW item</button>
-                {selected.length > 0 && !groupContiguous ? <p className="status error">Select at least two adjacent pending lines from this import.</p> : null}
+                {selected.length > 0 && !groupContiguous ? <p className="status error">Select at least two adjacent source lines without crossing a document gap.</p> : null}
               </div> : null}
               <div className="stack">
                 {receipt.proposals.map((proposal) => <div key={proposal.id} className="panel">
