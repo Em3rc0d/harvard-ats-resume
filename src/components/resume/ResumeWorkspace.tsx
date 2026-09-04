@@ -91,16 +91,9 @@ export function ResumeWorkspace() {
     () => assessments.filter((assessment) => assessment.jobSnapshotId === jobSnapshotId),
     [assessments, jobSnapshotId],
   );
-
-  useEffect(() => {
-    if (!jobSnapshotId) {
-      setOpportunityAssessmentId("");
-      return;
-    }
-    if (!jobAssessments.some((assessment) => assessment.id === opportunityAssessmentId)) {
-      setOpportunityAssessmentId(jobAssessments[0]?.id ?? "");
-    }
-  }, [jobAssessments, jobSnapshotId, opportunityAssessmentId]);
+  const selectedAssessmentId = jobAssessments.some((assessment) => assessment.id === opportunityAssessmentId)
+    ? opportunityAssessmentId
+    : (jobAssessments[0]?.id ?? "");
 
   async function saveProfile() {
     setSavingProfile(true);
@@ -141,7 +134,7 @@ export function ResumeWorkspace() {
       setError("SELECT_RESUME_MODE_REQUIRED");
       return;
     }
-    if (mode === "TARGETED" && (!jobSnapshotId || !opportunityAssessmentId)) {
+    if (mode === "TARGETED" && (!jobSnapshotId || !selectedAssessmentId)) {
       setError("TARGET_ASSESSMENT_REQUIRED");
       return;
     }
@@ -154,7 +147,7 @@ export function ResumeWorkspace() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(mode === "TARGETED"
-        ? { mode, jobSnapshotId, opportunityAssessmentId }
+        ? { mode, jobSnapshotId, opportunityAssessmentId: selectedAssessmentId }
         : { mode }),
     });
     const planBody = await planResponse.json().catch(() => null);
@@ -237,13 +230,13 @@ export function ResumeWorkspace() {
           </label>
           {mode === "TARGETED" ? <>
             <label>Job Snapshot
-              <select value={jobSnapshotId} onChange={(event) => setJobSnapshotId(event.target.value)}>
+              <select value={jobSnapshotId} onChange={(event) => { setJobSnapshotId(event.target.value); setOpportunityAssessmentId(""); }}>
                 <option value="">Select a captured job</option>
                 {jobs.map((job) => <option key={job.id} value={job.id}>{job.roleTitle}{job.company ? ` · ${job.company}` : ""}</option>)}
               </select>
             </label>
             <label>Opportunity Assessment
-              <select value={opportunityAssessmentId} onChange={(event) => setOpportunityAssessmentId(event.target.value)} disabled={!jobSnapshotId || jobAssessments.length === 0}>
+              <select value={selectedAssessmentId} onChange={(event) => setOpportunityAssessmentId(event.target.value)} disabled={!jobSnapshotId || jobAssessments.length === 0}>
                 <option value="">{jobAssessments.length === 0 ? "Run Assessment first" : "Select assessment"}</option>
                 {jobAssessments.map((assessment) => <option key={assessment.id} value={assessment.id}>{assessment.recommendation} · {assessment.decision} · {new Date(assessment.createdAt).toLocaleDateString()}</option>)}
               </select>
@@ -251,7 +244,7 @@ export function ResumeWorkspace() {
             {jobSnapshotId && jobAssessments.length === 0 ? <p className="status error">TARGETED planning is unavailable until this Job Snapshot has a current Opportunity Assessment.</p> : null}
           </> : null}
           {!profile ? <p className="status error">Save ResumeProfile before creating the final artifact. CV Engine will not export a nameless professional resume.</p> : null}
-          <button className="primary" disabled={busy || !profile || !mode || (mode === "TARGETED" && (!jobSnapshotId || !opportunityAssessmentId))} type="button" onClick={() => void createProfessionalResume()}>
+          <button className="primary" disabled={busy || !profile || !mode || (mode === "TARGETED" && (!jobSnapshotId || !selectedAssessmentId))} type="button" onClick={() => void createProfessionalResume()}>
             {busy ? "Building trusted artifact…" : "Create professional ResumeArtifact"}
           </button>
           <p className="muted">General planning selects current VERIFIED evidence under the one-page density policy. Targeted planning additionally requires a real Assessment and cannot turn GAP, UNKNOWN or blockers into candidate claims.</p>
