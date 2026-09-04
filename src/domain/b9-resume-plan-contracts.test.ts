@@ -20,10 +20,12 @@ describe("B9 ResumePlan source contracts", () => {
 
   it("fails closed for targeted plans without a real owner-bound Assessment", () => {
     const v3 = read("supabase/migrations/20260904030000_b9_resume_planner_v3.sql");
+    const domain = read("src/domain/resume/ResumePlan.ts");
     expect(v3).toContain("B9_TARGET_ASSESSMENT_REQUIRED");
     expect(v3).toContain("B9_TARGET_ASSESSMENT_NOT_FOUND");
     expect(v3).toContain("B9_TARGET_ASSESSMENT_STALE");
     expect(v3).toContain("B9_TARGET_SUPPORT_MISSING");
+    expect(domain).toContain("TARGETED included/density receipts require MATCH or POTENTIAL_MATCH provenance.");
   });
 
   it("uses only MATCH/POTENTIAL_MATCH evidence for targeted content", () => {
@@ -34,18 +36,20 @@ describe("B9 ResumePlan source contracts", () => {
     expect(v3).toContain("TARGET_POTENTIAL_MATCH");
   });
 
-  it("preserves the current deterministic section order and density policy", () => {
+  it("serializes the balanced editorial policy instead of hiding budgets in planner code", () => {
     const domain = read("src/domain/resume/ResumePlan.ts");
-    const v3 = read("supabase/migrations/20260904030000_b9_resume_planner_v3.sql");
-    expect(domain).toContain('"PROFILE",');
-    expect(domain).toContain('"EXPERIENCE",');
-    expect(domain).toContain('"PROJECTS",');
-    expect(domain).toContain('"EDUCATION",');
-    expect(domain).toContain('"CERTIFICATIONS",');
-    expect(domain).toContain('"SKILLS",');
-    expect(domain).toContain('"LANGUAGES",');
-    expect(v3).toContain('"policyVersion":"b9-one-page-density-v1"');
-    expect(v3).toContain("limit 20");
+    const policyMigration = read("supabase/migrations/20260904030100_b9_resume_density_policy_v2.sql");
+    expect(domain).toContain('B9_RESUME_DENSITY_POLICY_VERSION = "b9-balanced-one-page-density-v2"');
+    expect(domain).toContain("B9_RESUME_SECTION_BUDGETS");
+    expect(domain).toContain("PROFILE: 1");
+    expect(domain).toContain("EXPERIENCE: 4");
+    expect(domain).toContain("PROJECTS: 5");
+    expect(domain).toContain("EDUCATION: 2");
+    expect(domain).toContain("CERTIFICATIONS: 3");
+    expect(domain).toContain("SKILLS: 4");
+    expect(domain).toContain("LANGUAGES: 1");
+    expect(policyMigration).toContain("b9-balanced-one-page-density-v2");
+    expect(policyMigration).toContain("resume_plans_density_policy_check");
   });
 
   it("uses explainable source order and balanced section budgets instead of UUID-shaped density selection", () => {
