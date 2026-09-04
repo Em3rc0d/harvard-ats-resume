@@ -1,0 +1,90 @@
+name: CV Engine B9 Presentation Gate
+
+on:
+  push:
+    branches:
+      - "build/cv-engine-vnext-*"
+      - "agent/cvengine-contract-closure"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  b9-presentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cvengine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d cvengine"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/cvengine
+      PGPASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Execute B9 static presentation contracts
+        run: npx vitest run src/domain/b9-presentation-contracts.test.ts src/domain/b9-resume-plan-contracts.test.ts src/domain/b9-resume-profile-contracts.test.ts src/domain/b9-production-browser-contracts.test.ts src/domain/resume/ResumeComposition.test.ts src/domain/resume/ResumeArtifact.test.ts src/application/resume/ResumeArtifactRenderer.test.ts src/application/resume/ResumeArtifactRenderingAcceptance.test.ts src/domain/b5-import-contracts.test.ts
+
+      - name: Execute B9 fact-preservation and AI wiring gates
+        run: npx vitest run src/application/presentation/PresentationFactValidator.test.ts src/application/presentation/PresentationProposalService.test.ts
+
+      - name: Typecheck B9 application wiring
+        run: npm run typecheck
+
+      - name: Verify browser certification harness syntax
+        run: python -m py_compile tests/b9/production-browser-e2e.py
+
+      - name: Verify PostgreSQL client
+        run: psql --version
+
+      - name: Bootstrap Supabase auth semantics
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b1/postgres-auth-shim.sql
+
+      - name: Apply all versioned migrations to clean database
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in $(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | sort); do
+            echo "Applying $migration"
+            psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Execute B9 import proposal grouping contract
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b9/import-proposal-grouping.sql
+
+      - name: Execute B9 physical presentation contract
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b9/presentation-revisions.sql
+
+      - name: Execute B9.4 physical ResumePlan contract
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b9/resume-plans.sql
+
+      - name: Execute B9.4 planner v3 density contract
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b9/resume-plan-v3-density.sql
+
+      - name: Execute B9.5/B9.6 canonical ResumeArtifact contract
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b9/resume-artifacts.sql

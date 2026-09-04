@@ -1,4 +1,4 @@
-# CV Engine — Rebuild Contract v1.3
+# CV Engine — Rebuild Contract v1.2
 
 ## 1. Purpose
 
@@ -16,12 +16,6 @@ Harbor:
 
 > Career Opportunity Intelligence — maintain a historical, evidence-backed representation of a person's career, understand opportunities and their requirements, explain fit and gaps, support career decisions, generate context-specific applications, and learn from the person's evolution without corrupting career truth.
 
-Presentation principle:
-
-> CV Engine must convert defensible career truth into the strongest professional presentation possible for a context, while preserving the ability to demonstrate why every resulting claim remains defensible.
-
-The career remains the durable asset. A resume is a contextual projection. Better presentation must never become weaker truth.
-
 ## 3. Core domain model
 
 Minimum conceptual entities:
@@ -32,7 +26,6 @@ Minimum conceptual entities:
 - JobSnapshot / JobIntelligence
 - Opportunity / OpportunityAssessment
 - MatchReport
-- PresentationPlan / PresentationRevision
 - ResumeVersion / ResumeClaim
 - Provenance / SourceReceipt
 - CareerVault / durable history
@@ -55,13 +48,7 @@ Career Target preferences and direction. Intent is not evidence of capability.
 Fit, gaps, recommendations, opportunity ranking, and decision support. Derived analysis is not candidate truth or market truth.
 
 ### Presentation
-Selection, prioritization, wording, grouping, ordering and document formatting of supported candidate truth for a context.
-
-Presentation may change how verified truth is expressed but may not create new candidate facts, strengthen a claim beyond its evidence, or use market truth to backfill candidate truth.
-
-An optimized presentation must retain traceable lineage to the exact Career Evidence revisions that authorize it. Authoritative detail:
-
-- `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`
+Resume wording and formatting. Presentation may change wording but may not create new facts.
 
 ## 5. First-run trust and AI access boundary
 
@@ -132,7 +119,7 @@ These model IDs are an implementation baseline, not release qualification. B6 mu
 AI may:
 
 - assist with ambiguous resume fragments after deterministic boundaries are established;
-- propose stronger presentation while preserving facts;
+- improve presentation while preserving facts;
 - classify or interpret bounded external text when the result remains derived/untrusted until application validation.
 
 AI may not:
@@ -140,7 +127,6 @@ AI may not:
 - author candidate truth;
 - invent metrics, projects, employers, skills, dates, titles, certifications, scope, ownership, or seniority;
 - turn a Job Description into candidate evidence;
-- approve a PresentationRevision;
 - be the final authority for ResumeVersion provenance;
 - make a trusted-core durability claim.
 
@@ -148,17 +134,16 @@ Provider fallback must never weaken truth validation.
 
 ```text
 Gemini output ─┐
-               ├─→ application validation → accept bounded proposal for review OR reject/degrade
+               ├─→ application validation → accept bounded result OR reject/degrade
 Ollama output ─┘
 ```
 
-Final presentation approval and resume assembly remain application/user owned. Final ResumeVersion assembly should remain deterministic unless a future architecture decision explicitly replaces this contract with equally strong evidence/provenance guarantees.
+Final resume assembly should remain deterministic unless a future architecture decision explicitly replaces this contract with equally strong evidence/provenance guarantees.
 
 Authoritative detail:
 
 - `docs/vnext/01-AI-PROVIDER-ROUTING.md`
 - `docs/vnext/03-GEMINI-MODEL-MATRIX.md`
-- `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`
 
 ## 7. Gemini credential modes
 
@@ -220,8 +205,6 @@ BYOK credentials are explicitly outside durable persistence.
 
 The new implementation must not inherit the previous Redis topology by default. The primary datastore, schema, transaction model, ownership model, retention and deletion/export lifecycle must be frozen in PF0 before B1 durable Career Evidence is committed.
 
-Approved PresentationRevisions and immutable ResumeVersions are durable historical artifacts and must preserve their evidence/provenance identities. PresentationRevision may never become an alternate mutable Career Evidence authority.
-
 ## 10. Product flow for first release
 
 The first coherent release should support this complete path before expanding the harbor:
@@ -245,18 +228,12 @@ START
               ↓
        Opportunity Assessment (specific job)
               ↓
-       Presentation Plan
-              ↓
-       Truth-preserving presentation proposals
-              ↓
-       validation / diff / explicit user approval
-              ↓
        Deterministic ResumeVersion
               ↓
-       DOCX / PDF / TXT / provenance JSON
+       provenance / review / export
 ```
 
-Opportunity Space and broader market intelligence extend this core without changing candidate truth authority.
+Opportunity Space and broader market intelligence should be added only after the core single-opportunity path is complete and stable.
 
 ## 11. PF0 — Production Foundation Closure
 
@@ -323,8 +300,6 @@ B0.5 must not make AI a prerequisite for B1–B4 trusted-core capabilities.
 - export;
 - general and targeted versions.
 
-B4 remains a valid safe baseline. P1 extends presentation semantics without silently rewriting B4 closure evidence.
-
 ### B5 — Import convenience
 - PDF/DOCX extraction;
 - deterministic parsing first;
@@ -339,7 +314,7 @@ Import is intentionally later than manual Career Evidence so importer failures c
 - capability-specific Gemini model cascade;
 - Ollama fallback;
 - BYOK/platform/no-cloud credential modes;
-- inline presentation optimization capability;
+- inline presentation optimization;
 - bounded adapters;
 - retry/deadline/cost controls;
 - explicit failure/degradation contracts;
@@ -352,24 +327,6 @@ Import is intentionally later than manual Career Evidence so importer failures c
 - controlled acquisition and refresh;
 - historical opportunity intelligence.
 
-### P1 — Truth-Preserving Professional Presentation
-- PresentationPlan domain;
-- PresentationRevision domain;
-- evidence-to-presentation lineage;
-- deterministic novelty/strengthening guards;
-- bounded AI proposal wiring;
-- source/proposal/diff review;
-- explicit user approval;
-- deterministic ResumeClaim compilation from approved presentation;
-- summary synthesis with multi-evidence provenance;
-- ATS-safe deterministic document renderer;
-- DOCX/PDF/TXT/provenance JSON parity;
-- browser/runtime evidence.
-
-Authority: `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`.
-
-P1 is release-blocking for CVENGINE_V1_0_0.
-
 ### B8 — Release hardening
 - canonical personas;
 - golden datasets;
@@ -377,8 +334,7 @@ P1 is release-blocking for CVENGINE_V1_0_0.
 - browser E2E;
 - runtime identity;
 - release receipts;
-- provider fallback and secret-canary certification;
-- P1 presentation/export regression and runtime receipts before final certification.
+- provider fallback and secret-canary certification.
 
 ## 13. Quarry / test discipline
 
@@ -388,9 +344,6 @@ Test layers:
 
 - domain unit tests;
 - truth-invariant tests;
-- presentation novelty/strengthening tests;
-- presentation provenance and approval tests;
-- cross-format export consistency tests;
 - API/application behavior tests;
 - persistence/fault tests;
 - import source-reconciliation fixtures;
@@ -423,8 +376,6 @@ BYOK does not remove attempt limits: CV Engine must not accidentally consume a u
 
 Ollama is the fallback/resilience/privacy lane, not the truth authority. A hosted Ollama topology is not considered supported until its physical runtime/cost/cold-start behavior is characterized.
 
-P1 must degrade to deterministic/manual source-preserving presentation when AI is unavailable rather than block ResumeVersion creation.
-
 ## 15. Release language
 
 Do not claim:
@@ -432,7 +383,6 @@ Do not claim:
 - arbitrary CV support;
 - hiring probability;
 - universal ATS compatibility;
-- formal semantic equivalence proof for arbitrary natural-language rewrites;
 - supported hardware without measured receipts;
 - runtime/model latency guarantees without identified-runtime evidence;
 - production readiness from CI alone;
@@ -442,10 +392,8 @@ Do not claim:
 
 A release claim must identify the evidence that supports it.
 
-CV Engine may claim traceable evidence lineage for an approved presentation only when the corresponding provenance/validation/approval receipts exist.
-
 ## 16. Definition of done
 
-CV Engine vNext is done when a new user can complete the core path from first-run acknowledgement and AI access selection through Career Evidence to the strongest supported professional presentation for a chosen context, explicitly review/approve meaningful presentation changes, and export a provenance-backed ResumeVersion as DOCX/PDF/TXT plus provenance JSON on a clean runtime, including safe failure/degradation paths, without relying on hidden manual developer intervention.
+CV Engine vNext is done when a new user can complete the core path from first-run acknowledgement and AI access selection through Career Evidence to an exported, provenance-backed ResumeVersion on a clean runtime, including safe failure/degradation paths, without relying on hidden manual developer intervention.
 
 The rebuild is not complete because individual endpoints work. It is complete when the **product story works end to end** and the evidence receipts prove the claims we make about it.

@@ -2,7 +2,7 @@
 
 CV Engine is being rebuilt from the accumulated product, trust, market, system and release specifications into one coherent implementation.
 
-This branch family is **no longer documentation-only**. The source-of-truth documentation has authorized implementation through the current construction graph.
+This branch family is **no longer documentation-only**. The source-of-truth documentation has already authorized implementation, and the current rebuild contains the B0/B0.5/B1 application foundation.
 
 ## Product direction
 
@@ -20,34 +20,18 @@ Career Opportunity Intelligence ← HARBOR
 
 The durable asset is the Career Model / Career Evidence. A resume is a versioned projection of defensible evidence for a context.
 
-The missing product principle is now explicit:
-
-> CV Engine must convert defensible career truth into the strongest professional presentation possible for a context, while preserving the ability to demonstrate why every resulting claim remains defensible.
-
-In compact form:
-
-```text
-TRUTH → POSITIONING → PRESENTATION → PROOF
-```
-
 ## Non-negotiable truth architecture
 
 ```text
-Career Evidence       = candidate authority / what is true
-Job Snapshot          = market truth
-Career Target         = intent, not capability
-Assessment            = derived analysis
-PresentationPlan      = contextual selection / ordering / emphasis
-PresentationRevision  = how verified truth is expressed
-ResumeVersion         = deterministic compiled projection
-AI output             = bounded proposal
+Career Evidence = candidate authority
+Job Snapshot    = market truth
+Career Target   = intent, not capability
+Assessment      = derived analysis
+ResumeVersion   = deterministic projection
+AI output       = bounded proposal
 ```
 
-The Job Description must never create candidate truth. Missing evidence stays missing. Unsupported skills, employers, metrics, dates, responsibilities, credentials, projects, seniority or provenance must never be promoted into Career Evidence or silently introduced through presentation optimization.
-
-P1 presentation authority:
-
-- `docs/vnext/05-TRUTH-PRESERVING-PRESENTATION.md`
+The Job Description must never create candidate truth. Missing evidence stays missing. Unsupported skills, employers, metrics, dates, responsibilities, credentials, projects, seniority or provenance must never be promoted into Career Evidence.
 
 ## Current rebuild status
 
@@ -61,56 +45,23 @@ Closure policy is:
 
 Do not infer build completion from this README, historical PR documents or archived implementation notes.
 
-The active product node is **P1 — Truth-Preserving Professional Presentation**. B0 through B7 remain closed; B8 final certification and CVENGINE_V1_0_0 are release-blocked until P1 closes.
-
 ## Current implemented foundation
 
-The rebuild already includes the trusted foundation needed by P1:
+The rebuild currently includes:
 
-- Next.js / TypeScript application baseline;
+- Next.js / TypeScript construction baseline;
 - Supabase Auth session boundary;
 - first-run trust disclosure and consent receipt;
 - AI access mode selection;
-- transient browser-memory BYOK handling;
-- PostgreSQL/Supabase Career Vault;
-- owner-scoped RLS;
-- revisioned Career Evidence;
-- target/job truth separation;
-- evidence-backed assessments;
-- deterministic B4 ResumeVersion baseline;
-- trusted resume import convenience;
-- Gemini-primary/Ollama-fallback bounded AI runtime;
-- `INLINE_WORDING_OPTIMIZATION` bounded proposal capability;
-- Opportunity Space foundation;
-- B8 release-hardening implementation awaiting final certification.
+- transient browser-memory BYOK storage foundation;
+- PostgreSQL/Supabase Career Vault schema;
+- owner-scoped RLS definitions;
+- revisioned Career Evidence persistence model;
+- manual Career Evidence create/list/revise/delete path;
+- optimistic revision conflict protection;
+- construction CI.
 
-P1 does not replace that foundation. It turns it into the product experience we actually want.
-
-## P1 product path
-
-```text
-Career Evidence
-      ↓
-Career Target / Job context
-      ↓
-Presentation Plan
-      ↓
-strongest supported wording / selection / ordering
-      ↓
-truth-preserving validation
-      ↓
-source vs proposal vs diff
-      ↓
-explicit user approval
-      ↓
-immutable approved PresentationRevision
-      ↓
-deterministic ResumeVersion
-      ↓
-DOCX / PDF / TXT / provenance JSON
-```
-
-If AI is unavailable or a proposal cannot be justified, CV Engine degrades to deterministic/manual source-preserving presentation instead of weakening truth guarantees.
+Later product nodes remain blocked until their predecessors are closed according to the canonical graph.
 
 ## First-run boundary
 
@@ -137,12 +88,11 @@ Provider choice never changes truth authority.
 
 - the CV Engine-owned Gemini key is server-side only;
 - a BYOK Gemini key is transient secret material, not durable product state;
-- BYOK is memory-only in the browser by default and request-scoped on the server;
+- BYOK is memory-only in the browser by default and request-scoped on the server when provider calls are implemented;
 - BYOK must not be written to browser storage, Redis, databases, logs, analytics, telemetry or URLs;
 - production BYOK requires HTTPS outside the explicit localhost development exception;
 - Ollama never receives a Gemini credential;
-- cloud AI outage must not destroy the deterministic trusted core;
-- AI may propose presentation but may not approve it, create candidate truth or compile the final ResumeVersion.
+- cloud AI outage must not destroy the deterministic trusted core.
 
 ## Engineering doctrine
 
@@ -187,19 +137,18 @@ Contradictions are not resolved by guessing.
 ## Rebuild sequence
 
 ```text
-B0   Repository + typed contracts                         CLOSED
-B0.5 First-run trust + AI access foundation              CLOSED
-B1   Career Evidence core + durability                    CLOSED
-B2   Career Target + Job truth                            CLOSED
-B3   Evidence-backed Assessment                           CLOSED
-B4   Deterministic ResumeVersion baseline                 CLOSED
-B5   Resume import convenience                            CLOSED
-B6   Gemini-primary / Ollama-fallback AI assistance      CLOSED
-B7   Opportunity Space / market extension                 CLOSED
-P1   Truth-Preserving Professional Presentation           ACTIVE
-B8   Release hardening / final certification              BLOCKED_BY_P1
+B0   Repository + typed contracts
+B0.5 First-run trust + AI access foundation
+B1   Career Evidence core + durability
+B2   Career Target + Job truth
+B3   Evidence-backed Assessment
+B4   Deterministic ResumeVersion
+B5   Resume import convenience
+B6   Gemini-primary / Ollama-fallback AI assistance
+B7   Opportunity Space / market extension
+B8   Release hardening
 ```
 
 ## Definition of done
 
-CV Engine vNext is done only when a new user can turn verified career history into the strongest supported professional presentation for a chosen context, review and approve meaningful presentation changes, export a deterministic provenance-backed ResumeVersion as DOCX/PDF/TXT plus provenance JSON on a clean runtime, and the release evidence supports every production claim.
+CV Engine vNext is done only when a new user can complete the core product path through an exported, provenance-backed ResumeVersion on a clean runtime, including safe failure/degradation paths, without hidden developer intervention, and the B8 release evidence supports every production claim.

@@ -128,7 +128,7 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
 
   return (
     <main className="first-run-shell">
-      <header className="brand-bar"><div><span className="brand-mark">C</span><div><strong>CV Engine</strong><span>Career intelligence</span></div></div><span className="build-label">vNext · B8 RC</span></header>
+      <header className="brand-bar"><div><span className="brand-mark">C</span><div><strong>CV Engine</strong><span>Career intelligence</span></div></div><span className="build-label">vNext · B9</span></header>
       <div className="step-indicator" aria-label="First-run progress">
         <span className={step === "TRUST" ? "active" : step === "BOOTSTRAP" ? "" : "done"}>1 Trust</span>
         <span className={step === "AUTH" ? "active" : step === "TRUST" || step === "BOOTSTRAP" ? "" : "done"}>2 Account</span>
