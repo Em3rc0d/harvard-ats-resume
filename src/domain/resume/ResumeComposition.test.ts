@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   B9_RESUME_DENSITY_POLICY_VERSION,
   B9_RESUME_PLANNER_VERSION,
+  B9_RESUME_SECTION_BUDGETS,
   ResumePlanSchema,
 } from "./ResumePlan";
 import {
@@ -24,6 +25,7 @@ const plan = ResumePlanSchema.parse({
     policyVersion: B9_RESUME_DENSITY_POLICY_VERSION,
     targetPages: 1,
     maxItems: 20,
+    sectionBudgets: B9_RESUME_SECTION_BUDGETS,
   },
   careerEvidenceFingerprintSha256: hash("a"),
   semanticKey: hash("b"),
