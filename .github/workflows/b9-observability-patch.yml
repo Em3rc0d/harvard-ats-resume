@@ -1,0 +1,33 @@
+name: B9 Observability Patch Builder
+
+on:
+  push:
+    branches:
+      - fix/b9-provider-observability-d1eab
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/b9-provider-observability-d1eab
+          fetch-depth: 0
+      - name: Apply exact harness patch
+        run: python scripts/patch_b9_provider_observability.py
+      - name: Commit generated harness change
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- tests/b9/production-browser-e2e.py; then
+            echo "Harness already patched"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/b9/production-browser-e2e.py
+          git commit -m "fix(b9): surface provider failures in browser certification"
+          git push origin HEAD:fix/b9-provider-observability-d1eab
