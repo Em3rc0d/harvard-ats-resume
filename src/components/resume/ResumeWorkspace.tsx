@@ -134,7 +134,11 @@ export function ResumeWorkspace() {
       setError("SELECT_RESUME_MODE_REQUIRED");
       return;
     }
-    if (mode === "TARGETED" && (!jobSnapshotId || !selectedAssessmentId)) {
+    if (mode === "TARGETED" && !jobSnapshotId) {
+      setError("SELECT_JOB_SNAPSHOT_REQUIRED");
+      return;
+    }
+    if (mode === "TARGETED" && !selectedAssessmentId) {
       setError("TARGET_ASSESSMENT_REQUIRED");
       return;
     }
