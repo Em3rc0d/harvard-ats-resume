@@ -20,21 +20,24 @@ describe("B9 production browser certification contract", () => {
     expect(workflow).toContain("CVENGINE_EXPECTED_SHA: ${{ github.sha }}");
     expect(workflow).toContain("https://harvard-ats-resume.vercel.app");
     expect(workflow).toContain("playwright==1.55.0");
-    expect(workflow).toContain("tests/b9/production-browser-e2e.py");
+    expect(workflow).toContain("python tests/b9/production-browser-anonymous-wrapper.py");
+    expect(workflow).not.toContain("python - <<'PY'");
   });
 
-  it("uses a real disposable anonymous Auth session without email, passwords, or privileged keys", () => {
+  it("uses a versioned disposable anonymous Auth wrapper without email, passwords, or privileged keys", () => {
     const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
-    expect(workflow).toContain("B9_BROWSER_AUTH_PATCH_SOURCE_MISMATCH");
-    expect(workflow).toContain("B9_BROWSER_AUTH_FAILURE_PATCH_SOURCE_MISMATCH");
-    expect(workflow).toContain('page.route("**/auth/v1/signup", route_disposable_anonymous_signup)');
-    expect(workflow).toContain('route.continue_(post_data="{}")');
-    expect(workflow).toContain("B9_BROWSER_ANONYMOUS_AUTH_DISABLED");
-    expect(workflow).toContain("B9_BROWSER_ANONYMOUS_AUTH_RATE_LIMITED");
+    const wrapper = read("tests/b9/production-browser-anonymous-wrapper.py");
+    expect(wrapper).toContain("B9_BROWSER_AUTH_PATCH_SOURCE_MISMATCH");
+    expect(wrapper).toContain("B9_BROWSER_AUTH_FAILURE_PATCH_SOURCE_MISMATCH");
+    expect(wrapper).toContain('page.route("**/auth/v1/signup", route_disposable_anonymous_signup)');
+    expect(wrapper).toContain('route.continue_(post_data="{}")');
+    expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_DISABLED");
+    expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_RATE_LIMITED");
     expect(workflow).not.toContain("CVENGINE_SYNTHETIC_EMAIL:");
     expect(workflow).not.toContain("CVENGINE_SYNTHETIC_PASSWORD:");
     expect(workflow).not.toContain("SUPABASE_SERVICE_ROLE");
-    expect(workflow).not.toContain("hashlib.sha256");
+    expect(wrapper).not.toContain("SUPABASE_SERVICE_ROLE");
+    expect(wrapper).not.toContain("hashlib.sha256");
   });
 
   it("certifies the full B9 browser golden path including explicit PresentationRevision approval", () => {
