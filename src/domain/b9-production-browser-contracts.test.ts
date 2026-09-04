@@ -23,16 +23,18 @@ describe("B9 production browser certification contract", () => {
     expect(workflow).toContain("tests/b9/production-browser-e2e.py");
   });
 
-  it("uses an isolated disposable login fixture without depending on signup email delivery", () => {
+  it("uses a real disposable anonymous Auth session without email, passwords, or privileged keys", () => {
     const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
-    expect(workflow).toContain("CVENGINE_SYNTHETIC_EMAIL: cvengine-b9-browser-cert@invalid.example");
     expect(workflow).toContain("B9_BROWSER_AUTH_PATCH_SOURCE_MISMATCH");
-    expect(workflow).toContain('source.count(signup) != 1');
-    expect(workflow).toContain('name=\"Sign in\", exact=True');
-    expect(workflow).toContain('harness[\"SYNTHETIC_EMAIL\"]');
-    expect(workflow).toContain('hashlib.sha256(b\"cvengine-b9-browser-cert-v1\")');
+    expect(workflow).toContain("B9_BROWSER_AUTH_FAILURE_PATCH_SOURCE_MISMATCH");
+    expect(workflow).toContain('page.route("**/auth/v1/signup", route_disposable_anonymous_signup)');
+    expect(workflow).toContain('route.continue_(post_data="{}")');
+    expect(workflow).toContain("B9_BROWSER_ANONYMOUS_AUTH_DISABLED");
+    expect(workflow).toContain("B9_BROWSER_ANONYMOUS_AUTH_RATE_LIMITED");
+    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_EMAIL:");
     expect(workflow).not.toContain("CVENGINE_SYNTHETIC_PASSWORD:");
-    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_EMAIL_DOMAIN");
+    expect(workflow).not.toContain("SUPABASE_SERVICE_ROLE");
+    expect(workflow).not.toContain("hashlib.sha256");
   });
 
   it("certifies the full B9 browser golden path including explicit PresentationRevision approval", () => {
