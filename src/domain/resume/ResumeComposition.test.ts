@@ -29,22 +29,34 @@ const plan = ResumePlanSchema.parse({
   semanticKey: hash("b"),
   items: [
     {
-      id: id("11"), ordinal: 3, section: "SKILLS", evidenceId: id("21"), evidenceRevision: 1,
+      id: id("10"), ordinal: 1, section: "PROFILE", evidenceId: id("20"), evidenceRevision: 1,
+      evidenceKind: "ACHIEVEMENT", evidenceTextSha256: hash("1"), presentationRevisionId: null,
+      presentationTextSha256: null, renderedText: "Built production systems from zero to release.", selectionReason: "GENERAL_VERIFIED",
+    },
+    {
+      id: id("14"), ordinal: 2, section: "PROFILE", evidenceId: id("24"), evidenceRevision: 1,
+      evidenceKind: "METRIC", evidenceTextSha256: hash("2"), presentationRevisionId: null,
+      presentationTextSha256: null, renderedText: "Delivered three production projects.", selectionReason: "GENERAL_VERIFIED",
+    },
+    {
+      id: id("11"), ordinal: 5, section: "SKILLS", evidenceId: id("21"), evidenceRevision: 1,
       evidenceKind: "SKILL", evidenceTextSha256: hash("c"), presentationRevisionId: null,
       presentationTextSha256: null, renderedText: "Kubernetes", selectionReason: "GENERAL_VERIFIED",
     },
     {
-      id: id("12"), ordinal: 1, section: "PROJECTS", evidenceId: id("22"), evidenceRevision: 2,
+      id: id("12"), ordinal: 4, section: "PROJECTS", evidenceId: id("22"), evidenceRevision: 2,
       evidenceKind: "PROJECT", evidenceTextSha256: hash("d"), presentationRevisionId: id("32"),
       presentationTextSha256: hash("e"), renderedText: "Built and tested a deterministic evidence pipeline.", selectionReason: "GENERAL_VERIFIED",
     },
     {
-      id: id("13"), ordinal: 2, section: "EXPERIENCE", evidenceId: id("23"), evidenceRevision: 1,
-      evidenceKind: "EXPERIENCE", evidenceTextSha256: hash("f"), presentationRevisionId: null,
+      id: id("13"), ordinal: 3, section: "EXPERIENCE", evidenceId: id("23"), evidenceRevision: 1,
+      evidenceKind: "EMPLOYMENT", evidenceTextSha256: hash("f"), presentationRevisionId: null,
       presentationTextSha256: null, renderedText: "Developed production web services.", selectionReason: "GENERAL_VERIFIED",
     },
   ],
   sourceReceipts: [
+    { id: id("40"), evidenceId: id("20"), evidenceRevision: 1, evidenceKind: "ACHIEVEMENT", evidenceTextSha256: hash("1"), section: "PROFILE", decision: "INCLUDED", targetMatchStatus: null, selectedItemId: id("10") },
+    { id: id("44"), evidenceId: id("24"), evidenceRevision: 1, evidenceKind: "METRIC", evidenceTextSha256: hash("2"), section: "PROFILE", decision: "INCLUDED", targetMatchStatus: null, selectedItemId: id("14") },
     { id: id("41"), evidenceId: id("21"), evidenceRevision: 1, evidenceKind: "SKILL", evidenceTextSha256: hash("c"), section: "SKILLS", decision: "INCLUDED", targetMatchStatus: null, selectedItemId: id("11") },
     { id: id("42"), evidenceId: id("22"), evidenceRevision: 2, evidenceKind: "PROJECT", evidenceTextSha256: hash("d"), section: "PROJECTS", decision: "INCLUDED", targetMatchStatus: null, selectedItemId: id("12") },
     { id: id("43"), evidenceId: id("23"), evidenceRevision: 1, evidenceKind: "EXPERIENCE", evidenceTextSha256: hash("f"), section: "EXPERIENCE", decision: "INCLUDED", targetMatchStatus: null, selectedItemId: id("13") },
@@ -52,10 +64,22 @@ const plan = ResumePlanSchema.parse({
   createdAt: "2026-09-03T23:00:00.000Z",
 });
 
-describe("B9.4b deterministic resume composition", () => {
-  it("groups content by canonical section order without creating text", () => {
+describe("B9.4 deterministic resume composition", () => {
+  it("creates a professional summary only by concatenating exact approved plan wording", () => {
     const composition = composeResumePlan(plan);
     expect(composition.composerVersion).toBe(B9_RESUME_COMPOSER_VERSION);
+    expect(composition.professionalSummary).toEqual({
+      text: "Built production systems from zero to release. Delivered three production projects.",
+      sourcePlanItemIds: [id("10"), id("14")],
+      evidenceSources: [
+        { evidenceId: id("20"), evidenceRevision: 1 },
+        { evidenceId: id("24"), evidenceRevision: 1 },
+      ],
+    });
+  });
+
+  it("groups non-profile content by canonical section order without creating text", () => {
+    const composition = composeResumePlan(plan);
     expect(composition.sections.map((section) => section.section)).toEqual([
       "EXPERIENCE",
       "PROJECTS",
@@ -68,19 +92,14 @@ describe("B9.4b deterministic resume composition", () => {
     ]);
   });
 
-  it("preserves exact ResumePlan item provenance one-to-one", () => {
+  it("preserves exact ResumePlan provenance including summary sources", () => {
     const composition = composeResumePlan(plan);
-    const composed = composition.sections.flatMap((section) => section.entries);
-    expect(new Set(composed.map((entry) => entry.sourcePlanItemId)).size).toBe(plan.items.length);
-    for (const item of plan.items) {
-      const entry = composed.find((candidate) => candidate.sourcePlanItemId === item.id);
-      expect(entry).toEqual({
-        sourcePlanItemId: item.id,
-        evidenceId: item.evidenceId,
-        evidenceRevision: item.evidenceRevision,
-        renderedText: item.renderedText,
-      });
-    }
+    const composedIds = [
+      ...(composition.professionalSummary?.sourcePlanItemIds ?? []),
+      ...composition.sections.flatMap((section) => section.entries.map((entry) => entry.sourcePlanItemId)),
+    ];
+    expect(new Set(composedIds).size).toBe(plan.items.length);
+    for (const item of plan.items) expect(composedIds).toContain(item.id);
   });
 
   it("uses deterministic layout hints without rewriting content", () => {
