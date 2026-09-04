@@ -26,12 +26,12 @@ describe("B9 production browser certification contract", () => {
   it("uses an isolated disposable login fixture without depending on signup email delivery", () => {
     const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
     expect(workflow).toContain("CVENGINE_SYNTHETIC_EMAIL: cvengine-b9-browser-cert@invalid.example");
-    expect(workflow).toContain("CVENGINE_SYNTHETIC_PASSWORD:");
     expect(workflow).toContain("B9_BROWSER_AUTH_PATCH_SOURCE_MISMATCH");
     expect(workflow).toContain('source.count(signup) != 1');
     expect(workflow).toContain('name=\"Sign in\", exact=True');
     expect(workflow).toContain('harness[\"SYNTHETIC_EMAIL\"]');
-    expect(workflow).toContain('harness[\"SYNTHETIC_PASSWORD\"]');
+    expect(workflow).toContain('hashlib.sha256(b\"cvengine-b9-browser-cert-v1\")');
+    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_PASSWORD:");
     expect(workflow).not.toContain("CVENGINE_SYNTHETIC_EMAIL_DOMAIN");
   });
 
