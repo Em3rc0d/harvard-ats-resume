@@ -80,5 +80,8 @@ jobs:
       - name: Execute B9.4 physical ResumePlan contract
         run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b9/resume-plans.sql
 
+      - name: Execute B9.4 planner v3 density contract
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b9/resume-plan-v3-density.sql
+
       - name: Execute B9.5/B9.6 canonical ResumeArtifact contract
         run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b9/resume-artifacts.sql
