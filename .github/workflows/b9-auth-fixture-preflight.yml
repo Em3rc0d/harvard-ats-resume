@@ -1,0 +1,40 @@
+name: CV Engine B9 Auth Fixture Preflight
+
+on:
+  push:
+    branches:
+      - certification/b9-auth-preflight-04b238
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auth-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout preflight branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Playwright
+        run: |
+          python -m pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium
+
+      - name: Verify historical fixture authentication only
+        run: python tests/b9/legacy-fixture-preflight.py
+
+      - name: Upload sanitized preflight receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b9-auth-preflight-${{ github.run_id }}
+          path: artifacts/b9-auth-preflight
+          if-no-files-found: warn
+          retention-days: 1
