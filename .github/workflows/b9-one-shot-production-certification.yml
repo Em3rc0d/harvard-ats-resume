@@ -1,0 +1,40 @@
+name: CV Engine B9 One-Shot Production Certification
+
+on:
+  push:
+    branches:
+      - certification/b9-full-04b238
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout certification branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Playwright
+        run: |
+          python -m pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium
+
+      - name: Certify exact Production B9 path
+        run: python tests/b9/legacy-fixture-full-e2e.py
+
+      - name: Upload sanitized certification receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b9-one-shot-production-${{ github.run_id }}
+          path: artifacts/b9-production-browser
+          if-no-files-found: warn
+          retention-days: 7
