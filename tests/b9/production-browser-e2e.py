@@ -123,16 +123,86 @@ def cleanup_account(context: BrowserContext) -> None:
         pass
 
 
+def _safe_response_json(response: Any) -> dict[str, Any]:
+    try:
+        payload = response.json()
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _safe_provider_attempts(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    attempts = payload.get("attempts")
+    if not isinstance(attempts, list):
+        return []
+    safe_keys = ("provider", "model", "status", "failureCode", "durationMs", "inputTokens", "outputTokens")
+    return [
+        {key: item.get(key) for key in safe_keys if key in item}
+        for item in attempts
+        if isinstance(item, dict)
+    ]
+
+
 def create_and_approve_presentation(evidence_card: Any, report: dict[str, Any]) -> str:
-    evidence_card.get_by_role("button", name="Improve wording").click()
+    page = evidence_card.page
+    proposal_pattern = re.compile(r"/api/presentation/evidence/[^/]+/proposals$")
+    with page.expect_response(
+        lambda response: proposal_pattern.search(response.url) is not None
+        and response.request.method == "POST",
+        timeout=45_000,
+    ) as response_info:
+        evidence_card.get_by_role("button", name="Improve wording").click()
+
+    response = response_info.value
+    payload = _safe_response_json(response)
+    report["presentationProposalHttpStatus"] = response.status
+    report["presentationProposalFailureCode"] = payload.get("failureCode")
+    report["presentationProviderAttempts"] = _safe_provider_attempts(payload)
+
+    if response.status in (429, 503):
+        fail(
+            "B9_BROWSER_AI_ASSIST_UNAVAILABLE",
+            json.dumps(
+                {
+                    "status": response.status,
+                    "failureCode": payload.get("failureCode"),
+                    "attempts": report["presentationProviderAttempts"],
+                },
+                sort_keys=True,
+            ),
+        )
+    if response.status == 422:
+        fail(
+            "B9_BROWSER_AI_PROPOSAL_REJECTED_BY_VALIDATOR",
+            json.dumps(
+                {
+                    "status": response.status,
+                    "validation": payload.get("validation"),
+                    "attempts": report["presentationProviderAttempts"],
+                },
+                sort_keys=True,
+            ),
+        )
+    if response.status != 201:
+        fail(
+            "B9_BROWSER_PRESENTATION_PROPOSAL_HTTP_FAILURE",
+            json.dumps(
+                {
+                    "status": response.status,
+                    "error": payload.get("error"),
+                    "failureCode": payload.get("failureCode"),
+                },
+                sort_keys=True,
+            ),
+        )
+
+    report["checks"].append("PRESENTATION_PROPOSAL_HTTP_201_OBSERVED")
     try:
         review = evidence_card.locator("section.presentation-review")
-        review.get_by_role("heading", name="Review wording before it can be used.").wait_for(timeout=90_000)
+        review.get_by_role("heading", name="Review wording before it can be used.").wait_for(timeout=30_000)
     except PlaywrightTimeoutError:
-        detail = evidence_card.inner_text()
-        if "Suggestion rejected by fact-preservation checks" in detail:
-            fail("B9_BROWSER_AI_PROPOSAL_REJECTED_BY_VALIDATOR", detail)
-        fail("B9_BROWSER_AI_PROPOSAL_REVIEW_NOT_RENDERED", detail)
+        page_errors = " | ".join(page.get_by_role("alert").all_text_contents())
+        fail("B9_BROWSER_AI_PROPOSAL_REVIEW_NOT_RENDERED_AFTER_201", page_errors or evidence_card.inner_text())
 
     review = evidence_card.locator("section.presentation-review")
     before = review.locator(".presentation-diff article").nth(0).locator("p").inner_text().strip()
