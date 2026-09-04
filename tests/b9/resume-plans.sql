@@ -122,7 +122,7 @@ begin
   if v_count <> 2
      or v_receipts <> 2
      or v_included <> 2
-     or v_planner_version <> 'b9-deterministic-resume-plan-v2'
+     or v_planner_version <> 'b9-deterministic-resume-plan-v3'
      or v_project_text <> 'Built and tested a deterministic evidence pipeline.'
      or v_project_presentation <> (select approved_presentation_revision_id from b9_plan_context)
      or v_skill_text <> 'Kubernetes'

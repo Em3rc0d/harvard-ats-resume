@@ -8,6 +8,7 @@ const InputSchema = z.object({ resumePlanId: z.string().uuid() }).strict();
 function artifactApiError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
   if (message.includes("B9_RESUME_PLAN_STALE")) return NextResponse.json({ error: "RESUME_PLAN_STALE" }, { status: 409 });
+  if (message.includes("B9_RESUME_PROFILE_REQUIRED")) return NextResponse.json({ error: "RESUME_PROFILE_REQUIRED" }, { status: 409 });
   if (message.includes("B9_RESUME_PLAN_NOT_FOUND")) return NextResponse.json({ error: "RESUME_PLAN_NOT_FOUND" }, { status: 404 });
   return NextResponse.json({ error: "RESUME_ARTIFACT_OPERATION_FAILED" }, { status: 500 });
 }

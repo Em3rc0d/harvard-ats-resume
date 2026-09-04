@@ -52,6 +52,17 @@ export const AcceptImportProposalInputSchema = z.object({
   kind: CareerEvidenceKindSchema,
 }).strict();
 
+const ImportProposalGroupIdsSchema = z.array(z.string().uuid()).min(2).max(20).superRefine((ids, context) => {
+  if (new Set(ids).size !== ids.length) {
+    context.addIssue({ code: "custom", message: "Grouped proposal ids must be unique." });
+  }
+});
+
+export const AcceptImportProposalGroupInputSchema = z.object({
+  proposalIds: ImportProposalGroupIdsSchema,
+  kind: CareerEvidenceKindSchema,
+}).strict();
+
 export type ImportMediaType = z.infer<typeof ImportMediaTypeSchema>;
 export type ImportReceiptStatus = z.infer<typeof ImportReceiptStatusSchema>;
 export type ImportProposal = z.infer<typeof ImportProposalSchema>;

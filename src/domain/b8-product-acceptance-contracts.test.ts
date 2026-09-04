@@ -17,7 +17,7 @@ describe("B8 product acceptance source contracts", () => {
     expect(firstRun).toContain("selectMode(restoredMode)");
     expect(firstRun).toContain('restoredMode === "BYOK_GEMINI"');
     expect(firstRun).toContain('restoredMode === "PLATFORM_GEMINI" && !platformGeminiAvailable');
-    expect(firstRun).toContain("vNext · B8 RC");
+    expect(firstRun).toContain("vNext · B9");
     expect(firstRun).not.toContain("vNext · B2");
     expect(consent).toContain("export async function GET()");
     expect(consent).toContain('.from("consent_receipts")');
