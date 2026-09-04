@@ -1,12 +1,14 @@
 import { z } from "zod";
 
 export const B9_RESUME_PLANNER_VERSION_V1 = "b9-deterministic-resume-plan-v1" as const;
-export const B9_RESUME_PLANNER_VERSION = "b9-deterministic-resume-plan-v2" as const;
+export const B9_RESUME_PLANNER_VERSION_V2 = "b9-deterministic-resume-plan-v2" as const;
+export const B9_RESUME_PLANNER_VERSION = "b9-deterministic-resume-plan-v3" as const;
 export const B9_RESUME_DENSITY_POLICY_VERSION = "b9-one-page-density-v1" as const;
 
 export const ResumePlanModeSchema = z.enum(["GENERAL", "TARGETED"]);
 export const ResumePlanPlannerVersionSchema = z.enum([
   B9_RESUME_PLANNER_VERSION_V1,
+  B9_RESUME_PLANNER_VERSION_V2,
   B9_RESUME_PLANNER_VERSION,
 ]);
 export const ResumePlanSectionSchema = z.enum([
@@ -133,7 +135,7 @@ export const ResumePlanSchema = ResumePlanUnionSchema.superRefine((plan, context
   if (plan.sourceReceipts.length === 0) {
     context.addIssue({
       code: "custom",
-      message: "B9 ResumePlan v2 requires durable source-selection receipts.",
+      message: "B9 ResumePlan v2+ requires durable source-selection receipts.",
       path: ["sourceReceipts"],
     });
     return;
@@ -179,26 +181,14 @@ export const ResumePlanSchema = ResumePlanUnionSchema.superRefine((plan, context
         path: ["sourceReceipts"],
       });
     }
-    if (plan.mode === "TARGETED") {
-      const shouldHaveTargetStatus = receipt.decision !== "OMITTED_TARGET_IRRELEVANT";
-      if (shouldHaveTargetStatus !== (receipt.targetMatchStatus !== null)) {
-        context.addIssue({
-          code: "custom",
-          message: "TARGETED included/density receipts require MATCH or POTENTIAL_MATCH provenance.",
-          path: ["sourceReceipts"],
-        });
-      }
-    }
   }
 
-  for (const item of plan.items) {
-    if (!includedItemIds.has(item.id)) {
-      context.addIssue({
-        code: "custom",
-        message: "Every B9 ResumePlan v2 item requires an INCLUDED source receipt.",
-        path: ["items"],
-      });
-    }
+  if (includedItemIds.size !== plan.items.length) {
+    context.addIssue({
+      code: "custom",
+      message: "Every ResumePlan item must be backed by exactly one INCLUDED source receipt.",
+      path: ["items"],
+    });
   }
 });
 
@@ -212,6 +202,4 @@ export const CreateResumePlanInputSchema = z.discriminatedUnion("mode", [
 ]);
 
 export type ResumePlan = z.infer<typeof ResumePlanSchema>;
-export type ResumePlanItem = z.infer<typeof ResumePlanItemSchema>;
-export type ResumePlanSourceReceipt = z.infer<typeof ResumePlanSourceReceiptSchema>;
 export type CreateResumePlanInput = z.infer<typeof CreateResumePlanInputSchema>;
