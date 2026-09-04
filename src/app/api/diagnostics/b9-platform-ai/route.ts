@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { executeAICapability } from "../../../../../application/ai/AIGatewayRuntime";
+import { executeAICapability } from "../../../../application/ai/AIGatewayRuntime";
 
 export async function GET() {
   if (process.env.VERCEL_ENV === "production") {
