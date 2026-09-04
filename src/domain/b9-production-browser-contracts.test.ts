@@ -45,6 +45,19 @@ describe("B9 production browser certification contract", () => {
     expect(wrapper).not.toContain("hashlib.sha256");
   });
 
+  it("observes the Presentation proposal HTTP outcome before trusting rendered UI state", () => {
+    const script = read("tests/b9/production-browser-e2e.py");
+    expect(script).toContain("page.expect_response");
+    expect(script).toContain("PRESENTATION_PROPOSAL_HTTP_201_OBSERVED");
+    expect(script).toContain("presentationProposalHttpStatus");
+    expect(script).toContain("presentationProposalFailureCode");
+    expect(script).toContain("presentationProviderAttempts");
+    expect(script).toContain("B9_BROWSER_AI_ASSIST_UNAVAILABLE");
+    expect(script).toContain("B9_BROWSER_AI_PROPOSAL_REJECTED_BY_VALIDATOR");
+    expect(script).toContain("B9_BROWSER_PRESENTATION_PROPOSAL_HTTP_FAILURE");
+    expect(script).toContain("B9_BROWSER_AI_PROPOSAL_REVIEW_NOT_RENDERED_AFTER_201");
+  });
+
   it("certifies the full B9 browser golden path including explicit PresentationRevision approval", () => {
     const script = read("tests/b9/production-browser-e2e.py");
     expect(script).toContain("PLATFORM_AI_SELECTED");
