@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { B9_RESUME_DENSITY_POLICY_VERSION, B9_RESUME_PLANNER_VERSION, ResumePlanSchema } from "./ResumePlan";
+import {
+  B9_RESUME_DENSITY_POLICY_VERSION,
+  B9_RESUME_PLANNER_VERSION,
+  B9_RESUME_SECTION_BUDGETS,
+  ResumePlanSchema,
+} from "./ResumePlan";
 import { ResumeProfileSchema } from "./ResumeProfile";
 import { buildResumeArtifactContent } from "./ResumeArtifact";
 
@@ -10,7 +15,12 @@ const plan = ResumePlanSchema.parse({
   id: uuid(1), ownerUserId: uuid(2), mode: "GENERAL", jobSnapshotId: null, opportunityAssessmentId: null,
   plannerVersion: B9_RESUME_PLANNER_VERSION,
   sectionOrder: ["PROFILE","EXPERIENCE","PROJECTS","EDUCATION","CERTIFICATIONS","SKILLS","LANGUAGES"],
-  densityPolicy: { policyVersion: B9_RESUME_DENSITY_POLICY_VERSION, targetPages: 1, maxItems: 20 },
+  densityPolicy: {
+    policyVersion: B9_RESUME_DENSITY_POLICY_VERSION,
+    targetPages: 1,
+    maxItems: 20,
+    sectionBudgets: B9_RESUME_SECTION_BUDGETS,
+  },
   careerEvidenceFingerprintSha256: sha("a"), semanticKey: sha("b"),
   items: [{ id: uuid(10), ordinal: 1, section: "PROJECTS", evidenceId: uuid(20), evidenceRevision: 1, evidenceKind: "PROJECT", evidenceTextSha256: sha("c"), presentationRevisionId: null, presentationTextSha256: null, renderedText: "Built a deterministic pipeline.", selectionReason: "GENERAL_VERIFIED" }],
   sourceReceipts: [{ id: uuid(30), evidenceId: uuid(20), evidenceRevision: 1, evidenceKind: "PROJECT", evidenceTextSha256: sha("c"), section: "PROJECTS", decision: "INCLUDED", targetMatchStatus: null, selectedItemId: uuid(10) }],
