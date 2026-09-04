@@ -3,7 +3,18 @@ import { z } from "zod";
 export const B9_RESUME_PLANNER_VERSION_V1 = "b9-deterministic-resume-plan-v1" as const;
 export const B9_RESUME_PLANNER_VERSION_V2 = "b9-deterministic-resume-plan-v2" as const;
 export const B9_RESUME_PLANNER_VERSION = "b9-deterministic-resume-plan-v3" as const;
-export const B9_RESUME_DENSITY_POLICY_VERSION = "b9-one-page-density-v1" as const;
+export const B9_RESUME_DENSITY_POLICY_VERSION_V1 = "b9-one-page-density-v1" as const;
+export const B9_RESUME_DENSITY_POLICY_VERSION = "b9-balanced-one-page-density-v2" as const;
+
+export const B9_RESUME_SECTION_BUDGETS = {
+  PROFILE: 1,
+  EXPERIENCE: 4,
+  PROJECTS: 5,
+  EDUCATION: 2,
+  CERTIFICATIONS: 3,
+  SKILLS: 4,
+  LANGUAGES: 1,
+} as const;
 
 export const ResumePlanModeSchema = z.enum(["GENERAL", "TARGETED"]);
 export const ResumePlanPlannerVersionSchema = z.enum([
@@ -42,11 +53,31 @@ export const ResumePlanSectionOrderSchema = z.tuple([
   z.literal("LANGUAGES"),
 ]);
 
-export const ResumePlanDensityPolicySchema = z.object({
-  policyVersion: z.literal(B9_RESUME_DENSITY_POLICY_VERSION),
+const ResumePlanDensityPolicyV1Schema = z.object({
+  policyVersion: z.literal(B9_RESUME_DENSITY_POLICY_VERSION_V1),
   targetPages: z.literal(1),
   maxItems: z.literal(20),
 }).strict();
+
+const ResumePlanDensityPolicyV2Schema = z.object({
+  policyVersion: z.literal(B9_RESUME_DENSITY_POLICY_VERSION),
+  targetPages: z.literal(1),
+  maxItems: z.literal(20),
+  sectionBudgets: z.object({
+    PROFILE: z.literal(B9_RESUME_SECTION_BUDGETS.PROFILE),
+    EXPERIENCE: z.literal(B9_RESUME_SECTION_BUDGETS.EXPERIENCE),
+    PROJECTS: z.literal(B9_RESUME_SECTION_BUDGETS.PROJECTS),
+    EDUCATION: z.literal(B9_RESUME_SECTION_BUDGETS.EDUCATION),
+    CERTIFICATIONS: z.literal(B9_RESUME_SECTION_BUDGETS.CERTIFICATIONS),
+    SKILLS: z.literal(B9_RESUME_SECTION_BUDGETS.SKILLS),
+    LANGUAGES: z.literal(B9_RESUME_SECTION_BUDGETS.LANGUAGES),
+  }).strict(),
+}).strict();
+
+export const ResumePlanDensityPolicySchema = z.union([
+  ResumePlanDensityPolicyV1Schema,
+  ResumePlanDensityPolicyV2Schema,
+]);
 
 const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 const UUIDSchema = z.string().uuid();
@@ -130,6 +161,15 @@ const ResumePlanUnionSchema = z.discriminatedUnion("mode", [
 ]);
 
 export const ResumePlanSchema = ResumePlanUnionSchema.superRefine((plan, context) => {
+  const usesBalancedPolicy = plan.densityPolicy.policyVersion === B9_RESUME_DENSITY_POLICY_VERSION;
+  if ((plan.plannerVersion === B9_RESUME_PLANNER_VERSION) !== usesBalancedPolicy) {
+    context.addIssue({
+      code: "custom",
+      message: "ResumePlan v3 requires the balanced density policy; historical planners must retain their historical density policy.",
+      path: ["densityPolicy", "policyVersion"],
+    });
+  }
+
   if (plan.plannerVersion === B9_RESUME_PLANNER_VERSION_V1) return;
 
   if (plan.sourceReceipts.length === 0) {
@@ -181,6 +221,16 @@ export const ResumePlanSchema = ResumePlanUnionSchema.superRefine((plan, context
         path: ["sourceReceipts"],
       });
     }
+    if (plan.mode === "TARGETED") {
+      const shouldHaveTargetStatus = receipt.decision !== "OMITTED_TARGET_IRRELEVANT";
+      if (shouldHaveTargetStatus !== (receipt.targetMatchStatus !== null)) {
+        context.addIssue({
+          code: "custom",
+          message: "TARGETED included/density receipts require MATCH or POTENTIAL_MATCH provenance.",
+          path: ["sourceReceipts"],
+        });
+      }
+    }
   }
 
   if (includedItemIds.size !== plan.items.length) {
@@ -202,4 +252,6 @@ export const CreateResumePlanInputSchema = z.discriminatedUnion("mode", [
 ]);
 
 export type ResumePlan = z.infer<typeof ResumePlanSchema>;
+export type ResumePlanItem = z.infer<typeof ResumePlanItemSchema>;
+export type ResumePlanSourceReceipt = z.infer<typeof ResumePlanSourceReceiptSchema>;
 export type CreateResumePlanInput = z.infer<typeof CreateResumePlanInputSchema>;
