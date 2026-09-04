@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { B9_RESUME_DENSITY_POLICY_VERSION, B9_RESUME_PLANNER_VERSION, ResumePlanSchema } from "./ResumePlan";
+import { ResumeProfileSchema } from "./ResumeProfile";
 import { buildResumeArtifactContent } from "./ResumeArtifact";
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -16,8 +17,14 @@ const plan = ResumePlanSchema.parse({
   createdAt: "2026-09-04T01:00:00.000Z",
 });
 
-describe("B9.5 canonical ResumeArtifact content", () => {
-  it("is a deterministic projection of ResumePlan with no invented identity header", () => {
+const profile = ResumeProfileSchema.parse({
+  ownerUserId: uuid(2), revision: 3, displayName: "Synthetic Candidate", headline: "Backend Engineer",
+  location: "Synthetic City", email: null, phone: null, links: ["https://example.test/profile"],
+  semanticSha256: sha("d"), createdAt: "2026-09-04T01:30:00.000Z",
+});
+
+describe("B9 canonical ResumeArtifact content", () => {
+  it("keeps legacy no-profile composition deterministic without inventing identity", () => {
     const first = buildResumeArtifactContent(plan);
     const second = buildResumeArtifactContent(plan);
     expect(first).toEqual(second);
@@ -25,7 +32,18 @@ describe("B9.5 canonical ResumeArtifact content", () => {
     expect(first.sections[0]?.entries[0]?.renderedText).toBe("Built a deterministic pipeline.");
   });
 
+  it("binds an explicit ResumeProfile without turning identity into Career Evidence", () => {
+    const content = buildResumeArtifactContent(plan, profile);
+    expect(content.header).toEqual({
+      status: "AVAILABLE",
+      displayName: "Synthetic Candidate",
+      headline: "Backend Engineer",
+      contactLines: ["Synthetic City | https://example.test/profile"],
+    });
+    expect(content.sections[0]?.entries[0]?.renderedText).toBe("Built a deterministic pipeline.");
+  });
+
   it("does not synthesize a professional summary when PROFILE evidence is absent", () => {
-    expect(buildResumeArtifactContent(plan).professionalSummary).toBeNull();
+    expect(buildResumeArtifactContent(plan, profile).professionalSummary).toBeNull();
   });
 });
