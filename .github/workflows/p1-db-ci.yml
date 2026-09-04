@@ -37,3 +37,5 @@ jobs:
           done
       - name: Run P1 presentation persistence gate
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/p1/presentation.sql
+      - name: Run P1 AI proposal persistence gate
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/p1/ai-proposal.sql
