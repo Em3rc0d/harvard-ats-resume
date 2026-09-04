@@ -1,0 +1,64 @@
+name: B9 Platform Provider Diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/b9-provider-failure-d1eab
+
+permissions:
+  contents: read
+
+jobs:
+  provider-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CVENGINE_EXPECTED_SHA: d1eabcc08abc51b015410fda80c9682374e962b1
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+
+      - name: Recover synthetic diagnostic identity from immutable history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin certification/e2e-a44ec836
+          python - <<'PY'
+          import os, re, subprocess
+          text = subprocess.check_output(
+              ["git", "show", "FETCH_HEAD:tests/e2e/production-certification.mjs"],
+              text=True,
+          )
+          pairs = {
+              "CVENGINE_DIAGNOSTIC_EMAIL": r"const CORE_EMAIL = '([^']+)';",
+              "CVENGINE_DIAGNOSTIC_PASSWORD": r"const CORE_PASSWORD = '([^']+)';",
+          }
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              for env_name, pattern in pairs.items():
+                  match = re.search(pattern, text)
+                  if not match:
+                      raise SystemExit(f"missing historical fixture field: {env_name}")
+                  env_file.write(f"{env_name}={match.group(1)}\n")
+          PY
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Chromium harness
+        run: |
+          python -m pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium
+
+      - name: Capture exact provider outcome
+        run: python tests/b9/provider-failure-probe.py
+
+      - name: Upload sanitized provider receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b9-provider-diagnostic-${{ github.run_id }}
+          path: artifacts/b9-provider-diagnostic
+          if-no-files-found: warn
+          retention-days: 7
