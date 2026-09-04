@@ -10,13 +10,20 @@ const SECTION_HEADINGS: Record<string, string> = {
 };
 
 export type ResumeSemanticLine = {
-  kind: "HEADING" | "BODY" | "BULLET";
+  kind: "NAME" | "META" | "HEADING" | "BODY" | "BULLET";
   text: string;
 };
 
 export function buildResumeSemanticLines(input: ResumeArtifact): ResumeSemanticLine[] {
   const artifact = ResumeArtifactSchema.parse(input);
   const lines: ResumeSemanticLine[] = [];
+
+  if (artifact.content.header.status === "AVAILABLE") {
+    lines.push({ kind: "NAME", text: artifact.content.header.displayName });
+    if (artifact.content.header.headline) lines.push({ kind: "META", text: artifact.content.header.headline });
+    for (const contactLine of artifact.content.header.contactLines) lines.push({ kind: "META", text: contactLine });
+  }
+
   if (artifact.content.professionalSummary) {
     lines.push({ kind: "HEADING", text: "Professional Summary" });
     lines.push({ kind: "BODY", text: artifact.content.professionalSummary.text });
@@ -50,7 +57,7 @@ export function renderResumeArtifactText(input: ResumeArtifact): string {
 export function renderResumeArtifactProvenanceJson(input: ResumeArtifact): string {
   const artifact = ResumeArtifactSchema.parse(input);
   return `${JSON.stringify({
-    schemaVersion: "b9-resume-artifact-provenance-v1",
+    schemaVersion: "b9-resume-artifact-provenance-v2",
     artifactId: artifact.id,
     artifactSemanticSha256: artifact.artifactSemanticSha256,
     mode: artifact.mode,
@@ -59,7 +66,7 @@ export function renderResumeArtifactProvenanceJson(input: ResumeArtifact): strin
 }
 
 function xmlEscape(value: string) {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
 function u16(value: number) { return new Uint8Array([value & 255, (value >>> 8) & 255]); }
@@ -109,9 +116,15 @@ function zipStored(files: Array<{ name: string; data: Uint8Array }>) {
 
 function wordParagraph(line: ResumeSemanticLine) {
   const text = xmlEscape(line.kind === "BULLET" ? `• ${line.text}` : line.text);
-  const bold = line.kind === "HEADING" ? "<w:b/>" : "";
-  const size = line.kind === "HEADING" ? "22" : "20";
-  const spacing = line.kind === "HEADING" ? '<w:spacing w:before="160" w:after="60"/>' : '<w:spacing w:after="40"/>';
+  const bold = line.kind === "NAME" || line.kind === "HEADING" ? "<w:b/>" : "";
+  const size = line.kind === "NAME" ? "28" : line.kind === "HEADING" ? "22" : line.kind === "META" ? "19" : "20";
+  const spacing = line.kind === "NAME"
+    ? '<w:spacing w:after="40"/>'
+    : line.kind === "META"
+      ? '<w:spacing w:after="20"/>'
+      : line.kind === "HEADING"
+        ? '<w:spacing w:before="160" w:after="60"/>'
+        : '<w:spacing w:after="40"/>';
   return `<w:p><w:pPr>${spacing}</w:pPr><w:r><w:rPr>${bold}<w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 }
 
@@ -168,8 +181,9 @@ export function renderResumeArtifactPdf(input: ResumeArtifact): Uint8Array {
   const visualLines: Array<{ bold: boolean; text: string }> = [];
   for (const line of semantic) {
     const prefix = line.kind === "BULLET" ? "- " : "";
-    for (const wrapped of wrapLine(`${prefix}${line.text}`, line.kind === "HEADING" ? 70 : 92)) {
-      visualLines.push({ bold: line.kind === "HEADING", text: wrapped });
+    const width = line.kind === "NAME" ? 64 : line.kind === "HEADING" ? 70 : 92;
+    for (const wrapped of wrapLine(`${prefix}${line.text}`, width)) {
+      visualLines.push({ bold: line.kind === "NAME" || line.kind === "HEADING", text: wrapped });
     }
   }
   const pages: Array<Array<{ bold: boolean; text: string }>> = [];

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ResumeArtifactSchema, type ResumeArtifact } from "../../domain/resume/ResumeArtifact";
+import { B9_RESUME_ARTIFACT_VERSION, ResumeArtifactSchema, type ResumeArtifact } from "../../domain/resume/ResumeArtifact";
 
 function requiredString(value: unknown, field: string) {
   if (typeof value !== "string" || value.length === 0) throw new Error(`B9_ARTIFACT_READBACK_INVALID_${field}`);
@@ -39,20 +39,25 @@ export async function loadResumeArtifact(client: SupabaseClient, ownerUserId: st
     rendererContractVersion: artifact.renderer_contract_version,
     careerEvidenceFingerprintSha256: artifact.career_evidence_fingerprint_sha256,
     artifactSemanticSha256: artifact.artifact_semantic_sha256,
-    content: artifact.content_json, manifest: { ...manifest, receipts }, createdAt: iso(artifact.created_at),
+    content: artifact.content_json,
+    manifest: {
+      ...manifest,
+      resumeProfileRevision: artifact.resume_profile_revision ?? null,
+      resumeProfileSemanticSha256: artifact.resume_profile_semantic_sha256 ?? null,
+      receipts,
+    },
+    createdAt: iso(artifact.created_at),
   });
 }
 
 export async function createResumeArtifact(client: SupabaseClient, ownerUserId: string, resumePlanId: string): Promise<ResumeArtifact> {
-  const existing = await client.from("resume_artifacts").select("id").eq("owner_user_id", ownerUserId).eq("resume_plan_id", resumePlanId).eq("artifact_version", "b9-canonical-resume-artifact-v1").eq("composer_version", "b9-deterministic-resume-composition-v2").eq("renderer_contract_version", "b9-ats-safe-single-column-v1").maybeSingle();
-  if (existing.error) throw new Error(`B9_ARTIFACT_EXISTING_READ_FAILED:${existing.error.message}`);
-  if (existing.data?.id) return loadResumeArtifact(client, ownerUserId, String(existing.data.id));
-
   const result = await client.rpc("cv_engine_create_resume_artifact", { p_resume_plan_id: resumePlanId });
   if (result.error) throw new Error(`B9_ARTIFACT_CREATE_FAILED:${result.error.message}`);
   const row = Array.isArray(result.data) ? result.data[0] : result.data;
   if (!row || typeof row !== "object") throw new Error("B9_ARTIFACT_CREATE_EMPTY");
-  return loadResumeArtifact(client, ownerUserId, requiredString((row as Record<string, unknown>).resume_artifact_id, "ARTIFACT_ID"));
+  const artifact = await loadResumeArtifact(client, ownerUserId, requiredString((row as Record<string, unknown>).resume_artifact_id, "ARTIFACT_ID"));
+  if (artifact.artifactVersion !== B9_RESUME_ARTIFACT_VERSION) throw new Error("B9_ARTIFACT_CREATE_RETURNED_LEGACY_VERSION");
+  return artifact;
 }
 
 export async function listResumeArtifacts(client: SupabaseClient, ownerUserId: string): Promise<ResumeArtifact[]> {
