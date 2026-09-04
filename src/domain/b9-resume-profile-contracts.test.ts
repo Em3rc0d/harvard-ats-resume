@@ -44,4 +44,19 @@ describe("B9.6 ResumeProfile authority contracts", () => {
     expect(renderer).toContain("artifact.content.header.status === \"AVAILABLE\"");
     expect(renderer).toContain("buildResumeSemanticLines(artifact)");
   });
+
+  it("keeps the user-facing ResumeWorkspace on the B9 pipeline and all four exports", () => {
+    const workspace = read("src/components/resume/ResumeWorkspace.tsx");
+    expect(workspace).toContain('fetchJson("/api/resume-profile")');
+    expect(workspace).toContain('fetchJson("/api/resume-plans")');
+    expect(workspace).toContain('fetchJson("/api/resume-artifacts")');
+    expect(workspace).toContain('fetch("/api/resume-plans"');
+    expect(workspace).toContain('fetch("/api/resume-artifacts"');
+    expect(workspace).toContain("format=docx");
+    expect(workspace).toContain("format=pdf");
+    expect(workspace).toContain("format=text");
+    expect(workspace).toContain("format=json");
+    expect(workspace).not.toContain('fetch("/api/resumes"');
+    expect(workspace).not.toContain("ResumeVersion");
+  });
 });
