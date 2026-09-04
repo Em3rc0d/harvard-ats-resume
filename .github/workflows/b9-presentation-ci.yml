@@ -48,7 +48,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Execute B9 static presentation contracts
-        run: npx vitest run src/domain/b9-presentation-contracts.test.ts src/domain/b9-resume-plan-contracts.test.ts src/domain/resume/ResumeComposition.test.ts
+        run: npx vitest run src/domain/b9-presentation-contracts.test.ts src/domain/b9-resume-plan-contracts.test.ts src/domain/resume/ResumeComposition.test.ts src/domain/resume/ResumeArtifact.test.ts
 
       - name: Execute B9 fact-preservation and AI wiring gates
         run: npx vitest run src/application/presentation/PresentationFactValidator.test.ts src/application/presentation/PresentationProposalService.test.ts
@@ -76,3 +76,6 @@ jobs:
 
       - name: Execute B9.4 physical ResumePlan contract
         run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b9/resume-plans.sql
+
+      - name: Execute B9.5 canonical ResumeArtifact contract
+        run: psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f tests/b9/resume-artifacts.sql
