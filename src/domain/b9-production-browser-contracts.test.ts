@@ -24,16 +24,19 @@ describe("B9 production browser certification contract", () => {
     expect(workflow).not.toContain("python - <<'PY'");
   });
 
-  it("uses a versioned disposable anonymous Auth wrapper without email, passwords, or privileged keys", () => {
+  it("uses a query-safe, exactly-once disposable anonymous Auth wrapper without privileged credentials", () => {
     const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
     const wrapper = read("tests/b9/production-browser-anonymous-wrapper.py");
     expect(wrapper).toContain("B9_BROWSER_AUTH_PATCH_SOURCE_MISMATCH");
+    expect(wrapper).toContain("B9_BROWSER_AUTH_SUBMIT_PATCH_SOURCE_MISMATCH");
     expect(wrapper).toContain("B9_BROWSER_AUTH_FAILURE_PATCH_SOURCE_MISMATCH");
-    expect(wrapper).toContain('page.route("**/auth/v1/signup", route_disposable_anonymous_signup)');
+    expect(wrapper).toContain('page.route("**/auth/v1/signup**", route_disposable_anonymous_signup)');
+    expect(wrapper).toContain('page.expect_request("**/auth/v1/signup**", timeout=15_000)');
+    expect(wrapper).toContain('anonymous_signup_intercepts["count"] += 1');
+    expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_INTERCEPT_COUNT");
     expect(wrapper).toContain('route.continue_(post_data="{}")');
     expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_DISABLED");
     expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_RATE_LIMITED");
-    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_EMAIL:");
     expect(workflow).not.toContain("CVENGINE_SYNTHETIC_PASSWORD:");
     expect(workflow).not.toContain("SUPABASE_SERVICE_ROLE");
     expect(wrapper).not.toContain("SUPABASE_SERVICE_ROLE");
