@@ -1,5 +1,14 @@
 \set ON_ERROR_STOP on
 
+-- Previous B9 physical contracts intentionally exercise account deletion.
+-- Reseed this contract's independent owner fixture so B9.5 never depends on
+-- execution order side effects from B9.1/B9.4.
+reset role;
+insert into auth.users (id) values
+  ('00000000-0000-4000-8000-000000000101'),
+  ('00000000-0000-4000-8000-000000000202')
+on conflict do nothing;
+
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000101';
 
