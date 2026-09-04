@@ -48,13 +48,16 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Execute B9 static presentation contracts
-        run: npx vitest run src/domain/b9-presentation-contracts.test.ts src/domain/b9-resume-plan-contracts.test.ts src/domain/b9-resume-profile-contracts.test.ts src/domain/resume/ResumeComposition.test.ts src/domain/resume/ResumeArtifact.test.ts src/application/resume/ResumeArtifactRenderer.test.ts src/application/resume/ResumeArtifactRenderingAcceptance.test.ts
+        run: npx vitest run src/domain/b9-presentation-contracts.test.ts src/domain/b9-resume-plan-contracts.test.ts src/domain/b9-resume-profile-contracts.test.ts src/domain/b9-production-browser-contracts.test.ts src/domain/resume/ResumeComposition.test.ts src/domain/resume/ResumeArtifact.test.ts src/application/resume/ResumeArtifactRenderer.test.ts src/application/resume/ResumeArtifactRenderingAcceptance.test.ts
 
       - name: Execute B9 fact-preservation and AI wiring gates
         run: npx vitest run src/application/presentation/PresentationFactValidator.test.ts src/application/presentation/PresentationProposalService.test.ts
 
       - name: Typecheck B9 application wiring
         run: npm run typecheck
+
+      - name: Verify browser certification harness syntax
+        run: python -m py_compile tests/b9/production-browser-e2e.py
 
       - name: Verify PostgreSQL client
         run: psql --version

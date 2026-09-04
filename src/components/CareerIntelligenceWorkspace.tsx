@@ -20,7 +20,7 @@ export function CareerIntelligenceWorkspace({ aiAccessMode, onSignOut }: Props) 
     <main className="first-run-shell">
       <header className="brand-bar">
         <div><span className="brand-mark">C</span><div><strong>CV Engine</strong><span>Evidence · import · intent · market truth · assessment · opportunity space · trusted resume</span></div></div>
-        <span className="build-label">vNext · B8 RC</span>
+        <span className="build-label">vNext · B9</span>
       </header>
       <nav className="split-actions" aria-label="CV Engine truth, import, analysis, opportunity, resume and account surfaces">
         <button className={surface === "EVIDENCE" ? "primary" : "secondary"} type="button" onClick={() => setSurface("EVIDENCE")}>Career Evidence</button>
@@ -29,7 +29,7 @@ export function CareerIntelligenceWorkspace({ aiAccessMode, onSignOut }: Props) 
         <button className={surface === "JOB" ? "primary" : "secondary"} type="button" onClick={() => setSurface("JOB")}>Job Truth</button>
         <button className={surface === "ASSESSMENT" ? "primary" : "secondary"} type="button" onClick={() => setSurface("ASSESSMENT")}>Assessment</button>
         <button className={surface === "OPPORTUNITIES" ? "primary" : "secondary"} type="button" onClick={() => setSurface("OPPORTUNITIES")}>Opportunity Space</button>
-        <button className={surface === "RESUME" ? "primary" : "secondary"} type="button" onClick={() => setSurface("RESUME")}>ResumeVersion</button>
+        <button className={surface === "RESUME" ? "primary" : "secondary"} type="button" onClick={() => setSurface("RESUME")}>Resume</button>
         <button className={surface === "ACCOUNT" ? "primary" : "secondary"} type="button" onClick={() => setSurface("ACCOUNT")}>Account</button>
         <button className="text-button" type="button" onClick={() => void onSignOut()}>Sign out</button>
       </nav>
