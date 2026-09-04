@@ -14,10 +14,14 @@ select evidence_id from public.cv_engine_create_career_evidence(
 ) \gset art_ev_
 select resume_plan_id from public.cv_engine_create_resume_plan('GENERAL', null, null) \gset art_plan_
 
+create temporary table b9_artifact_plan_context as
+select :'art_ev_evidence_id'::uuid evidence_id,
+       :'art_plan_resume_plan_id'::uuid plan_id;
+
 -- v2 fails closed without explicit profile authority.
 do $$ begin
   begin
-    perform * from public.cv_engine_create_resume_artifact(:'art_plan_resume_plan_id'::uuid);
+    perform * from public.cv_engine_create_resume_artifact((select plan_id from b9_artifact_plan_context));
     raise exception 'B9_ARTIFACT_CREATED_WITHOUT_PROFILE';
   exception when no_data_found then null; end;
 end $$;
@@ -29,9 +33,10 @@ select revision_number, created from public.cv_engine_upsert_resume_profile(
 select resume_artifact_id, created from public.cv_engine_create_resume_artifact(:'art_plan_resume_plan_id'::uuid) \gset art_first_
 
 create temporary table b9_artifact_context as
-select :'art_ev_evidence_id'::uuid evidence_id,
-       :'art_plan_resume_plan_id'::uuid plan_id,
-       :'art_first_resume_artifact_id'::uuid artifact_id;
+select evidence_id,
+       plan_id,
+       :'art_first_resume_artifact_id'::uuid artifact_id
+from b9_artifact_plan_context;
 
 do $$ declare v_content jsonb; v_manifest jsonb; v_receipts integer; begin
   select content_json, manifest_json into v_content, v_manifest
@@ -71,11 +76,18 @@ select revision_number, created from public.cv_engine_upsert_resume_profile(
 ) \gset art_profile2_
 select resume_artifact_id, created from public.cv_engine_create_resume_artifact(:'art_plan_resume_plan_id'::uuid) \gset art_second_
 
-do $$ declare v_first jsonb; v_second jsonb; begin
-  if :'art_profile2_revision_number'::integer <> 2 or not :'art_profile2_created'::boolean then raise exception 'B9_PROFILE_REVISION_NOT_CREATED'; end if;
-  if not :'art_second_created'::boolean or :'art_second_resume_artifact_id'::uuid = (select artifact_id from b9_artifact_context) then raise exception 'B9_PROFILE_CHANGE_DID_NOT_CREATE_DISTINCT_ARTIFACT'; end if;
+create temporary table b9_artifact_profile2_context as
+select :'art_profile2_revision_number'::integer profile_revision,
+       :'art_profile2_created'::boolean profile_created,
+       :'art_second_resume_artifact_id'::uuid artifact_id,
+       :'art_second_created'::boolean artifact_created;
+
+do $$ declare v_first jsonb; v_second jsonb; v_profile record; begin
+  select * into v_profile from b9_artifact_profile2_context;
+  if v_profile.profile_revision <> 2 or not v_profile.profile_created then raise exception 'B9_PROFILE_REVISION_NOT_CREATED'; end if;
+  if not v_profile.artifact_created or v_profile.artifact_id = (select artifact_id from b9_artifact_context) then raise exception 'B9_PROFILE_CHANGE_DID_NOT_CREATE_DISTINCT_ARTIFACT'; end if;
   select content_json into v_first from public.resume_artifacts where id=(select artifact_id from b9_artifact_context);
-  select content_json into v_second from public.resume_artifacts where id=:'art_second_resume_artifact_id'::uuid;
+  select content_json into v_second from public.resume_artifacts where id=v_profile.artifact_id;
   if v_first#>>'{header,headline}' <> 'Backend Engineer' then raise exception 'B9_HISTORICAL_PROFILE_REWRITTEN'; end if;
   if v_second#>>'{header,headline}' <> 'Backend / Full Stack Engineer' then raise exception 'B9_NEW_PROFILE_NOT_BOUND'; end if;
 end $$;
