@@ -123,6 +123,37 @@ def cleanup_account(context: BrowserContext) -> None:
         pass
 
 
+def create_and_approve_presentation(evidence_card: Any, report: dict[str, Any]) -> str:
+    evidence_card.get_by_role("button", name="Improve wording").click()
+    try:
+        review = evidence_card.locator("section.presentation-review")
+        review.get_by_role("heading", name="Review wording before it can be used.").wait_for(timeout=90_000)
+    except PlaywrightTimeoutError:
+        detail = evidence_card.inner_text()
+        if "Suggestion rejected by fact-preservation checks" in detail:
+            fail("B9_BROWSER_AI_PROPOSAL_REJECTED_BY_VALIDATOR", detail)
+        fail("B9_BROWSER_AI_PROPOSAL_REVIEW_NOT_RENDERED", detail)
+
+    review = evidence_card.locator("section.presentation-review")
+    before = review.locator(".presentation-diff article").nth(0).locator("p").inner_text().strip()
+    proposed = review.locator(".presentation-diff article").nth(1).locator("p").inner_text().strip()
+    if before != SOURCE_TEXT:
+        fail("B9_BROWSER_PRESENTATION_BEFORE_NOT_EXACT_SOURCE", before)
+    if not proposed:
+        fail("B9_BROWSER_PRESENTATION_PROPOSAL_EMPTY")
+    if "Validator PASS" not in review.inner_text():
+        fail("B9_BROWSER_PRESENTATION_VALIDATOR_PASS_NOT_VISIBLE")
+
+    review.get_by_role("button", name="Approve wording").click()
+    evidence_card.get_by_text("Presentation wording approved. Career Evidence remains unchanged.", exact=True).wait_for(timeout=30_000)
+    if SOURCE_TEXT not in evidence_card.locator("p.evidence-text").inner_text():
+        fail("B9_BROWSER_PRESENTATION_MUTATED_CAREER_EVIDENCE")
+
+    report["presentationChangedText"] = proposed != SOURCE_TEXT
+    report["checks"].append("PRESENTATION_BEFORE_AFTER_VALIDATED_AND_APPROVED")
+    return proposed
+
+
 def run_browser(report: dict[str, Any]) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     source_docx = OUTPUT_DIR / "synthetic-input.docx"
@@ -150,9 +181,13 @@ def run_browser(report: dict[str, Any]) -> None:
                     fail("B9_BROWSER_SIGNUP_REQUIRES_EMAIL_CONFIRMATION")
                 fail("B9_BROWSER_AUTH_DID_NOT_ADVANCE", statuses)
 
-            page.get_by_role("radio", name=re.compile("Continue without cloud AI", re.I)).click()
+            platform_ai = page.get_by_role("radio", name=re.compile("Use CV Engine AI", re.I))
+            if platform_ai.count() != 1:
+                fail("B9_BROWSER_PLATFORM_AI_NOT_AVAILABLE")
+            platform_ai.click()
             page.get_by_role("button", name="Continue to CV Engine").click()
             page.get_by_role("heading", name="Build the career evidence you can defend.").wait_for(timeout=30_000)
+            report["checks"].append("PLATFORM_AI_SELECTED")
 
             page.get_by_role("button", name="Resume Import", exact=True).click()
             page.get_by_label("Resume file").set_input_files(str(source_docx))
@@ -172,6 +207,8 @@ def run_browser(report: dict[str, Any]) -> None:
             evidence_card.get_by_role("button", name="Save revision").click()
             evidence_card.get_by_text("Defensible", exact=True).wait_for(timeout=30_000)
             report["checks"].append("IMPORTED_EVIDENCE_EXPLICITLY_VERIFIED")
+
+            rendered_text = create_and_approve_presentation(evidence_card, report)
 
             page.get_by_role("button", name="Career Target", exact=True).click()
             page.get_by_label("Target role").fill(TARGET_ROLE)
@@ -193,24 +230,30 @@ def run_browser(report: dict[str, Any]) -> None:
             page.get_by_text(re.compile("ResumeArtifact created from ResumePlan")).wait_for(timeout=30_000)
             artifact_card = page.locator("article.evidence-card").filter(has_text=CANDIDATE_NAME).first
             artifact_card.wait_for(timeout=30_000)
-            if SOURCE_TEXT not in artifact_card.inner_text():
-                fail("B9_BROWSER_PREVIEW_MISSING_VERIFIED_SOURCE")
-            report["checks"].append("GENERAL_RESUME_ARTIFACT_CREATED")
+            if rendered_text not in artifact_card.inner_text():
+                fail("B9_BROWSER_PREVIEW_MISSING_APPROVED_PRESENTATION")
+            report["checks"].append("GENERAL_RESUME_ARTIFACT_CREATED_FROM_APPROVED_PRESENTATION")
 
             txt = download_bytes(artifact_card, "TXT").decode("utf-8")
             provenance_bytes = download_bytes(artifact_card, "Provenance JSON")
             docx = download_bytes(artifact_card, "Download DOCX")
             pdf = download_bytes(artifact_card, "Download PDF")
-            if CANDIDATE_NAME not in txt or SOURCE_TEXT not in txt:
+            if CANDIDATE_NAME not in txt or rendered_text not in txt:
                 fail("B9_BROWSER_TXT_CANONICAL_CONTENT_MISMATCH")
             provenance = json.loads(provenance_bytes.decode("utf-8"))
             if provenance.get("schemaVersion") != "b9-resume-artifact-provenance-v2":
                 fail("B9_BROWSER_PROVENANCE_SCHEMA_MISMATCH")
             manifest = provenance.get("manifest") or {}
-            if manifest.get("resumeProfileRevision") != 1 or not manifest.get("receipts"):
+            receipts = manifest.get("receipts") or []
+            if manifest.get("resumeProfileRevision") != 1 or len(receipts) != 1:
                 fail("B9_BROWSER_PROVENANCE_INCOMPLETE")
-            assert_docx(docx, SOURCE_TEXT)
-            assert_pdf(pdf, SOURCE_TEXT)
+            receipt = receipts[0]
+            if not receipt.get("presentationRevisionId") or not receipt.get("presentationTextSha256"):
+                fail("B9_BROWSER_APPROVED_PRESENTATION_PROVENANCE_MISSING")
+            if receipt.get("renderedTextSha256") != receipt.get("presentationTextSha256"):
+                fail("B9_BROWSER_PRESENTATION_RENDERED_HASH_MISMATCH")
+            assert_docx(docx, rendered_text)
+            assert_pdf(pdf, rendered_text)
             (OUTPUT_DIR / "artifact.txt").write_text(txt, encoding="utf-8")
             (OUTPUT_DIR / "artifact-provenance.json").write_bytes(provenance_bytes)
             report["artifactId"] = provenance.get("artifactId")
@@ -222,7 +265,7 @@ def run_browser(report: dict[str, Any]) -> None:
             page.get_by_role("button", name="Resume", exact=True).click()
             reloaded_card = page.locator("article.evidence-card").filter(has_text=CANDIDATE_NAME).first
             reloaded_card.wait_for(timeout=30_000)
-            if SOURCE_TEXT not in reloaded_card.inner_text():
+            if rendered_text not in reloaded_card.inner_text():
                 fail("B9_BROWSER_HISTORICAL_ARTIFACT_RELOAD_MISMATCH")
             report["checks"].append("HISTORICAL_ARTIFACT_RELOAD")
 
@@ -237,6 +280,8 @@ def run_browser(report: dict[str, Any]) -> None:
             account_export = json.loads(Path(account_path).read_text(encoding="utf-8"))
             if len(account_export.get("resumeArtifacts", [])) < 1 or len(account_export.get("resumeProfileRevisions", [])) < 1:
                 fail("B9_BROWSER_ACCOUNT_EXPORT_B9_STATE_MISSING")
+            if len(account_export.get("presentationRevisions", [])) < 1:
+                fail("B9_BROWSER_ACCOUNT_EXPORT_PRESENTATION_STATE_MISSING")
             report["checks"].append("ACCOUNT_EXPORT_INCLUDES_B9")
 
             page.get_by_label(re.compile("Type DELETE_MY_ACCOUNT to continue")).fill("DELETE_MY_ACCOUNT")
@@ -262,7 +307,7 @@ def run_browser(report: dict[str, Any]) -> None:
 def main() -> int:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     report: dict[str, Any] = {
-        "schemaVersion": "b9-production-browser-receipt-v1",
+        "schemaVersion": "b9-production-browser-receipt-v2",
         "baseUrl": BASE_URL,
         "expectedGitCommitSha": EXPECTED_SHA,
         "observedRuntime": None,

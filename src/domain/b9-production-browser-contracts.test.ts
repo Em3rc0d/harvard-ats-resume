@@ -10,7 +10,7 @@ describe("B9 production browser certification contract", () => {
     const route = read("src/app/api/build-info/route.ts");
     expect(route).toContain("VERCEL_GIT_COMMIT_SHA");
     expect(route).toContain("VERCEL_ENV");
-    expect(route).toContain('Cache-Control');
+    expect(route).toContain("Cache-Control");
     expect(route).not.toContain("SUPABASE_SERVICE_ROLE");
   });
 
@@ -23,11 +23,15 @@ describe("B9 production browser certification contract", () => {
     expect(workflow).toContain("tests/b9/production-browser-e2e.py");
   });
 
-  it("certifies upload, explicit verification, artifact exports, reload and deletion", () => {
+  it("certifies the full B9 browser golden path including explicit PresentationRevision approval", () => {
     const script = read("tests/b9/production-browser-e2e.py");
+    expect(script).toContain("PLATFORM_AI_SELECTED");
     expect(script).toContain("DOCX_UPLOAD_AND_REVIEW_PROPOSAL");
     expect(script).toContain("IMPORTED_EVIDENCE_EXPLICITLY_VERIFIED");
-    expect(script).toContain("GENERAL_RESUME_ARTIFACT_CREATED");
+    expect(script).toContain("PRESENTATION_BEFORE_AFTER_VALIDATED_AND_APPROVED");
+    expect(script).toContain("B9_BROWSER_PRESENTATION_MUTATED_CAREER_EVIDENCE");
+    expect(script).toContain("GENERAL_RESUME_ARTIFACT_CREATED_FROM_APPROVED_PRESENTATION");
+    expect(script).toContain("B9_BROWSER_APPROVED_PRESENTATION_PROVENANCE_MISSING");
     expect(script).toContain("DOCX_PDF_TXT_PROVENANCE_PARITY");
     expect(script).toContain("HISTORICAL_ARTIFACT_RELOAD");
     expect(script).toContain("ACCOUNT_DELETE_AND_SESSION_DENIAL");
