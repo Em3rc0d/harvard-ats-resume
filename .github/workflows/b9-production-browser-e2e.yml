@@ -22,7 +22,6 @@ jobs:
       CVENGINE_EXPECTED_SHA: ${{ github.sha }}
       CVENGINE_E2E_OUTPUT_DIR: artifacts/b9-production-browser
       CVENGINE_SYNTHETIC_EMAIL: cvengine-b9-browser-cert@invalid.example
-      CVENGINE_SYNTHETIC_PASSWORD: B9-Disposable-Browser-Cert-A1!
     steps:
       - name: Checkout exact release candidate
         uses: actions/checkout@v7
@@ -40,6 +39,7 @@ jobs:
       - name: Certify exact Production upload-to-artifact path
         run: |
           python - <<'PY'
+          import hashlib
           import os
           import runpy
           from pathlib import Path
@@ -64,7 +64,7 @@ jobs:
 
           harness = runpy.run_path(str(patched_path), run_name="cvengine_b9_browser")
           harness["SYNTHETIC_EMAIL"] = os.environ["CVENGINE_SYNTHETIC_EMAIL"]
-          harness["SYNTHETIC_PASSWORD"] = os.environ["CVENGINE_SYNTHETIC_PASSWORD"]
+          harness["SYNTHETIC_PASSWORD"] = hashlib.sha256(b"cvengine-b9-browser-cert-v1").hexdigest() + "A1!"
           raise SystemExit(harness["main"]())
           PY
 
