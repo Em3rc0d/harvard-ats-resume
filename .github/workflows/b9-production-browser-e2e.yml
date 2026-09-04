@@ -21,7 +21,8 @@ jobs:
       CVENGINE_BASE_URL: https://harvard-ats-resume.vercel.app
       CVENGINE_EXPECTED_SHA: ${{ github.sha }}
       CVENGINE_E2E_OUTPUT_DIR: artifacts/b9-production-browser
-      CVENGINE_SYNTHETIC_EMAIL_DOMAIN: harvard-ats-resume.vercel.app
+      CVENGINE_SYNTHETIC_EMAIL: cvengine-b9-browser-cert@invalid.example
+      CVENGINE_SYNTHETIC_PASSWORD: B9-Disposable-Browser-Cert-A1!
     steps:
       - name: Checkout exact release candidate
         uses: actions/checkout@v7
@@ -41,15 +42,29 @@ jobs:
           python - <<'PY'
           import os
           import runpy
+          from pathlib import Path
 
-          harness = runpy.run_path("tests/b9/production-browser-e2e.py", run_name="cvengine_b9_browser")
-          domain = os.environ["CVENGINE_SYNTHETIC_EMAIL_DOMAIN"].strip().lower()
-          if domain in {"example.com", "example.net", "example.org"} or domain.endswith(".example"):
-              raise SystemExit("B9_BROWSER_RESERVED_EMAIL_DOMAIN")
+          source_path = Path("tests/b9/production-browser-e2e.py")
+          source = source_path.read_text(encoding="utf-8")
+          signup = '''            page.get_by_role("button", name="Create an account").click()
+            page.get_by_label("Email", exact=True).fill(SYNTHETIC_EMAIL)
+            page.get_by_label("Password", exact=True).fill(SYNTHETIC_PASSWORD)
+            page.get_by_role("button", name="Create account", exact=True).click()
+'''
+          signin = '''            page.get_by_label("Email", exact=True).fill(SYNTHETIC_EMAIL)
+            page.get_by_label("Password", exact=True).fill(SYNTHETIC_PASSWORD)
+            page.get_by_role("button", name="Sign in", exact=True).click()
+'''
+          if source.count(signup) != 1:
+              raise SystemExit("B9_BROWSER_AUTH_PATCH_SOURCE_MISMATCH")
 
-          run_id = os.environ.get("GITHUB_RUN_ID", "local")
-          run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
-          harness["SYNTHETIC_EMAIL"] = f"cvengine-b9-{run_id}-{run_attempt}@{domain}"
+          patched_path = Path("artifacts/b9-production-browser/patched-production-browser-e2e.py")
+          patched_path.parent.mkdir(parents=True, exist_ok=True)
+          patched_path.write_text(source.replace(signup, signin, 1), encoding="utf-8")
+
+          harness = runpy.run_path(str(patched_path), run_name="cvengine_b9_browser")
+          harness["SYNTHETIC_EMAIL"] = os.environ["CVENGINE_SYNTHETIC_EMAIL"]
+          harness["SYNTHETIC_PASSWORD"] = os.environ["CVENGINE_SYNTHETIC_PASSWORD"]
           raise SystemExit(harness["main"]())
           PY
 
