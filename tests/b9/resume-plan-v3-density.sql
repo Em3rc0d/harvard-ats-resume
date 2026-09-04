@@ -29,8 +29,12 @@ select * from public.cv_engine_create_career_evidence('LANGUAGE','MANUAL','VERIF
 
 select resume_plan_id from public.cv_engine_create_resume_plan('GENERAL',null,null) \gset plan_
 
+create temporary table b9_v3_density_context(plan_id uuid) on commit preserve rows;
+insert into b9_v3_density_context(plan_id) values (:'plan_resume_plan_id'::uuid);
+
 do $$
 declare
+  v_plan_id uuid := (select plan_id from b9_v3_density_context limit 1);
   v_planner text;
   v_policy jsonb;
   v_projects integer;
@@ -44,7 +48,7 @@ begin
   select planner_version, density_policy
     into v_planner, v_policy
   from public.resume_plans
-  where id = :'plan_resume_plan_id'::uuid;
+  where id = v_plan_id;
 
   select count(*) filter (where section = 'PROJECTS'),
          count(*) filter (where section = 'CERTIFICATIONS'),
@@ -52,14 +56,14 @@ begin
          count(*) filter (where section = 'LANGUAGES')
     into v_projects, v_certs, v_skills, v_languages
   from public.resume_plan_items
-  where resume_plan_id = :'plan_resume_plan_id'::uuid;
+  where resume_plan_id = v_plan_id;
 
   select count(*),
          count(*) filter (where decision = 'INCLUDED'),
          count(*) filter (where decision = 'OMITTED_DENSITY')
     into v_receipts, v_included, v_omitted
   from public.resume_plan_source_receipts
-  where resume_plan_id = :'plan_resume_plan_id'::uuid;
+  where resume_plan_id = v_plan_id;
 
   if v_planner <> 'b9-deterministic-resume-plan-v3'
      or v_policy <> '{"policyVersion":"b9-balanced-one-page-density-v2","targetPages":1,"maxItems":20,"sectionBudgets":{"PROFILE":1,"EXPERIENCE":4,"PROJECTS":5,"EDUCATION":2,"CERTIFICATIONS":3,"SKILLS":4,"LANGUAGES":1}}'::jsonb
