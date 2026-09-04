@@ -23,14 +23,18 @@ describe("B9 production browser certification contract", () => {
     expect(workflow).toContain("tests/b9/production-browser-e2e.py");
   });
 
-  it("injects a non-reserved synthetic identity before Production browser signup", () => {
+  it("uses a real disposable anonymous Auth session without email, passwords, or privileged keys", () => {
     const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
-    expect(workflow).toContain("CVENGINE_SYNTHETIC_EMAIL_DOMAIN: harvard-ats-resume.vercel.app");
-    expect(workflow).toContain("B9_BROWSER_RESERVED_EMAIL_DOMAIN");
-    expect(workflow).toContain('harness["SYNTHETIC_EMAIL"]');
-    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_EMAIL_DOMAIN: example.com");
-    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_EMAIL_DOMAIN: example.net");
-    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_EMAIL_DOMAIN: example.org");
+    expect(workflow).toContain("B9_BROWSER_AUTH_PATCH_SOURCE_MISMATCH");
+    expect(workflow).toContain("B9_BROWSER_AUTH_FAILURE_PATCH_SOURCE_MISMATCH");
+    expect(workflow).toContain('page.route("**/auth/v1/signup", route_disposable_anonymous_signup)');
+    expect(workflow).toContain('route.continue_(post_data="{}")');
+    expect(workflow).toContain("B9_BROWSER_ANONYMOUS_AUTH_DISABLED");
+    expect(workflow).toContain("B9_BROWSER_ANONYMOUS_AUTH_RATE_LIMITED");
+    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_EMAIL:");
+    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_PASSWORD:");
+    expect(workflow).not.toContain("SUPABASE_SERVICE_ROLE");
+    expect(workflow).not.toContain("hashlib.sha256");
   });
 
   it("certifies the full B9 browser golden path including explicit PresentationRevision approval", () => {
