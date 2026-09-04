@@ -209,19 +209,21 @@ export async function createAIPresentationProposal(
   const { sourceEvidence, marketContext } = await loadTrustedContext(userClient, ownerUserId, input);
   const prompt = buildTrustedPrompt(input.purpose, sourceEvidence, marketContext);
 
-  const outcome = await executeAICapability({
-    capability: "INLINE_WORDING_OPTIMIZATION",
-    credentialMode: runtime.credentialMode,
-    prompt,
-    systemInstruction: WORDING_SYSTEM_INSTRUCTION,
-  }, {
+  const executionConfig = {
     platformGeminiKey: runtime.platformGeminiKey,
     byokGeminiKey: runtime.byokGeminiKey,
     geminiBaseUrl: runtime.geminiBaseUrl,
     ollamaBaseUrl: runtime.ollamaBaseUrl,
     ollamaApiKey: runtime.ollamaApiKey,
-    logger: runtime.logger,
-  });
+    ...(runtime.logger ? { logger: runtime.logger } : {}),
+  };
+
+  const outcome = await executeAICapability({
+    capability: "INLINE_WORDING_OPTIMIZATION",
+    credentialMode: runtime.credentialMode,
+    prompt,
+    systemInstruction: WORDING_SYSTEM_INSTRUCTION,
+  }, executionConfig);
 
   if (!outcome.ok) {
     throw new Error(`P1_AI_WORDING_UNAVAILABLE:${outcome.failureCode}`);
