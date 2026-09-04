@@ -10,10 +10,7 @@ import {
   PresentationEvidenceReceiptSchema,
   type PresentationEvidenceReceipt,
 } from "../../domain/presentation/PresentationRevision";
-import {
-  completeModelAssistedSemanticReview,
-  validatePresentationProposal,
-} from "./PresentationGuard";
+import { validatePresentationProposal } from "./PresentationGuard";
 
 export const P1_AI_PRESENTATION_CONTRACT_VERSION = "p1-ai-presentation-v1" as const;
 
@@ -77,10 +74,14 @@ function supportedTermsFromEvidence(sourceEvidence: readonly PresentationEvidenc
   return [...new Set(tokens.map((token) => token.toLocaleLowerCase("en-US")))];
 }
 
-function marketOnlyTerms(requirements: readonly string[], supportedTerms: readonly string[]) {
+function marketFactTerms(requirements: readonly string[], supportedTerms: readonly string[]) {
   const supported = new Set(supportedTerms.map((term) => term.toLocaleLowerCase("en-US")));
+  const stop = new Set(["required", "preferred", "experience", "with", "and", "the", "for", "role", "skills", "skill", "years", "year"]);
   const terms = requirements.flatMap((requirement) => requirement.match(/[A-Za-z][A-Za-z0-9+.#/-]{1,80}/g) ?? []);
-  return [...new Set(terms.filter((term) => !supported.has(term.toLocaleLowerCase("en-US"))))];
+  return [...new Set(terms.filter((term) => {
+    const normalized = term.toLocaleLowerCase("en-US");
+    return !supported.has(normalized) && !stop.has(normalized) && (/[A-Z]/.test(term[0] ?? "") || /[+.#/-]/.test(term));
+  }))];
 }
 
 export async function optimizePresentationWithAI(
@@ -90,7 +91,7 @@ export async function optimizePresentationWithAI(
   const input = OptimizationRequestSchema.parse(requestInput);
   const sourceText = sourceTextFor(input.sourceEvidence);
   const supportedTerms = supportedTermsFromEvidence(input.sourceEvidence);
-  const marketTerms = marketOnlyTerms(input.marketRequirements, supportedTerms);
+  const marketTerms = marketFactTerms(input.marketRequirements, supportedTerms);
 
   const outcome = await executeAICapability({
     capability: "INLINE_WORDING_OPTIMIZATION",
@@ -122,7 +123,6 @@ export async function optimizePresentationWithAI(
     sourceEvidence: input.sourceEvidence,
     proposedText: outcome.proposal.text,
     supportedTerms,
-    detectedCandidateTerms: outcome.proposal.text.match(/[A-Za-z][A-Za-z0-9+.#/-]{1,80}/g) ?? [],
     marketOnlyTerms: marketTerms,
   });
 
@@ -137,15 +137,11 @@ export async function optimizePresentationWithAI(
     };
   }
 
-  const reviewed = validation.overallStatus === "ACCEPTED"
-    ? validation
-    : completeModelAssistedSemanticReview(validation);
-
   return {
     status: "PROPOSED",
     proposedText: outcome.proposal.text,
     sourceText,
-    validation: reviewed,
+    validation,
     aiOutcome: outcome,
     aiProvenance: {
       provider: outcome.provenance.provider,
