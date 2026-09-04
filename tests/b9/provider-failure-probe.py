@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -47,6 +48,7 @@ def main() -> int:
         "expectedGitCommitSha": EXPECTED_SHA,
         "status": "FAIL",
     }
+    session_authenticated = False
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -70,20 +72,17 @@ def main() -> int:
             page.get_by_label("Password", exact=True).fill(PASSWORD)
             page.get_by_role("button", name="Sign in", exact=True).click()
 
-            # Existing synthetic diagnostic identity may land either on AI access or directly in product.
-            try:
-                page.get_by_role("heading", name="Choose how CV Engine may use AI").wait_for(timeout=15_000)
-                no_cloud = page.get_by_role("radio", name="Continue without cloud AI")
-                if no_cloud.count() == 1:
-                    no_cloud.click()
-                    page.get_by_role("button", name="Continue to CV Engine").click()
-            except Exception:
-                pass
-            page.get_by_role("button", name="Career Evidence", exact=True).wait_for(timeout=30_000)
-
-            session = context.request.get(f"{BASE_URL}/api/session", timeout=15_000)
-            if session.status != 200:
-                raise RuntimeError("DIAGNOSTIC_SESSION_NOT_AUTHENTICATED")
+            deadline = time.monotonic() + 20
+            session = None
+            while time.monotonic() < deadline:
+                session = context.request.get(f"{BASE_URL}/api/session", timeout=10_000)
+                if session.status == 200:
+                    session_authenticated = True
+                    break
+                time.sleep(0.5)
+            if not session_authenticated:
+                status = session.status if session is not None else "none"
+                raise RuntimeError(f"DIAGNOSTIC_SESSION_NOT_AUTHENTICATED:{status}")
 
             consent = context.request.post(
                 f"{BASE_URL}/api/consent",
@@ -104,11 +103,13 @@ def main() -> int:
             report["selectedEvidenceKind"] = selected.get("kind")
             report["selectedEvidenceRevision"] = selected.get("revision")
 
+            started = time.monotonic()
             proposal = context.request.post(
                 f"{BASE_URL}/api/presentation/evidence/{evidence_id}/proposals",
                 data={},
                 timeout=45_000,
             )
+            report["proposalElapsedMs"] = round((time.monotonic() - started) * 1000)
             payload = safe_json(proposal) or {}
             report["proposalHttpStatus"] = proposal.status
             report["proposalError"] = payload.get("error")
@@ -137,6 +138,7 @@ def main() -> int:
                 "proposalError": report.get("proposalError"),
                 "failureCode": report.get("failureCode"),
                 "attempts": report.get("attempts"),
+                "proposalElapsedMs": report.get("proposalElapsedMs"),
                 "outcome": report.get("outcome"),
             }, sort_keys=True))
             return 0
@@ -144,15 +146,18 @@ def main() -> int:
             report["error"] = str(exc)
             return 1
         finally:
-            try:
-                restore = context.request.post(
-                    f"{BASE_URL}/api/consent",
-                    data={"aiAccessModePreference": "NO_CLOUD_AI"},
-                    timeout=15_000,
-                )
-                report["consentRestoredToNoCloud"] = restore.status == 201
-            except Exception:
-                report["consentRestoredToNoCloud"] = False
+            if session_authenticated:
+                try:
+                    restore = context.request.post(
+                        f"{BASE_URL}/api/consent",
+                        data={"aiAccessModePreference": "NO_CLOUD_AI"},
+                        timeout=15_000,
+                    )
+                    report["consentRestoredToNoCloud"] = restore.status == 201
+                except Exception:
+                    report["consentRestoredToNoCloud"] = False
+            else:
+                report["consentRestoredToNoCloud"] = None
             (OUTPUT / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
             context.close()
             browser.close()
