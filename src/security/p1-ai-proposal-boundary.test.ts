@@ -36,7 +36,8 @@ describe("P1 AI presentation trust boundary", () => {
     expect(envExample).not.toContain("NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY");
     expect(adminClient).toContain('import "server-only"');
     expect(adminClient).toContain("process.env.SUPABASE_SERVICE_ROLE_KEY");
-    expect(route).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(route).not.toContain("process.env.SUPABASE_SERVICE_ROLE_KEY");
+    expect(route).toContain("createSupabaseAdminClient()");
   });
 
   it("uses a dedicated server-owned wording path instead of accepting the generic AI prompt contract", () => {
