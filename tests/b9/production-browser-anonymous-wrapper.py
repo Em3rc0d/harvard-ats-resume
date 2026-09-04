@@ -45,6 +45,15 @@ AUTH_SUBMIT_ANCHOR = '''            page.get_by_role("button", name="Create acco
 
 AUTH_SUBMIT_REPLACEMENT = '''            with page.expect_request("**/auth/v1/signup**", timeout=15_000):
                 page.get_by_role("button", name="Create account", exact=True).click()
+
+            # expect_request observes request emission before the route callback is
+            # guaranteed to have run. Wait briefly for the interception itself so
+            # the exactly-once assertion is deterministic instead of racing Playwright.
+            intercept_deadline = time.monotonic() + 2.0
+            while anonymous_signup_intercepts["count"] == 0 and time.monotonic() < intercept_deadline:
+                page.wait_for_timeout(25)
+            if anonymous_signup_intercepts["count"] == 0:
+                fail("B9_BROWSER_ANONYMOUS_AUTH_INTERCEPT_TIMEOUT")
             if anonymous_signup_intercepts["count"] != 1:
                 fail("B9_BROWSER_ANONYMOUS_AUTH_INTERCEPT_COUNT", str(anonymous_signup_intercepts["count"]))
             try:
