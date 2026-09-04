@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { AcceptImportProposalInputSchema } from "./import/Import";
+import { AcceptImportProposalGroupInputSchema, AcceptImportProposalInputSchema } from "./import/Import";
 import { createImportLineProposals, extractResumeMechanically } from "../application/import/ResumeExtractor";
 
 function storedDocx(documentXml: string) {
@@ -84,6 +84,26 @@ describe("B5 trusted import contracts", () => {
     expect(AcceptImportProposalInputSchema.safeParse({ kind: "OTHER" }).success).toBe(false);
   });
 
+  it("allows only explicit unique proposal ids and an explicit kind for grouped evidence", () => {
+    const ids = ["00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002"];
+    expect(AcceptImportProposalGroupInputSchema.safeParse({ proposalIds: ids, kind: "PROJECT" }).success).toBe(true);
+    expect(AcceptImportProposalGroupInputSchema.safeParse({ proposalIds: [ids[0]], kind: "PROJECT" }).success).toBe(false);
+    expect(AcceptImportProposalGroupInputSchema.safeParse({ proposalIds: [ids[0], ids[0]], kind: "PROJECT" }).success).toBe(false);
+    expect(AcceptImportProposalGroupInputSchema.safeParse({ proposalIds: ids, kind: "PROJECT", canonicalText: "Injected" }).success).toBe(false);
+  });
+
+  it("keeps grouped import acceptance explicit, contiguous and source-preserving", () => {
+    const migration = readFileSync("supabase/migrations/20260904030200_b9_import_proposal_grouping.sql", "utf8");
+    const ui = readFileSync("src/components/import/ResumeImportWorkspace.tsx", "utf8");
+    expect(migration).toContain("B5_IMPORT_GROUP_NONCONTIGUOUS");
+    expect(migration).toContain("B5_IMPORT_GROUP_RECEIPT_MISMATCH");
+    expect(migration).toContain("string_agg(ip.canonical_text, E'\\n' order by ip.ordinal)");
+    expect(migration).toContain("'NEEDS_REVIEW'");
+    expect(ui).toContain("Accept contiguous source lines as one evidence block");
+    expect(ui).toContain("SELECT_CONTIGUOUS_IMPORT_LINES_REQUIRED");
+    expect(ui).toContain('fetch("/api/imports/proposals/accept-group"');
+  });
+
   it("does not silently default imported review proposals to PROJECT in the UI", () => {
     const ui = readFileSync("src/components/import/ResumeImportWorkspace.tsx", "utf8");
     expect(ui).toContain("SELECT_EVIDENCE_KIND_REQUIRED");
@@ -91,6 +111,7 @@ describe("B5 trusted import contracts", () => {
     expect(ui).toContain("disabled={busy || !kindByProposal[proposal.id]}");
     expect(ui).not.toContain('kindByProposal[proposalId] ?? "PROJECT"');
     expect(ui).not.toContain('kindByProposal[proposal.id] ?? "PROJECT"');
+    expect(ui).not.toContain('groupKindByReceipt[receipt.id] ?? "PROJECT"');
   });
 
   it("does not define durable raw source-byte storage", () => {

@@ -115,6 +115,28 @@ export async function acceptImportProposal(client: SupabaseClient, ownerUserId: 
   };
 }
 
+export async function acceptImportProposalGroup(
+  client: SupabaseClient,
+  ownerUserId: string,
+  proposalIds: string[],
+  kind: string,
+) {
+  const result = await client.rpc("cv_engine_accept_import_proposal_group", {
+    p_proposal_ids: proposalIds,
+    p_kind: kind,
+  });
+  if (result.error) throw new Error(`B5_PROPOSAL_GROUP_ACCEPT_FAILED:${result.error.message}`);
+  const row = Array.isArray(result.data) ? result.data[0] : result.data;
+  if (!row || typeof row !== "object") throw new Error("B5_PROPOSAL_GROUP_ACCEPT_EMPTY");
+  const record = row as Record<string, unknown>;
+  const evidenceId = requiredString(record.accepted_evidence_id, "EVIDENCE_ID");
+  const receiptId = requiredString(record.source_receipt_id, "RECEIPT_ID");
+  return {
+    evidenceId,
+    receipt: await loadImportReceipt(client, ownerUserId, receiptId),
+  };
+}
+
 export async function dismissImportProposal(client: SupabaseClient, ownerUserId: string, proposalId: string) {
   const proposal = await client.from("import_proposals").select("receipt_id").eq("owner_user_id", ownerUserId).eq("id", proposalId).maybeSingle();
   if (proposal.error || !proposal.data) throw new Error("B5_IMPORT_PROPOSAL_NOT_FOUND");
