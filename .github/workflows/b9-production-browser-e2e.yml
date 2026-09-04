@@ -21,7 +21,6 @@ jobs:
       CVENGINE_BASE_URL: https://harvard-ats-resume.vercel.app
       CVENGINE_EXPECTED_SHA: ${{ github.sha }}
       CVENGINE_E2E_OUTPUT_DIR: artifacts/b9-production-browser
-      CVENGINE_SYNTHETIC_EMAIL: cvengine-b9-browser-cert@invalid.example
     steps:
       - name: Checkout exact release candidate
         uses: actions/checkout@v7
@@ -39,32 +38,52 @@ jobs:
       - name: Certify exact Production upload-to-artifact path
         run: |
           python - <<'PY'
-          import hashlib
-          import os
           import runpy
           from pathlib import Path
 
           source_path = Path("tests/b9/production-browser-e2e.py")
           source = source_path.read_text(encoding="utf-8")
-          signup = '''            page.get_by_role("button", name="Create an account").click()
-            page.get_by_label("Email", exact=True).fill(SYNTHETIC_EMAIL)
-            page.get_by_label("Password", exact=True).fill(SYNTHETIC_PASSWORD)
-            page.get_by_role("button", name="Create account", exact=True).click()
+          anchor = '''        try:
+            page.goto(BASE_URL, wait_until="networkidle", timeout=60_000)
 '''
-          signin = '''            page.get_by_label("Email", exact=True).fill(SYNTHETIC_EMAIL)
-            page.get_by_label("Password", exact=True).fill(SYNTHETIC_PASSWORD)
-            page.get_by_role("button", name="Sign in", exact=True).click()
+          replacement = '''        try:
+            # Certification only: preserve the real signup UI and Supabase client,
+            # but turn its one Auth signup request into a disposable anonymous
+            # signup. Supabase still creates a real authenticated user/session;
+            # the normal CV Engine account-deletion path removes it at the end.
+            def route_disposable_anonymous_signup(route):
+                if route.request.method != "POST":
+                    route.continue_()
+                    return
+                route.continue_(post_data="{}")
+
+            page.route("**/auth/v1/signup", route_disposable_anonymous_signup)
+            page.goto(BASE_URL, wait_until="networkidle", timeout=60_000)
 '''
-          if source.count(signup) != 1:
+          if source.count(anchor) != 1:
               raise SystemExit("B9_BROWSER_AUTH_PATCH_SOURCE_MISMATCH")
+
+          auth_failure = '''                if "Check your email" in statuses:
+                    fail("B9_BROWSER_SIGNUP_REQUIRES_EMAIL_CONFIRMATION")
+                fail("B9_BROWSER_AUTH_DID_NOT_ADVANCE", statuses)
+'''
+          auth_failure_replacement = '''                if "Anonymous sign-ins are disabled" in statuses:
+                    fail("B9_BROWSER_ANONYMOUS_AUTH_DISABLED")
+                if "rate limit" in statuses.lower() or "too many requests" in statuses.lower():
+                    fail("B9_BROWSER_ANONYMOUS_AUTH_RATE_LIMITED", statuses)
+                if "Check your email" in statuses:
+                    fail("B9_BROWSER_SIGNUP_REQUIRES_EMAIL_CONFIRMATION")
+                fail("B9_BROWSER_AUTH_DID_NOT_ADVANCE", statuses)
+'''
+          if source.count(auth_failure) != 1:
+              raise SystemExit("B9_BROWSER_AUTH_FAILURE_PATCH_SOURCE_MISMATCH")
 
           patched_path = Path("artifacts/b9-production-browser/patched-production-browser-e2e.py")
           patched_path.parent.mkdir(parents=True, exist_ok=True)
-          patched_path.write_text(source.replace(signup, signin, 1), encoding="utf-8")
+          patched = source.replace(anchor, replacement, 1).replace(auth_failure, auth_failure_replacement, 1)
+          patched_path.write_text(patched, encoding="utf-8")
 
           harness = runpy.run_path(str(patched_path), run_name="cvengine_b9_browser")
-          harness["SYNTHETIC_EMAIL"] = os.environ["CVENGINE_SYNTHETIC_EMAIL"]
-          harness["SYNTHETIC_PASSWORD"] = hashlib.sha256(b"cvengine-b9-browser-cert-v1").hexdigest() + "A1!"
           raise SystemExit(harness["main"]())
           PY
 
