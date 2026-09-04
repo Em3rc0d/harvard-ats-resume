@@ -24,13 +24,15 @@ describe("B9 production browser certification contract", () => {
     expect(workflow).not.toContain("python - <<'PY'");
   });
 
-  it("uses a query-safe, exactly-once disposable anonymous Auth wrapper without privileged credentials", () => {
+  it("uses a service-worker-safe, exactly-once disposable anonymous Auth wrapper without privileged credentials", () => {
     const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
     const wrapper = read("tests/b9/production-browser-anonymous-wrapper.py");
+    expect(wrapper).toContain("B9_BROWSER_CONTEXT_PATCH_SOURCE_MISMATCH");
     expect(wrapper).toContain("B9_BROWSER_AUTH_PATCH_SOURCE_MISMATCH");
     expect(wrapper).toContain("B9_BROWSER_AUTH_SUBMIT_PATCH_SOURCE_MISMATCH");
     expect(wrapper).toContain("B9_BROWSER_AUTH_FAILURE_PATCH_SOURCE_MISMATCH");
-    expect(wrapper).toContain('page.route("**/auth/v1/signup**", route_disposable_anonymous_signup)');
+    expect(wrapper).toContain('service_workers="block"');
+    expect(wrapper).toContain('context.route("**/auth/v1/signup**", route_disposable_anonymous_signup)');
     expect(wrapper).toContain('page.expect_request("**/auth/v1/signup**", timeout=15_000)');
     expect(wrapper).toContain('anonymous_signup_intercepts["count"] += 1');
     expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_INTERCEPT_COUNT");
