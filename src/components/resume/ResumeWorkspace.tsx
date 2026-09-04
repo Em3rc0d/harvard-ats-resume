@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import type { JobSnapshot } from "../../domain/jobs/JobSnapshot";
 import type { OpportunityAssessment } from "../../domain/matching/Assessment";
 import type { ResumeArtifact } from "../../domain/resume/ResumeArtifact";
-import type { ResumePlan, ResumePlanModeSchema } from "../../domain/resume/ResumePlan";
+import type { ResumePlan } from "../../domain/resume/ResumePlan";
 import type { ResumeProfile } from "../../domain/resume/ResumeProfile";
 
-type ResumeMode = typeof ResumePlanModeSchema._type;
+type ResumeMode = ResumePlan["mode"];
 
 type ProfileDraft = {
   displayName: string;
