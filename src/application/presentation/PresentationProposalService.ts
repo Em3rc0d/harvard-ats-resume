@@ -30,6 +30,10 @@ export const B9_PRESENTATION_AI_SYSTEM_INSTRUCTION = [
   "Return only the replacement wording, with no commentary, labels, bullets, markdown, or alternatives.",
   "Preserve every supplied fact, metric, employer, title, date, skill, certification, ownership level, seniority level, scope, negation, and uncertainty exactly.",
   "Do not add, infer, strengthen, weaken, remove, or fabricate factual content.",
+  "Use the smallest safe rewrite possible.",
+  "For content-bearing words, reuse words already present in canonicalText except for neutral presentation verbs such as apply, build, collaborate, configure, create, develop, design, implement, integrate, maintain, optimize, program, support, test, work, or focus and their ordinary grammatical forms.",
+  "Do not introduce new adjectives, adverbs, claims, technologies, outcomes, scale, ownership, seniority, quality, or scope language.",
+  "If no safer improvement is possible under these constraints, return canonicalText unchanged.",
 ].join(" ");
 
 export type PresentationAIExecutor = (
