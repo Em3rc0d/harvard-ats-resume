@@ -30,6 +30,9 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Preflight exact Production runtime
+        run: python tests/b9/production-runtime-preflight.py
+
       - name: Install pinned browser harness
         run: |
           python -m pip install --disable-pip-version-check playwright==1.55.0
