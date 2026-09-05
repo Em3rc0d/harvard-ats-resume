@@ -86,6 +86,12 @@ describe("B9 production browser certification contract", () => {
     expect(workflow).not.toContain("CVENGINE_SYNTHETIC_PASSWORD:");
   });
 
+  it("preserves whitespace semantics in confirmation URL extraction instead of excluding literal s", () => {
+    const wrapper = read("tests/b9/production-browser-email-wrapper.py");
+    expect(wrapper).toContain(String.raw`https://[^\s\"'<>]+`);
+    expect(wrapper).not.toContain(String.raw`https://[^\\s\\\"'<>]+`);
+  });
+
   it("pins the mail API representation and emits a sanitized receipt before mailbox provisioning", () => {
     const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
     const wrapper = read("tests/b9/production-browser-email-wrapper.py");
