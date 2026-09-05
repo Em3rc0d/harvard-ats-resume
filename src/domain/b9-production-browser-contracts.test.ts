@@ -86,6 +86,26 @@ describe("B9 production browser certification contract", () => {
     expect(workflow).not.toContain("CVENGINE_SYNTHETIC_PASSWORD:");
   });
 
+  it("pins the mail API representation and emits a sanitized receipt before mailbox provisioning", () => {
+    const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
+    const wrapper = read("tests/b9/production-browser-email-wrapper.py");
+    const receiptIndex = wrapper.indexOf("_write_wrapper_report(report)");
+    const mailboxIndex = wrapper.indexOf("mailbox = TemporaryMailbox.create()");
+
+    expect(wrapper).toContain('MAILTM_ACCEPT = "application/ld+json"');
+    expect(wrapper).toContain('WRAPPER_REPORT_PATH = OUTPUT_DIR / "wrapper-report.json"');
+    expect(wrapper).toContain('"schemaVersion": "b9-production-browser-wrapper-receipt-v1"');
+    expect(wrapper).toContain("def _collection_members");
+    expect(wrapper).toContain('payload.get("hydra:member")');
+    expect(wrapper).toContain('payload.get("data")');
+    expect(wrapper).toContain('payload.get("_embedded")');
+    expect(wrapper).toContain('report["failedPhase"]');
+    expect(receiptIndex).toBeGreaterThan(-1);
+    expect(mailboxIndex).toBeGreaterThan(receiptIndex);
+    expect(workflow).toContain("if: always()");
+    expect(workflow).toContain("path: artifacts/b9-production-browser");
+  });
+
   it("keeps ephemeral mailbox credentials out of the patched artifact", () => {
     const wrapper = read("tests/b9/production-browser-email-wrapper.py");
     expect(wrapper).toContain("SYNTHETIC_EMAIL = CERT_AUTH_EMAIL");
