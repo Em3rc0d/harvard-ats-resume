@@ -20,7 +20,7 @@ describe("B9 production browser certification contract", () => {
     expect(workflow).toContain("CVENGINE_EXPECTED_SHA: ${{ github.sha }}");
     expect(workflow).toContain("https://harvard-ats-resume.vercel.app");
     expect(workflow).toContain("playwright==1.55.0");
-    expect(workflow).toContain("python tests/b9/production-browser-anonymous-wrapper.py");
+    expect(workflow).toContain("python tests/b9/production-browser-email-wrapper.py");
     expect(workflow).not.toContain("python - <<'PY'");
   });
 
@@ -29,7 +29,7 @@ describe("B9 production browser certification contract", () => {
     const preflight = read("tests/b9/production-runtime-preflight.py");
     const preflightIndex = workflow.indexOf("python tests/b9/production-runtime-preflight.py");
     const installIndex = workflow.indexOf("python -m pip install --disable-pip-version-check playwright==1.55.0");
-    const certifyIndex = workflow.indexOf("python tests/b9/production-browser-anonymous-wrapper.py");
+    const certifyIndex = workflow.indexOf("python tests/b9/production-browser-email-wrapper.py");
 
     expect(preflightIndex).toBeGreaterThan(-1);
     expect(installIndex).toBeGreaterThan(preflightIndex);
@@ -62,27 +62,36 @@ describe("B9 production browser certification contract", () => {
     }
   });
 
-  it("uses a service-worker-safe, exactly-once disposable anonymous Auth wrapper without privileged credentials", () => {
+  it("uses an ephemeral email-confirmed Auth fixture without privileged credentials or Auth weakening", () => {
     const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
-    const wrapper = read("tests/b9/production-browser-anonymous-wrapper.py");
-    expect(wrapper).toContain("B9_BROWSER_CONTEXT_PATCH_SOURCE_MISMATCH");
-    expect(wrapper).toContain("B9_BROWSER_AUTH_PATCH_SOURCE_MISMATCH");
-    expect(wrapper).toContain("B9_BROWSER_AUTH_SUBMIT_PATCH_SOURCE_MISMATCH");
-    expect(wrapper).toContain("B9_BROWSER_AUTH_FAILURE_PATCH_SOURCE_MISMATCH");
-    expect(wrapper).toContain('service_workers="block"');
-    expect(wrapper).toContain('context.route("**/auth/v1/signup**", route_disposable_anonymous_signup)');
-    expect(wrapper).toContain('page.expect_request("**/auth/v1/signup**", timeout=15_000)');
-    expect(wrapper).toContain('anonymous_signup_intercepts["count"] += 1');
-    expect(wrapper).toContain('intercept_deadline = time.monotonic() + 2.0');
-    expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_INTERCEPT_TIMEOUT");
-    expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_INTERCEPT_COUNT");
-    expect(wrapper).toContain('route.continue_(post_data="{}")');
-    expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_DISABLED");
-    expect(wrapper).toContain("B9_BROWSER_ANONYMOUS_AUTH_RATE_LIMITED");
-    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_PASSWORD:");
-    expect(workflow).not.toContain("SUPABASE_SERVICE_ROLE");
+    const wrapper = read("tests/b9/production-browser-email-wrapper.py");
+
+    expect(wrapper).toContain("https://mail.tm");
+    expect(wrapper).toContain("secrets.token_urlsafe");
+    expect(wrapper).toContain("CERT_AUTH_WAIT_FOR_CONFIRMATION");
+    expect(wrapper).toContain("/auth/v1/verify");
+    expect(wrapper).toContain('SUPABASE_CONFIRM_HOST = "zqcwlnshtsectitagkca.supabase.co"');
+    expect(wrapper).toContain('redirect.path != "/auth/callback"');
+    expect(wrapper).toContain("B9_BROWSER_EMAIL_CONFIRMATION_NOT_RECEIVED");
+    expect(wrapper).toContain("B9_BROWSER_EMAIL_CONFIRMATION_LINK_NOT_FOUND");
+    expect(wrapper).toContain("B9_BROWSER_EMAIL_SIGNUP_RATE_LIMITED");
+    expect(wrapper).toContain("mailbox.delete()");
+    expect(wrapper).toContain("B9_CERT_MAILBOX_CLEANUP_FAILED");
+    expect(wrapper).toContain('report["checks"].append("EMAIL_CONFIRMED_AUTH_SESSION")');
+    expect(wrapper).toContain("Acknowledge and continue");
+    expect(wrapper).not.toContain("route.continue_");
+    expect(wrapper).not.toContain("signInAnonymously");
     expect(wrapper).not.toContain("SUPABASE_SERVICE_ROLE");
-    expect(wrapper).not.toContain("hashlib.sha256");
+    expect(workflow).not.toContain("SUPABASE_SERVICE_ROLE");
+    expect(workflow).not.toContain("CVENGINE_SYNTHETIC_PASSWORD:");
+  });
+
+  it("keeps ephemeral mailbox credentials out of the patched artifact", () => {
+    const wrapper = read("tests/b9/production-browser-email-wrapper.py");
+    expect(wrapper).toContain("SYNTHETIC_EMAIL = CERT_AUTH_EMAIL");
+    expect(wrapper).toContain("SYNTHETIC_PASSWORD = CERT_AUTH_PASSWORD");
+    expect(wrapper).toContain("init_globals={");
+    expect(wrapper).not.toContain("PATCHED_PATH.write_text(f");
   });
 
   it("observes the Presentation proposal HTTP outcome before trusting rendered UI state", () => {
