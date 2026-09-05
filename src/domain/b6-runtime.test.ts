@@ -145,8 +145,10 @@ describe("B6 AI runtime", () => {
   });
 
   it("normalizes provider errors and never echoes provider bodies or credentials", async () => {
-    const gemini = await listen((_request, response) => json(response, 401, { error: `invalid ${SECRET}` }));
-    const ollama = await listen((_request, response) => json(response, 500, { error: `bad ${SECRET} ${OLLAMA_SECRET}` }));
+    const geminiErrorMarker = "provider-body-invalid-canary";
+    const ollamaErrorMarker = "provider-body-bad-canary";
+    const gemini = await listen((_request, response) => json(response, 401, { error: `${geminiErrorMarker} ${SECRET}` }));
+    const ollama = await listen((_request, response) => json(response, 500, { error: `${ollamaErrorMarker} ${SECRET} ${OLLAMA_SECRET}` }));
 
     const outcome = await executeAICapability({
       capability: "OPPORTUNITY_EXPLANATION",
@@ -159,8 +161,8 @@ describe("B6 AI runtime", () => {
     const serialized = JSON.stringify(outcome);
     expect(serialized).not.toContain(SECRET);
     expect(serialized).not.toContain(OLLAMA_SECRET);
-    expect(serialized).not.toContain("invalid");
-    expect(serialized).not.toContain("bad");
+    expect(serialized).not.toContain(geminiErrorMarker);
+    expect(serialized).not.toContain(ollamaErrorMarker);
     if (!outcome.ok) expect(outcome.attempts.every((attempt) => attempt.failureCode !== null)).toBe(true);
   });
 

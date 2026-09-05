@@ -66,7 +66,7 @@ AUTH_FLOW_REPLACEMENT = '''            page.get_by_role("button", name="Create a
                     fail("B9_BROWSER_AUTH_DID_NOT_ADVANCE", statuses)
 
                 confirmation_url = CERT_AUTH_WAIT_FOR_CONFIRMATION()
-                page.goto(confirmation_url, wait_until="networkidle", timeout=60_000)
+                page.goto(confirmation_url, wait_until="domcontentloaded", timeout=30_000)
 
                 ai_heading = page.get_by_role("heading", name="Choose how CV Engine may use AI")
                 if not ai_heading.is_visible():
