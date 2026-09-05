@@ -190,7 +190,7 @@ def _candidate_urls(value: str) -> list[str]:
     decoded = html.unescape(value)
     return [
         item.rstrip(".,);]")
-        for item in re.findall(r"https://[^\\s\\\"'<>]+", decoded)
+        for item in re.findall(r"https://[^\s\"'<>]+", decoded)
     ]
 
 
