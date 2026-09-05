@@ -92,6 +92,14 @@ describe("B9 production browser certification contract", () => {
     expect(wrapper).not.toContain(String.raw`https://[^\\s\\\"'<>]+`);
   });
 
+  it("uses DOM readiness plus semantic UI waits for email confirmation redirects", () => {
+    const wrapper = read("tests/b9/production-browser-email-wrapper.py");
+    expect(wrapper).toContain('page.goto(confirmation_url, wait_until="domcontentloaded", timeout=30_000)');
+    expect(wrapper).not.toContain('page.goto(confirmation_url, wait_until="networkidle"');
+    expect(wrapper).toContain("trust_heading.wait_for(timeout=30_000)");
+    expect(wrapper).toContain("ai_heading.wait_for(timeout=30_000)");
+  });
+
   it("pins the mail API representation and emits a sanitized receipt before mailbox provisioning", () => {
     const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
     const wrapper = read("tests/b9/production-browser-email-wrapper.py");
