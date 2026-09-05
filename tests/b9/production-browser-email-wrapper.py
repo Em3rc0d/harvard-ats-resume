@@ -17,9 +17,12 @@ from typing import Any
 # provider and intentionally kept out of the CV Engine product runtime:
 # https://mail.tm
 MAILTM_BASE_URL = "https://api.mail.tm"
+MAILTM_ACCEPT = "application/ld+json"
 SUPABASE_CONFIRM_HOST = "zqcwlnshtsectitagkca.supabase.co"
 SOURCE_PATH = Path("tests/b9/production-browser-e2e.py")
-PATCHED_PATH = Path("artifacts/b9-production-browser/patched-production-browser-e2e.py")
+OUTPUT_DIR = Path(os.environ.get("CVENGINE_E2E_OUTPUT_DIR", "artifacts/b9-production-browser"))
+PATCHED_PATH = OUTPUT_DIR / "patched-production-browser-e2e.py"
+WRAPPER_REPORT_PATH = OUTPUT_DIR / "wrapper-report.json"
 BASE_URL = os.environ.get("CVENGINE_BASE_URL", "https://harvard-ats-resume.vercel.app").rstrip("/")
 RUN_ID = os.environ.get("GITHUB_RUN_ID", "local")
 RUN_ATTEMPT = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
@@ -86,16 +89,26 @@ class MailboxError(RuntimeError):
     pass
 
 
+def _error_code(error: BaseException) -> str:
+    text = str(error).strip()
+    return text.split(":", 1)[0] if text else error.__class__.__name__
+
+
+def _write_wrapper_report(report: dict[str, Any]) -> None:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    WRAPPER_REPORT_PATH.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+
+
 def _request_json(
     method: str,
     path: str,
     *,
     payload: dict[str, Any] | None = None,
     token: str | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     body = None if payload is None else json.dumps(payload).encode("utf-8")
     headers = {
-        "Accept": "application/json",
+        "Accept": MAILTM_ACCEPT,
         "User-Agent": "cvengine-b9-certification",
     }
     if payload is not None:
@@ -118,8 +131,8 @@ def _request_json(
                 if not raw:
                     return {}
                 parsed = json.loads(raw.decode("utf-8"))
-                if not isinstance(parsed, dict):
-                    raise MailboxError("B9_CERT_MAIL_API_INVALID_JSON")
+                if not isinstance(parsed, (dict, list)):
+                    raise MailboxError("B9_CERT_MAIL_API_JSON_SHAPE_UNSUPPORTED")
                 return parsed
         except urllib.error.HTTPError as error:
             if error.code == 429 and attempt < 2:
@@ -131,10 +144,46 @@ def _request_json(
                 time.sleep(1.0 + attempt)
                 continue
             raise MailboxError("B9_CERT_MAIL_API_UNREACHABLE") from None
-        except json.JSONDecodeError:
+        except (UnicodeDecodeError, json.JSONDecodeError):
             raise MailboxError("B9_CERT_MAIL_API_INVALID_JSON") from None
 
     raise MailboxError("B9_CERT_MAIL_API_UNREACHABLE")
+
+
+def _as_object(payload: dict[str, Any] | list[Any], code: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise MailboxError(code)
+    return payload
+
+
+def _collection_members(payload: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+
+    hydra_members = payload.get("hydra:member")
+    if isinstance(hydra_members, list):
+        return [item for item in hydra_members if isinstance(item, dict)]
+
+    data = payload.get("data")
+    if isinstance(data, list):
+        normalized: list[dict[str, Any]] = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            attributes = item.get("attributes")
+            if isinstance(attributes, dict):
+                normalized.append({**attributes, **({"id": item.get("id")} if item.get("id") else {})})
+            else:
+                normalized.append(item)
+        return normalized
+
+    embedded = payload.get("_embedded")
+    if isinstance(embedded, dict):
+        for value in embedded.values():
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+
+    raise MailboxError("B9_CERT_MAIL_COLLECTION_SHAPE_UNSUPPORTED")
 
 
 def _candidate_urls(value: str) -> list[str]:
@@ -177,12 +226,11 @@ class TemporaryMailbox:
 
     @classmethod
     def create(cls) -> "TemporaryMailbox":
-        domains = _request_json("GET", "/domains")
+        domains_payload = _request_json("GET", "/domains")
         candidates = [
             item.get("domain")
-            for item in domains.get("hydra:member", [])
-            if isinstance(item, dict)
-            and item.get("isActive") is True
+            for item in _collection_members(domains_payload)
+            if item.get("isActive") is True
             and item.get("isPrivate") is not True
             and isinstance(item.get("domain"), str)
         ]
@@ -191,19 +239,25 @@ class TemporaryMailbox:
 
         address = f"cvengine-b9-mail-{RUN_ID}-{RUN_ATTEMPT}@{candidates[0]}"
         password = secrets.token_urlsafe(36) + "A1!"
-        account = _request_json(
-            "POST",
-            "/accounts",
-            payload={"address": address, "password": password},
+        account = _as_object(
+            _request_json(
+                "POST",
+                "/accounts",
+                payload={"address": address, "password": password},
+            ),
+            "B9_CERT_MAIL_ACCOUNT_SHAPE_UNSUPPORTED",
         )
         account_id = account.get("id")
         if not isinstance(account_id, str) or not account_id:
             raise MailboxError("B9_CERT_MAIL_ACCOUNT_ID_MISSING")
 
-        auth = _request_json(
-            "POST",
-            "/token",
-            payload={"address": address, "password": password},
+        auth = _as_object(
+            _request_json(
+                "POST",
+                "/token",
+                payload={"address": address, "password": password},
+            ),
+            "B9_CERT_MAIL_TOKEN_SHAPE_UNSUPPORTED",
         )
         token = auth.get("token")
         if not isinstance(token, str) or not token:
@@ -217,33 +271,32 @@ class TemporaryMailbox:
 
         while time.monotonic() < deadline:
             listing = _request_json("GET", "/messages", token=self.token)
-            members = listing.get("hydra:member", [])
-            if isinstance(members, list):
-                for item in members:
-                    if not isinstance(item, dict):
-                        continue
-                    message_id = item.get("id")
-                    if not isinstance(message_id, str) or not message_id or message_id in inspected:
-                        continue
-                    inspected.add(message_id)
-                    saw_message = True
-                    detail = _request_json("GET", f"/messages/{message_id}", token=self.token)
+            for item in _collection_members(listing):
+                message_id = item.get("id")
+                if not isinstance(message_id, str) or not message_id or message_id in inspected:
+                    continue
+                inspected.add(message_id)
+                saw_message = True
+                detail = _as_object(
+                    _request_json("GET", f"/messages/{message_id}", token=self.token),
+                    "B9_CERT_MAIL_MESSAGE_SHAPE_UNSUPPORTED",
+                )
 
-                    fields: list[str] = []
-                    verifications = detail.get("verifications")
-                    if isinstance(verifications, list):
-                        fields.extend(value for value in verifications if isinstance(value, str))
-                    text = detail.get("text")
-                    if isinstance(text, str):
-                        fields.append(text)
-                    html_parts = detail.get("html")
-                    if isinstance(html_parts, list):
-                        fields.extend(value for value in html_parts if isinstance(value, str))
+                fields: list[str] = []
+                verifications = detail.get("verifications")
+                if isinstance(verifications, list):
+                    fields.extend(value for value in verifications if isinstance(value, str))
+                text = detail.get("text")
+                if isinstance(text, str):
+                    fields.append(text)
+                html_parts = detail.get("html")
+                if isinstance(html_parts, list):
+                    fields.extend(value for value in html_parts if isinstance(value, str))
 
-                    for field in fields:
-                        confirmation = _valid_confirmation_url(field)
-                        if confirmation:
-                            return confirmation
+                for field in fields:
+                    confirmation = _valid_confirmation_url(field)
+                    if confirmation:
+                        return confirmation
             time.sleep(2.5)
 
         if saw_message:
@@ -255,21 +308,38 @@ class TemporaryMailbox:
 
 
 def main() -> int:
-    source = SOURCE_PATH.read_text(encoding="utf-8")
-    if source.count(CREDENTIAL_ANCHOR) != 1:
-        raise SystemExit("B9_BROWSER_EMAIL_CREDENTIAL_PATCH_SOURCE_MISMATCH")
-    if source.count(AUTH_FLOW_ANCHOR) != 1:
-        raise SystemExit("B9_BROWSER_EMAIL_AUTH_PATCH_SOURCE_MISMATCH")
+    report: dict[str, Any] = {
+        "schemaVersion": "b9-production-browser-wrapper-receipt-v1",
+        "status": "FAIL",
+        "phase": "PRE_HARNESS",
+        "mailProvider": "mail.tm",
+        "mailRepresentation": MAILTM_ACCEPT,
+        "checks": [],
+    }
+    _write_wrapper_report(report)
 
-    mailbox = TemporaryMailbox.create()
-    PATCHED_PATH.parent.mkdir(parents=True, exist_ok=True)
-    patched = source.replace(CREDENTIAL_ANCHOR, CREDENTIAL_REPLACEMENT, 1)
-    patched = patched.replace(AUTH_FLOW_ANCHOR, AUTH_FLOW_REPLACEMENT, 1)
-    PATCHED_PATH.write_text(patched, encoding="utf-8")
-
+    mailbox: TemporaryMailbox | None = None
     result = 1
     cleanup_failed = False
     try:
+        source = SOURCE_PATH.read_text(encoding="utf-8")
+        if source.count(CREDENTIAL_ANCHOR) != 1:
+            raise MailboxError("B9_BROWSER_EMAIL_CREDENTIAL_PATCH_SOURCE_MISMATCH")
+        if source.count(AUTH_FLOW_ANCHOR) != 1:
+            raise MailboxError("B9_BROWSER_EMAIL_AUTH_PATCH_SOURCE_MISMATCH")
+
+        report["phase"] = "MAILBOX_PROVISION"
+        _write_wrapper_report(report)
+        mailbox = TemporaryMailbox.create()
+        report["checks"].append("TEMPORARY_MAILBOX_PROVISIONED")
+
+        patched = source.replace(CREDENTIAL_ANCHOR, CREDENTIAL_REPLACEMENT, 1)
+        patched = patched.replace(AUTH_FLOW_ANCHOR, AUTH_FLOW_REPLACEMENT, 1)
+        PATCHED_PATH.write_text(patched, encoding="utf-8")
+        report["checks"].append("BROWSER_HARNESS_PATCHED_WITH_IN_MEMORY_CREDENTIALS")
+        report["phase"] = "BROWSER_HARNESS"
+        _write_wrapper_report(report)
+
         harness = runpy.run_path(
             str(PATCHED_PATH),
             run_name="cvengine_b9_browser",
@@ -280,14 +350,33 @@ def main() -> int:
             },
         )
         result = int(harness["main"]())
+        report["harnessExitCode"] = result
+        if result == 0:
+            report["status"] = "PASS"
+            report["checks"].append("BROWSER_HARNESS_PASSED")
+        else:
+            report["errorCode"] = "B9_CERT_BROWSER_HARNESS_FAILED"
+    except Exception as error:
+        report["failedPhase"] = report["phase"]
+        report["errorCode"] = _error_code(error)
+        print(str(error), file=os.sys.stderr)
+        result = 1
     finally:
-        try:
-            mailbox.delete()
-        except Exception:
-            cleanup_failed = True
+        if mailbox is not None:
+            try:
+                mailbox.delete()
+                report["checks"].append("TEMPORARY_MAILBOX_DELETED")
+            except Exception:
+                cleanup_failed = True
+                report["failedPhase"] = "MAILBOX_CLEANUP"
+                report["errorCode"] = "B9_CERT_MAILBOX_CLEANUP_FAILED"
+                report["status"] = "FAIL"
+                print("B9_CERT_MAILBOX_CLEANUP_FAILED", file=os.sys.stderr)
+        if report["status"] == "PASS":
+            report["phase"] = "COMPLETE"
+        _write_wrapper_report(report)
 
     if cleanup_failed:
-        print("B9_CERT_MAILBOX_CLEANUP_FAILED", file=os.sys.stderr)
         return 1
     return result
 
