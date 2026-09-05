@@ -57,7 +57,7 @@ jobs:
         run: npm run typecheck
 
       - name: Verify browser certification harness syntax
-        run: python -m py_compile tests/b9/production-browser-e2e.py tests/b9/production-browser-anonymous-wrapper.py
+        run: python -m py_compile tests/b9/production-browser-e2e.py tests/b9/production-browser-email-wrapper.py
 
       - name: Verify PostgreSQL client
         run: psql --version

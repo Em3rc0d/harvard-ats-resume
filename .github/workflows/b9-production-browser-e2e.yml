@@ -39,7 +39,7 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: Certify exact Production upload-to-artifact path
-        run: python tests/b9/production-browser-anonymous-wrapper.py
+        run: python tests/b9/production-browser-email-wrapper.py
 
       - name: Upload sanitized browser receipt
         if: always()
