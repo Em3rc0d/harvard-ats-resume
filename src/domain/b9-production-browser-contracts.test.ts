@@ -24,6 +24,44 @@ describe("B9 production browser certification contract", () => {
     expect(workflow).not.toContain("python - <<'PY'");
   });
 
+  it("refuses stale Production before installing the heavy browser harness", () => {
+    const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
+    const preflight = read("tests/b9/production-runtime-preflight.py");
+    const preflightIndex = workflow.indexOf("python tests/b9/production-runtime-preflight.py");
+    const installIndex = workflow.indexOf("python -m pip install --disable-pip-version-check playwright==1.55.0");
+    const certifyIndex = workflow.indexOf("python tests/b9/production-browser-anonymous-wrapper.py");
+
+    expect(preflightIndex).toBeGreaterThan(-1);
+    expect(installIndex).toBeGreaterThan(preflightIndex);
+    expect(certifyIndex).toBeGreaterThan(installIndex);
+    expect(preflight).toContain("/api/build-info");
+    expect(preflight).toContain("B9_PREFLIGHT_EXACT_RUNTIME_READY");
+    expect(preflight).toContain("B9_PREFLIGHT_EXACT_RUNTIME_NOT_READY");
+    expect(preflight).toContain('last.get("gitCommitSha") == EXPECTED_SHA');
+    expect(preflight).toContain('last.get("environment") == "production"');
+    expect(preflight).not.toContain("playwright");
+    expect(preflight).not.toContain("SUPABASE_SERVICE_ROLE");
+  });
+
+  it("suppresses automatic B9 branch previews while preserving main Production deployment", () => {
+    const config = JSON.parse(read("vercel.json")) as {
+      git?: { deploymentEnabled?: Record<string, boolean> };
+    };
+    const rules = config.git?.deploymentEnabled;
+
+    expect(rules?.main).toBe(true);
+    for (const pattern of [
+      "agent/b9-*",
+      "fix/b9-*",
+      "diagnostic/b9-*",
+      "cert/b9-*",
+      "test/b9-*",
+      "docs/b9-*",
+    ]) {
+      expect(rules?.[pattern]).toBe(false);
+    }
+  });
+
   it("uses a service-worker-safe, exactly-once disposable anonymous Auth wrapper without privileged credentials", () => {
     const workflow = read(".github/workflows/b9-production-browser-e2e.yml");
     const wrapper = read("tests/b9/production-browser-anonymous-wrapper.py");
