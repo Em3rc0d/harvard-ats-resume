@@ -82,9 +82,9 @@ def write_synthetic_docx(path: Path) -> None:
         archive.writestr("word/document.xml", document_xml)
 
 
-def download_bytes(page: Page, accessible_name: str) -> bytes:
+def download_bytes(page: Page, container: Any, accessible_name: str) -> bytes:
     with page.expect_download(timeout=30_000) as download_info:
-        page.get_by_role("link", name=accessible_name, exact=True).click()
+        container.get_by_role("link", name=accessible_name, exact=True).click()
     download = download_info.value
     path = download.path()
     if path is None:
@@ -304,10 +304,10 @@ def run_browser(report: dict[str, Any]) -> None:
                 fail("B9_BROWSER_PREVIEW_MISSING_APPROVED_PRESENTATION")
             report["checks"].append("GENERAL_RESUME_ARTIFACT_CREATED_FROM_APPROVED_PRESENTATION")
 
-            txt = download_bytes(artifact_card, "TXT").decode("utf-8")
-            provenance_bytes = download_bytes(artifact_card, "Provenance JSON")
-            docx = download_bytes(artifact_card, "Download DOCX")
-            pdf = download_bytes(artifact_card, "Download PDF")
+            txt = download_bytes(page, artifact_card, "TXT").decode("utf-8")
+            provenance_bytes = download_bytes(page, artifact_card, "Provenance JSON")
+            docx = download_bytes(page, artifact_card, "Download DOCX")
+            pdf = download_bytes(page, artifact_card, "Download PDF")
             if CANDIDATE_NAME not in txt or rendered_text not in txt:
                 fail("B9_BROWSER_TXT_CANONICAL_CONTENT_MISMATCH")
             provenance = json.loads(provenance_bytes.decode("utf-8"))
