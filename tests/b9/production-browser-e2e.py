@@ -330,7 +330,7 @@ def run_browser(report: dict[str, Any]) -> None:
             report["artifactSemanticSha256"] = provenance.get("artifactSemanticSha256")
             report["checks"].append("DOCX_PDF_TXT_PROVENANCE_PARITY")
 
-            page.reload(wait_until="networkidle", timeout=60_000)
+            page.reload(wait_until="domcontentloaded", timeout=30_000)
             page.get_by_role("button", name="Resume", exact=True).wait_for(timeout=30_000)
             page.get_by_role("button", name="Resume", exact=True).click()
             reloaded_card = page.locator("article.evidence-card").filter(has_text=CANDIDATE_NAME).first
