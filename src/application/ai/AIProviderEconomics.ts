@@ -1,7 +1,7 @@
 import type { AIExecutionBudget } from "../../domain/ai/AICapability";
 import type { AICapabilityName, AIProviderAttemptPlan } from "./AIGatewayFoundation";
 
-export const GEMINI_PRICING_CONTRACT_VERSION = "google-gemini-paid-standard-2026-09-01" as const;
+export const GEMINI_PRICING_CONTRACT_VERSION = "google-gemini-paid-standard-2026-09-10" as const;
 export const GEMINI_PRICING_VALID_THROUGH = "2026-12-31" as const;
 
 type GeminiPrice = Readonly<{
@@ -14,6 +14,10 @@ const GEMINI_PRICES: Readonly<Record<string, GeminiPrice>> = {
     inputUsdPerMillionTokens: 0.30,
     outputUsdPerMillionTokens: 2.50,
   },
+  "gemini-3.6-flash": {
+    inputUsdPerMillionTokens: 0.75,
+    outputUsdPerMillionTokens: 3.75,
+  },
   "gemini-3.7-flash": {
     inputUsdPerMillionTokens: 0.75,
     outputUsdPerMillionTokens: 3.75,
@@ -23,6 +27,7 @@ const GEMINI_PRICES: Readonly<Record<string, GeminiPrice>> = {
 const CAPABILITY_COST_CAP_USD: Readonly<Record<AICapabilityName, number>> = {
   RESUME_IMPORT_FRAGMENT: 0.02,
   RESUME_SEMANTIC_UNDERSTANDING: 0.09,
+  RESUME_HOLISTIC_IMPROVEMENT: 0.18,
   JOB_DESCRIPTION_INTERPRETATION: 0.04,
   OPPORTUNITY_EXPLANATION: 0.03,
   INLINE_WORDING_OPTIMIZATION: 0.005,

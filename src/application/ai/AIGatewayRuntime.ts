@@ -18,7 +18,7 @@ import {
 export const B6_RUNTIME_CONTRACT_VERSION = "b6-ai-runtime-v1" as const;
 
 export const AIProposalSchema = z.object({
-  text: z.string().trim().min(1).max(20_000),
+  text: z.string().trim().min(1).max(60_000),
 }).strict();
 
 export const AIExecutionFailureCodeSchema = z.enum([
@@ -175,6 +175,17 @@ const BUDGETS: Readonly<Record<AICapabilityName, AIExecutionBudget>> = {
     maxOutputTokens: 5_000,
     perAttemptTimeoutMs: 18_000,
     wholeOperationDeadlineMs: 42_000,
+    allowQualityEscalation: true,
+  },
+  RESUME_HOLISTIC_IMPROVEMENT: {
+    capability: "RESUME_HOLISTIC_IMPROVEMENT",
+    capabilityClass: "BOUNDED_ASSIST",
+    maxGeminiAttempts: 2,
+    maxOllamaAttempts: 1,
+    maxInputTokens: 70_000,
+    maxOutputTokens: 10_000,
+    perAttemptTimeoutMs: 22_000,
+    wholeOperationDeadlineMs: 58_000,
     allowQualityEscalation: true,
   },
   JOB_DESCRIPTION_INTERPRETATION: {
@@ -397,7 +408,7 @@ export async function executeAICapability(
   const input: NormalizedAIExecutionInput = {
     capability: AICapabilityNameSchema.parse(inputValue.capability),
     credentialMode: CredentialModeSchema.parse(inputValue.credentialMode),
-    prompt: z.string().trim().min(1).max(40_000).parse(inputValue.prompt),
+    prompt: z.string().trim().min(1).max(70_000).parse(inputValue.prompt),
     systemInstruction: inputValue.systemInstruction === null ? null : z.string().trim().min(1).max(8_000).parse(inputValue.systemInstruction),
     responseJsonSchema,
   };

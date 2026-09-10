@@ -11,6 +11,7 @@ import {
 const capabilities: AICapabilityName[] = [
   "RESUME_IMPORT_FRAGMENT",
   "RESUME_SEMANTIC_UNDERSTANDING",
+  "RESUME_HOLISTIC_IMPROVEMENT",
   "JOB_DESCRIPTION_INTERPRETATION",
   "OPPORTUNITY_EXPLANATION",
   "INLINE_WORDING_OPTIMIZATION",
@@ -24,7 +25,7 @@ describe("B6 AI economics", () => {
         capability,
         buildProviderAttemptPlan(capability, "PLATFORM_KEY"),
         budget,
-        new Date("2026-09-01T12:00:00Z"),
+        new Date("2026-09-10T12:00:00Z"),
       );
       expect(policy.maximumPaidCostUsd).toBeLessThanOrEqual(policy.capUsd);
       expect(policy.pricingContractVersion).toBe(GEMINI_PRICING_CONTRACT_VERSION);
@@ -34,6 +35,7 @@ describe("B6 AI economics", () => {
 
   it("prices actual Gemini usage deterministically", () => {
     expect(geminiActualPaidCostUsd("gemini-3.5-flash-lite", 1_000_000, 1_000_000)).toBeCloseTo(2.8, 8);
+    expect(geminiActualPaidCostUsd("gemini-3.6-flash", 1_000_000, 1_000_000)).toBeCloseTo(4.5, 8);
     expect(geminiActualPaidCostUsd("gemini-3.7-flash", 1_000_000, 1_000_000)).toBeCloseTo(4.5, 8);
   });
 
@@ -53,7 +55,7 @@ describe("B6 AI economics", () => {
       capability,
       buildProviderAttemptPlan(capability, "NO_CLOUD_AI"),
       getAIExecutionBudget(capability),
-      new Date("2026-09-01T12:00:00Z"),
+      new Date("2026-09-10T12:00:00Z"),
     );
     expect(policy.maximumPaidCostUsd).toBe(0);
   });
