@@ -188,6 +188,17 @@ const BUDGETS: Readonly<Record<AICapabilityName, AIExecutionBudget>> = {
     wholeOperationDeadlineMs: 58_000,
     allowQualityEscalation: true,
   },
+  RESUME_FACT_GUARD: {
+    capability: "RESUME_FACT_GUARD",
+    capabilityClass: "BOUNDED_ASSIST",
+    maxGeminiAttempts: 2,
+    maxOllamaAttempts: 1,
+    maxInputTokens: 60_000,
+    maxOutputTokens: 8_000,
+    perAttemptTimeoutMs: 20_000,
+    wholeOperationDeadlineMs: 52_000,
+    allowQualityEscalation: true,
+  },
   JOB_DESCRIPTION_INTERPRETATION: {
     capability: "JOB_DESCRIPTION_INTERPRETATION",
     capabilityClass: "DERIVED_ANALYSIS_ASSIST",
