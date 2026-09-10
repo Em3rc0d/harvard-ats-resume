@@ -36,20 +36,26 @@ select resume_improvement_run_id from public.cv_engine_record_resume_improvement
   null
 ) \gset v12_run_
 
+create temporary table v12_context as
+select
+  :'v12_import_receipt_id'::uuid as receipt_id,
+  :'v12_run_resume_improvement_run_id'::uuid as run_id,
+  :'v12_hash_source_hash'::text as source_hash;
+
 do $$
 declare
   v_run public.resume_improvement_runs%rowtype;
 begin
-  select * into v_run from public.resume_improvement_runs where id=:'v12_run_resume_improvement_run_id'::uuid;
+  select * into v_run from public.resume_improvement_runs where id=(select run_id from v12_context);
   if v_run.owner_user_id <> '00000000-0000-4000-8000-000000000101'::uuid then
     raise exception 'V12_RUN_OWNER_MISMATCH';
   end if;
-  if v_run.source_sha256 <> :'v12_hash_source_hash' then
+  if v_run.source_sha256 <> (select source_hash from v12_context) then
     raise exception 'V12_SOURCE_HASH_NOT_DERIVED_FROM_RECEIPT';
   end if;
-  if v_run.semantic_document_sha256 <> encode(digest(v_run.semantic_document_json::text,'sha256'),'hex')
-     or v_run.generated_document_sha256 <> encode(digest(v_run.generated_document_json::text,'sha256'),'hex')
-     or v_run.guardian_report_sha256 <> encode(digest(v_run.guardian_report_json::text,'sha256'),'hex') then
+  if v_run.semantic_document_sha256 <> public.cv_engine_sha256(v_run.semantic_document_json::text)
+     or v_run.generated_document_sha256 <> public.cv_engine_sha256(v_run.generated_document_json::text)
+     or v_run.guardian_report_sha256 <> public.cv_engine_sha256(v_run.guardian_report_json::text) then
     raise exception 'V12_DURABLE_HASH_MISMATCH';
   end if;
 end $$;
@@ -58,14 +64,14 @@ end $$;
 do $$ begin
   begin
     update public.resume_improvement_runs set status='PARTIALLY_IMPROVED'
-    where id=:'v12_run_resume_improvement_run_id'::uuid;
+    where id=(select run_id from v12_context);
     raise exception 'V12_DIRECT_UPDATE_ALLOWED';
   exception when insufficient_privilege then null; end;
 end $$;
 
 do $$ begin
   begin
-    delete from public.resume_improvement_runs where id=:'v12_run_resume_improvement_run_id'::uuid;
+    delete from public.resume_improvement_runs where id=(select run_id from v12_context);
     raise exception 'V12_DIRECT_DELETE_ALLOWED';
   exception when insufficient_privilege then null; end;
 end $$;
@@ -75,7 +81,7 @@ do $$ begin
     insert into public.resume_improvement_runs(
       owner_user_id,source_receipt_id,source_sha256,status
     ) values (
-      auth.uid(), :'v12_import_receipt_id'::uuid, :'v12_hash_source_hash', 'FAILED_SOURCE_UNREADABLE'
+      auth.uid(), (select receipt_id from v12_context), (select source_hash from v12_context), 'FAILED_SOURCE_UNREADABLE'
     );
     raise exception 'V12_DIRECT_INSERT_ALLOWED';
   exception when insufficient_privilege then null; end;
@@ -88,14 +94,14 @@ set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000202';
 
 do $$ declare v_count integer; begin
   select count(*) into v_count from public.resume_improvement_runs
-  where id=:'v12_run_resume_improvement_run_id'::uuid;
+  where id=(select run_id from v12_context);
   if v_count <> 0 then raise exception 'V12_CROSS_OWNER_READ_ALLOWED'; end if;
 end $$;
 
 do $$ begin
   begin
     perform * from public.cv_engine_record_resume_improvement_run(
-      :'v12_import_receipt_id'::uuid,
+      (select receipt_id from v12_context),
       null,null,null,null,
       'FAILED_SOURCE_UNREADABLE',
       null,null
@@ -111,7 +117,7 @@ set request.jwt.claim.sub = '';
 do $$ begin
   begin
     perform * from public.cv_engine_record_resume_improvement_run(
-      :'v12_import_receipt_id'::uuid,
+      (select receipt_id from v12_context),
       null,null,null,null,
       'FAILED_SOURCE_UNREADABLE',
       null,null
