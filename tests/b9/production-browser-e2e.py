@@ -261,17 +261,21 @@ def run_browser(report: dict[str, Any]) -> None:
 
             page.get_by_role("button", name="Resume Import", exact=True).click()
             page.get_by_label("Resume file").set_input_files(str(source_docx))
-            page.get_by_role("button", name="Extract review proposals").click()
-            page.get_by_text(SOURCE_TEXT, exact=True).wait_for(timeout=30_000)
-            proposal_select = page.locator('select[aria-label^="Evidence kind for proposal"]').first
+            page.get_by_role("button", name="Analyze resume", exact=True).click()
+            page.get_by_text(re.compile(r"CV Engine organized \d+ mechanical lines into \d+ review blocks")).wait_for(timeout=45_000)
+            report["checks"].append("AI_FIRST_IMPORT_REVIEW_RENDERED")
+
+            audit = page.locator("details").filter(has_text="Audit mode · source lines, hashes and manual override").first
+            audit.locator("summary").click()
+            audit.get_by_text(SOURCE_TEXT, exact=True).wait_for(timeout=30_000)
+            proposal_select = audit.locator('select[aria-label^="Evidence kind for proposal"]').first
             proposal_select.select_option("PROJECT")
-            page.get_by_role("button", name="Accept as NEEDS_REVIEW", exact=True).click()
-            page.get_by_text(re.compile("Created Career Evidence")).wait_for(timeout=30_000)
-            report["checks"].append("DOCX_UPLOAD_AND_REVIEW_PROPOSAL")
+            audit.get_by_role("button", name="Accept as NEEDS_REVIEW", exact=True).click()
 
             page.get_by_role("button", name="Career Evidence", exact=True).click()
             evidence_card = page.locator("article.evidence-card").filter(has_text=SOURCE_TEXT).first
             evidence_card.wait_for(timeout=30_000)
+            report["checks"].append("DOCX_UPLOAD_AND_REVIEW_PROPOSAL")
             evidence_card.get_by_role("button", name="Edit as new revision").click()
             evidence_card.get_by_label("I can defend this revised statement as true.").check()
             evidence_card.get_by_role("button", name="Save revision").click()
@@ -352,6 +356,9 @@ def run_browser(report: dict[str, Any]) -> None:
                 fail("B9_BROWSER_ACCOUNT_EXPORT_B9_STATE_MISSING")
             if len(account_export.get("presentationRevisions", [])) < 1:
                 fail("B9_BROWSER_ACCOUNT_EXPORT_PRESENTATION_STATE_MISSING")
+            if len(account_export.get("importReviewStructures", [])) < 1:
+                fail("B9_BROWSER_ACCOUNT_EXPORT_IMPORT_REVIEW_STATE_MISSING")
+            report["checks"].append("ACCOUNT_EXPORT_INCLUDES_AI_IMPORT_REVIEW")
             report["checks"].append("ACCOUNT_EXPORT_INCLUDES_B9")
 
             page.get_by_label(re.compile("Type DELETE_MY_ACCOUNT to continue")).fill("DELETE_MY_ACCOUNT")
