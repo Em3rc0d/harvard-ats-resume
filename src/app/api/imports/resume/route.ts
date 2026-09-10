@@ -3,7 +3,9 @@ import type { CredentialMode } from "../../../../domain/ai/AICapability";
 import { GeminiCredentialInputSchema, type AIAccessMode } from "../../../../domain/ai/AIAccess";
 import { CURRENT_TRUST_DISCLOSURE_VERSION } from "../../../../domain/trust/FirstRunTrust";
 import { requireAuthenticatedSupabaseContext } from "../../../../application/auth/requireAuthenticatedUser";
-import type { SafeAIEvent } from "../../../../application/ai/AIGatewayRuntime";
+import { buildProviderAttemptPlan } from "../../../../application/ai/AIGatewayFoundation";
+import { getAIExecutionBudget, type SafeAIEvent } from "../../../../application/ai/AIGatewayRuntime";
+import { assertProviderEconomicsWithinPolicy } from "../../../../application/ai/AIProviderEconomics";
 import {
   listImportReceipts,
   recordImportReviewStructure,
@@ -86,21 +88,37 @@ export async function POST(request: Request) {
 
       const accessMode = consent.error
         ? null
-        : consent.data?.ai_access_mode_preference as AIAccessMode | null | undefined ?? null;
+        : ((consent.data?.ai_access_mode_preference as AIAccessMode | null | undefined) ?? null);
       const suppliedByok = accessMode === "BYOK_GEMINI" ? request.headers.get("x-cvengine-byok-key") : null;
       const parsedByok = accessMode === "BYOK_GEMINI" ? GeminiCredentialInputSchema.safeParse(suppliedByok) : null;
       const byokGeminiKey = parsedByok?.success ? parsedByok.data : null;
       const production = process.env.NODE_ENV === "production";
       const configuredOllamaUrl = process.env.OLLAMA_BASE_URL?.trim() || null;
+      const credentialMode = credentialModeForAccess(accessMode);
+
+      let economicsAllowed = true;
+      try {
+        const capability = "RESUME_IMPORT_FRAGMENT" as const;
+        assertProviderEconomicsWithinPolicy(
+          capability,
+          buildProviderAttemptPlan(capability, credentialMode),
+          getAIExecutionBudget(capability),
+        );
+      } catch (error) {
+        economicsAllowed = false;
+        console.info("CV_ENGINE_IMPORT_AI_ECONOMICS_FALLBACK", error instanceof Error ? error.message : "UNKNOWN");
+      }
+
       const runtimeConfig = {
-        credentialMode: credentialModeForAccess(accessMode),
+        credentialMode,
         platformGeminiKey: process.env.GEMINI_API_KEY?.trim() || null,
         byokGeminiKey,
         geminiBaseUrl: process.env.GEMINI_API_BASE_URL?.trim() || "https://generativelanguage.googleapis.com",
         ollamaBaseUrl: configuredOllamaUrl || (production ? "http://127.0.0.1:9" : "http://127.0.0.1:11434"),
         ollamaApiKey: process.env.OLLAMA_API_KEY?.trim() || null,
         logger: safeLogger,
-        skipProviderExecution: accessMode === null
+        skipProviderExecution: !economicsAllowed
+          || accessMode === null
           || (accessMode === "BYOK_GEMINI" && byokGeminiKey === null)
           || (accessMode === "NO_CLOUD_AI" && production && configuredOllamaUrl === null),
       } as const;
