@@ -12,6 +12,7 @@ const capabilities: AICapabilityName[] = [
   "RESUME_IMPORT_FRAGMENT",
   "RESUME_SEMANTIC_UNDERSTANDING",
   "RESUME_HOLISTIC_IMPROVEMENT",
+  "RESUME_FACT_GUARD",
   "JOB_DESCRIPTION_INTERPRETATION",
   "OPPORTUNITY_EXPLANATION",
   "INLINE_WORDING_OPTIMIZATION",
@@ -50,7 +51,7 @@ describe("B6 AI economics", () => {
   });
 
   it("NO_CLOUD_AI has no paid Gemini route", () => {
-    const capability = "OPPORTUNITY_EXPLANATION" as const;
+    const capability = "RESUME_FACT_GUARD" as const;
     const policy = assertProviderEconomicsWithinPolicy(
       capability,
       buildProviderAttemptPlan(capability, "NO_CLOUD_AI"),
