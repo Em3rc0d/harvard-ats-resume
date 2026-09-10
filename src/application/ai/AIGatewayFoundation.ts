@@ -7,6 +7,7 @@ import {
 export const AICapabilityNameSchema = z.enum([
   "RESUME_IMPORT_FRAGMENT",
   "RESUME_SEMANTIC_UNDERSTANDING",
+  "RESUME_HOLISTIC_IMPROVEMENT",
   "JOB_DESCRIPTION_INTERPRETATION",
   "OPPORTUNITY_EXPLANATION",
   "INLINE_WORDING_OPTIMIZATION",
@@ -35,6 +36,12 @@ const ROUTES: Readonly<Record<AICapabilityName, ModelRoute>> = {
     capability: "RESUME_SEMANTIC_UNDERSTANDING",
     geminiModels: ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
     ollamaModel: "cv-engine-import",
+    allowGeminiQualityEscalation: true,
+  },
+  RESUME_HOLISTIC_IMPROVEMENT: {
+    capability: "RESUME_HOLISTIC_IMPROVEMENT",
+    geminiModels: ["gemini-3.7-flash", "gemini-3.6-flash"],
+    ollamaModel: "cv-engine-resume-editor",
     allowGeminiQualityEscalation: true,
   },
   JOB_DESCRIPTION_INTERPRETATION: {
