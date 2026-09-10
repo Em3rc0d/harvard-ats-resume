@@ -7,6 +7,11 @@ import {
   type ImportReceipt,
   type ImportReceiptStatus,
 } from "../../domain/import/Import";
+import {
+  ImportReviewStructureSchema,
+  type ImportReviewAIRun,
+  type ImportReviewBlock,
+} from "../../domain/import/ImportReview";
 import type { ImportLineProposal } from "./ResumeExtractor";
 
 function requiredString(value: unknown, field: string) {
@@ -18,13 +23,28 @@ function iso(value: unknown) {
   return new Date(requiredString(value, "TIMESTAMP")).toISOString();
 }
 
+function mapReviewStructure(row: Record<string, unknown>) {
+  return ImportReviewStructureSchema.parse({
+    id: requiredString(row.id, "REVIEW_STRUCTURE_ID"),
+    receiptId: requiredString(row.receipt_id, "REVIEW_RECEIPT_ID"),
+    ownerUserId: requiredString(row.owner_user_id, "REVIEW_OWNER"),
+    structureVersion: row.structure_version,
+    status: row.status,
+    blocks: row.blocks,
+    aiRuns: row.ai_runs,
+    createdAt: iso(row.created_at),
+  });
+}
+
 export async function loadImportReceipt(client: SupabaseClient, ownerUserId: string, receiptId: string): Promise<ImportReceipt> {
-  const [receiptResult, proposalsResult] = await Promise.all([
+  const [receiptResult, proposalsResult, structureResult] = await Promise.all([
     client.from("import_receipts").select("*").eq("owner_user_id", ownerUserId).eq("id", receiptId).maybeSingle(),
     client.from("import_proposals").select("*").eq("owner_user_id", ownerUserId).eq("receipt_id", receiptId).order("ordinal", { ascending: true }),
+    client.from("import_review_structures").select("*").eq("owner_user_id", ownerUserId).eq("receipt_id", receiptId).maybeSingle(),
   ]);
   if (receiptResult.error) throw new Error(`B5_RECEIPT_READ_FAILED:${receiptResult.error.message}`);
   if (proposalsResult.error) throw new Error(`B5_PROPOSALS_READ_FAILED:${proposalsResult.error.message}`);
+  if (structureResult.error) throw new Error(`V11_IMPORT_REVIEW_READ_FAILED:${structureResult.error.message}`);
   if (!receiptResult.data) throw new Error("B5_IMPORT_RECEIPT_NOT_FOUND");
   const receipt = receiptResult.data as Record<string, unknown>;
   const proposals = (proposalsResult.data ?? []).map((row) => {
@@ -56,6 +76,7 @@ export async function loadImportReceipt(client: SupabaseClient, ownerUserId: str
     warningCode: receipt.warning_code ?? null,
     proposalCount: receipt.proposal_count,
     proposals,
+    reviewStructure: structureResult.data ? mapReviewStructure(structureResult.data as Record<string, unknown>) : null,
     createdAt: iso(receipt.created_at),
   });
 }
@@ -100,6 +121,40 @@ export async function recordResumeImport(
   if (!row || typeof row !== "object") throw new Error("B5_IMPORT_RECORD_EMPTY");
   const receiptId = requiredString((row as Record<string, unknown>).receipt_id, "RECEIPT_ID");
   return loadImportReceipt(client, ownerUserId, receiptId);
+}
+
+export async function recordImportReviewStructure(
+  client: SupabaseClient,
+  ownerUserId: string,
+  input: {
+    receiptId: string;
+    structureVersion: string;
+    status: "AI_STRUCTURED" | "HYBRID" | "DETERMINISTIC_FALLBACK";
+    blocks: readonly ImportReviewBlock[];
+    aiRuns: readonly ImportReviewAIRun[];
+  },
+) {
+  const existing = await client
+    .from("import_review_structures")
+    .select("id")
+    .eq("owner_user_id", ownerUserId)
+    .eq("receipt_id", input.receiptId)
+    .maybeSingle();
+  if (existing.error) throw new Error(`V11_IMPORT_REVIEW_LOOKUP_FAILED:${existing.error.message}`);
+  if (!existing.data) {
+    const inserted = await client.from("import_review_structures").insert({
+      receipt_id: input.receiptId,
+      owner_user_id: ownerUserId,
+      structure_version: input.structureVersion,
+      status: input.status,
+      blocks: input.blocks,
+      ai_runs: input.aiRuns,
+    });
+    if (inserted.error && inserted.error.code !== "23505") {
+      throw new Error(`V11_IMPORT_REVIEW_RECORD_FAILED:${inserted.error.message}`);
+    }
+  }
+  return loadImportReceipt(client, ownerUserId, input.receiptId);
 }
 
 export async function acceptImportProposal(client: SupabaseClient, ownerUserId: string, proposalId: string, kind: string) {

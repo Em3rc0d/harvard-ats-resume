@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CareerEvidenceKindSchema } from "../career/CareerEvidence";
+import { ImportReviewStructureSchema } from "./ImportReview";
 
 export const B5_EXTRACTOR_VERSION = "b5-mechanical-resume-extractor-v1" as const;
 export const B5_PROPOSAL_VERSION = "b5-line-proposals-v1" as const;
@@ -35,6 +36,7 @@ export const ImportReceiptSchema = z.object({
   warningCode: z.string().trim().min(1).max(100).nullable(),
   proposalCount: z.number().int().nonnegative().max(100),
   proposals: z.array(ImportProposalSchema).max(100),
+  reviewStructure: ImportReviewStructureSchema.nullable().default(null),
   createdAt: z.iso.datetime(),
 }).superRefine((value, context) => {
   if (value.proposalCount !== value.proposals.length) {
@@ -45,6 +47,16 @@ export const ImportReceiptSchema = z.object({
   }
   if (value.status !== "EXTRACTED" && value.proposals.length > 0) {
     context.addIssue({ code: "custom", path: ["proposals"], message: "Non-extracted imports cannot carry proposals." });
+  }
+  if (value.reviewStructure && (value.reviewStructure.receiptId !== value.id || value.reviewStructure.ownerUserId !== value.ownerUserId)) {
+    context.addIssue({ code: "custom", path: ["reviewStructure"], message: "Review structure must belong to the same receipt and owner." });
+  }
+  if (value.reviewStructure) {
+    const structuredOrdinals = new Set(value.reviewStructure.blocks.flatMap((block) => block.sourceOrdinals));
+    const proposalOrdinals = new Set(value.proposals.map((proposal) => proposal.ordinal));
+    if (structuredOrdinals.size !== proposalOrdinals.size || [...proposalOrdinals].some((ordinal) => !structuredOrdinals.has(ordinal))) {
+      context.addIssue({ code: "custom", path: ["reviewStructure", "blocks"], message: "Review structure must cover every mechanical proposal exactly once." });
+    }
   }
 });
 

@@ -103,8 +103,8 @@ describe("B5 trusted import contracts", () => {
     expect(sourceLineFix).toContain("string_agg(ip.canonical_text, E'\\n' order by ip.source_line, ip.ordinal)");
     expect(sourceLineFix).toContain("'NEEDS_REVIEW'");
     expect(ui).toContain("proposal.sourceLine === selected[index - 1]!.sourceLine + 1");
-    expect(ui).toContain("blank-line gaps are treated as structural boundaries");
-    expect(ui).toContain("SELECT_CONTIGUOUS_IMPORT_LINES_REQUIRED");
+    expect(ui).toContain("IMPORT_REVIEW_BLOCK_SOURCE_LINES_NONCONTIGUOUS");
+    expect(ui).toContain("AI organizes, you confirm truth");
     expect(ui).toContain('fetch("/api/imports/proposals/accept-group"');
   });
 

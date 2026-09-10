@@ -141,6 +141,16 @@ describe("B9 production browser certification contract", () => {
     expect(script).toContain("B9_BROWSER_AI_PROPOSAL_REVIEW_NOT_RENDERED_AFTER_201");
   });
 
+  it("certifies AI-first import before the existing B9 truth and artifact golden path", () => {
+    const script = read("tests/b9/production-browser-e2e.py");
+    expect(script).toContain('name="Analyze resume"');
+    expect(script).toContain("AI_FIRST_IMPORT_REVIEW_RENDERED");
+    expect(script).toContain("Audit mode · source lines, hashes and manual override");
+    expect(script).toContain("ACCOUNT_EXPORT_INCLUDES_AI_IMPORT_REVIEW");
+    expect(script).toContain("B9_BROWSER_ACCOUNT_EXPORT_IMPORT_REVIEW_STATE_MISSING");
+    expect(script).not.toContain('name="Extract review proposals"');
+  });
+
   it("certifies the full B9 browser golden path including explicit PresentationRevision approval", () => {
     const script = read("tests/b9/production-browser-e2e.py");
     expect(script).toContain("PLATFORM_AI_SELECTED");
