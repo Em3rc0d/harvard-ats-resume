@@ -5,14 +5,19 @@ This directory contains the authoritative product, AI, security and production-f
 ## Status
 
 ```text
-PRODUCT / TRUTH ARCHITECTURE     CLOSED
+PRODUCT / TRUTH ARCHITECTURE     CLOSED WITH AUTHORITY CORRECTION 11
 AI / BYOK ARCHITECTURE           CLOSED
 PF0 PRODUCTION FOUNDATION        CLOSED
 ZERO-BASED IMPLEMENTATION        AUTHORIZED
-PRODUCTION READY CLAIM           BLOCKED UNTIL IMPLEMENTATION + B8 EVIDENCE
+PRODUCT COHERENCE REWORK         BLOCKED UNTIL CONTRACT 11 IMPLEMENTATION PLAN CLOSES
+PRODUCTION READY CLAIM           REQUIRES RELEASE EVIDENCE FOR THE IMPLEMENTED SHA
 ```
 
-The documentation phase has reached its stop condition. From this point onward, broad conceptual redesign is prohibited unless executable evidence demonstrates a genuinely missing boundary.
+The documentation phase previously reached its stop condition. Broad conceptual redesign remains prohibited unless executable evidence demonstrates a genuinely missing boundary.
+
+Real-user resume dogfood subsequently demonstrated such a boundary: candidate-provided assertions had become over-constrained as if lack of external verification made them unusable for normal resume improvement. `11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md` is therefore an authorized truth-boundary correction, not an informal redesign.
+
+No code should be changed merely to react to symptoms until the implementation nodes defined by Contract 11 are closed.
 
 ## Authority set
 
@@ -85,15 +90,36 @@ The documentation phase has reached its stop condition. From this point onward, 
     - $22K motion/fluidity bar;
     - applies after functionality/UX/accessibility/responsiveness are correct.
 
+12. `11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md`
+    - **Believe the user's source. Distrust the AI's additions.**
+    - candidate-authored source is authoritative candidate assertion;
+    - lack of external verification does not make a claim false or unusable;
+    - AI transformations require provenance/fact-preservation validation;
+    - unsupported AI additions are blocked, not candidate-provided claims;
+    - Truth Graph is a provenance/safety ledger, not a background-check tribunal;
+    - core product path is upload → improve → validate → deliver;
+    - re-coding remains blocked until the implementation nodes in Contract 11 are closed.
+
 ## Governing architecture
 
 ```text
-Career Evidence = candidate authority
-Job Snapshot    = market truth
-Career Target   = intent
-Assessment      = derived analysis
-ResumeVersion   = deterministic projection
-AI              = bounded assistant
+Candidate source assertion = candidate authority
+Externally verified fact   = candidate authority + additional verification
+Job Snapshot               = market truth
+Career Target              = intent
+Assessment                 = derived analysis
+AI transformation          = proposed presentation
+Fact Guardian              = source-preservation gate
+Resume Artifact            = accepted projection
+```
+
+The previous shorthand `Career Evidence = candidate authority` remains structurally useful, but Contract 11 clarifies the ingestion semantics: candidate-authored CV/source material may become candidate-authoritative assertions without first proving the candidate's biography externally.
+
+Hard distinction:
+
+```text
+Not externally verified != false
+Candidate-provided assertion != unsupported AI addition
 ```
 
 ```text
@@ -104,6 +130,8 @@ Redis      = optional operational accelerator
 ```
 
 ## Build order
+
+Historical build order remains documented:
 
 ```text
 B0    empty implementation / typed contracts / CI
@@ -116,15 +144,23 @@ B5    import convenience
 B6    AI gateway implementation + qualification
 B7    Opportunity Space / market extension
 B8    production evidence / release qualification
+B9    presentation / artifact / production browser closure
 ```
 
-## New working rule
+Contract 11 does not authorize blind rebuilding of these blocks. It requires a product-coherence implementation plan that reuses the existing trusted infrastructure wherever possible.
+
+## Current working rule
 
 ```text
-DESIGN → CLOSED
-BUILD  → NOW
+TRUTH AUTHORITY CORRECTION → DOCUMENTED
+IMPLEMENTATION GRAPH        → MUST CLOSE NEXT
+RANDOM RE-CODING            → PROHIBITED
 ```
 
-Allowed documentation from here is implementation evidence: ADRs, migrations, quarries, benchmark receipts, security evidence and release records.
+Allowed next documentation includes the implementation plan, compatibility analysis, ADRs, migration design, quarries, benchmark receipts, security evidence and release records required by Contract 11.
 
-Provider routing improves availability. Truth contracts decide acceptance. Production foundation decides ownership, durability, security and deployability.
+Provider routing improves availability. Truth contracts decide source authority and acceptance. Production foundation decides ownership, durability, security and deployability.
+
+The primary product principle is now:
+
+> **Believe the user's source. Distrust the AI's additions.**
