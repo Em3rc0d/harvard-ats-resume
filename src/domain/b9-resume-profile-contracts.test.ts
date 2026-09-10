@@ -39,10 +39,12 @@ describe("B9.6 ResumeProfile authority contracts", () => {
   });
 
   it("renders identity through the same canonical semantic sequence as all claims", () => {
-    const renderer = read("src/application/resume/ResumeArtifactRenderer.ts");
+    const adapter = read("src/application/resume/ResumeArtifactRenderer.ts");
+    const renderer = read("src/application/resume/ATSResumeRenderer.ts");
     expect(renderer).toContain('kind: "NAME" | "META" | "HEADING" | "BODY" | "BULLET"');
-    expect(renderer).toContain("artifact.content.header.status === \"AVAILABLE\"");
-    expect(renderer).toContain("buildResumeSemanticLines(artifact)");
+    expect(adapter).toContain("artifact.content.header.status === \"AVAILABLE\"");
+    expect(adapter).toContain("buildResumeSemanticLines(artifact)");
+    expect(adapter).toContain('from "./ATSResumeRenderer"');
   });
 
   it("keeps the user-facing ResumeWorkspace on the B9 pipeline and all four exports", () => {
