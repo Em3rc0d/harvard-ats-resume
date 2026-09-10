@@ -55,8 +55,13 @@ function run(guardianDecision: "PASS" | "REPAIRED_PASS" | "REJECTED" = "PASS"): 
     passes: [{
       passNumber: 1,
       providerProvenance: {
-        provider: "gemini", model: "gemini-3.5-flash-lite", requestId: "guard-1",
-        contractVersion: "b6-ai-runtime-v1", attempt: 1, fallbackUsed: false, credentialMode: "PLATFORM",
+        provider: "gemini",
+        model: "gemini-3.5-flash-lite",
+        requestId: "12000000-0000-4000-8000-000000000106",
+        contractVersion: "b6-ai-runtime-v1",
+        attempt: 1,
+        fallbackUsed: false,
+        credentialMode: "PLATFORM",
       },
       reviewedPaths: ["header.displayName"],
       reviewedSourceOrdinals: [1,2,3,4,5,6,7,8],
