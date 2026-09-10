@@ -134,14 +134,26 @@ export async function recordImportReviewStructure(
     aiRuns: readonly ImportReviewAIRun[];
   },
 ) {
-  const result = await client.rpc("cv_engine_record_import_review_structure", {
-    p_receipt_id: input.receiptId,
-    p_structure_version: input.structureVersion,
-    p_status: input.status,
-    p_blocks: input.blocks,
-    p_ai_runs: input.aiRuns,
-  });
-  if (result.error) throw new Error(`V11_IMPORT_REVIEW_RECORD_FAILED:${result.error.message}`);
+  const existing = await client
+    .from("import_review_structures")
+    .select("id")
+    .eq("owner_user_id", ownerUserId)
+    .eq("receipt_id", input.receiptId)
+    .maybeSingle();
+  if (existing.error) throw new Error(`V11_IMPORT_REVIEW_LOOKUP_FAILED:${existing.error.message}`);
+  if (!existing.data) {
+    const inserted = await client.from("import_review_structures").insert({
+      receipt_id: input.receiptId,
+      owner_user_id: ownerUserId,
+      structure_version: input.structureVersion,
+      status: input.status,
+      blocks: input.blocks,
+      ai_runs: input.aiRuns,
+    });
+    if (inserted.error && inserted.error.code !== "23505") {
+      throw new Error(`V11_IMPORT_REVIEW_RECORD_FAILED:${inserted.error.message}`);
+    }
+  }
   return loadImportReceipt(client, ownerUserId, input.receiptId);
 }
 
