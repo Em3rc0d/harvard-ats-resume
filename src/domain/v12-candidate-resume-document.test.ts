@@ -24,7 +24,11 @@ function backed(value: string, refs: ResumeSourceRef[]) {
 
 describe("v1.2 CandidateResumeDocument", () => {
   it("represents whole-CV semantic entities above mechanical provenance leaves", () => {
-    const refs = [sourceRef(1), sourceRef(2), sourceRef(3), sourceRef(4)];
+    const ref1 = sourceRef(1);
+    const ref2 = sourceRef(2);
+    const ref3 = sourceRef(3);
+    const ref4 = sourceRef(4);
+    const refs = [ref1, ref2, ref3, ref4];
     const document = CandidateResumeDocumentSchema.parse({
       id: DOCUMENT,
       ownerUserId: OWNER,
@@ -34,33 +38,33 @@ describe("v1.2 CandidateResumeDocument", () => {
       understandingStatus: "AI_STRUCTURED",
       locale: "es-PE",
       identity: {
-        displayName: backed("Eduardo Example", [refs[0]]),
+        displayName: backed("Eduardo Example", [ref1]),
         headline: null,
         location: null,
         email: null,
         phone: null,
         links: [],
-        sourceRefs: [refs[0]],
+        sourceRefs: [ref1],
       },
       profile: null,
       employment: [{
-        role: backed("Full Stack Developer", [refs[1]]),
-        organization: backed("Example Tech", [refs[1]]),
+        role: backed("Full Stack Developer", [ref2]),
+        organization: backed("Example Tech", [ref2]),
         startDateText: null,
         endDateText: null,
         location: null,
         summary: null,
-        bullets: [backed("Built maintainable APIs.", [refs[2]])],
+        bullets: [backed("Built maintainable APIs.", [ref3])],
         technologies: [],
-        sourceRefs: [refs[1], refs[2]],
+        sourceRefs: [ref2, ref3],
       }],
       projects: [],
       education: [],
       certifications: [],
       skillGroups: [{
-        label: backed("Backend", [refs[3]]),
-        skills: [backed("Spring Boot", [refs[3]])],
-        sourceRefs: [refs[3]],
+        label: backed("Backend", [ref4]),
+        skills: [backed("Spring Boot", [ref4])],
+        sourceRefs: [ref4],
       }],
       languages: [],
       otherSections: [],

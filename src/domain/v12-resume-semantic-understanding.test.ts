@@ -90,6 +90,11 @@ const validSemanticOutput = {
   unassignedSourceOrdinals: [4],
 };
 
+function requireCapturedBody(value: Record<string, unknown> | null): Record<string, unknown> {
+  if (value === null) throw new Error("REQUEST_BODY_NOT_CAPTURED");
+  return value;
+}
+
 describe("v1.2 resume semantic understanding", () => {
   it("projects a whole resume into semantic entities while preserving mechanical provenance", () => {
     const projected = projectSemanticProviderOutput(receipt(), validSemanticOutput, {
@@ -151,9 +156,10 @@ describe("v1.2 resume semantic understanding", () => {
       expect(outcome.document.projects[0]?.name?.value).toBe("AutoPulse");
       expect(outcome.provenance.capability).toBe("RESUME_SEMANTIC_UNDERSTANDING");
     }
-    const generationConfig = bodySeen?.generationConfig as Record<string, unknown> | undefined;
-    const responseFormat = generationConfig?.responseFormat as Record<string, unknown> | undefined;
-    const text = responseFormat?.text as Record<string, unknown> | undefined;
-    expect(text?.schema).toEqual(RESUME_SEMANTIC_UNDERSTANDING_SCHEMA);
+    const captured = requireCapturedBody(bodySeen as Record<string, unknown> | null);
+    const generationConfig = captured["generationConfig"] as Record<string, unknown>;
+    const responseFormat = generationConfig["responseFormat"] as Record<string, unknown>;
+    const textConfig = responseFormat["text"] as Record<string, unknown>;
+    expect(textConfig["schema"]).toEqual(RESUME_SEMANTIC_UNDERSTANDING_SCHEMA);
   });
 });

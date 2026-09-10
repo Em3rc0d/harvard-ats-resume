@@ -49,7 +49,7 @@ function budget(): AIExecutionBudget {
 function config(geminiBaseUrl: string, ollamaBaseUrl: string) {
   return {
     platformGeminiKey: SECRET,
-    byokGeminiKey: null,
+    byokGeminiKey: SECRET,
     geminiBaseUrl,
     ollamaBaseUrl,
     ollamaApiKey: null,
@@ -61,6 +61,11 @@ function validateAnswer(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value) || (value as { answer?: unknown }).answer !== "ok") {
     throw new Error("INVALID_TEST_OUTPUT");
   }
+}
+
+function requireCapturedBody(value: Record<string, unknown> | null): Record<string, unknown> {
+  if (value === null) throw new Error("REQUEST_BODY_NOT_CAPTURED");
+  return value;
 }
 
 describe("v1.2 structured AI runtime", () => {
@@ -90,12 +95,13 @@ describe("v1.2 structured AI runtime", () => {
     }, config(gemini, ollama));
 
     expect(outcome.ok).toBe(true);
-    const generationConfig = requestBody?.generationConfig as Record<string, unknown> | undefined;
-    const responseFormat = generationConfig?.responseFormat as Record<string, unknown> | undefined;
-    const text = responseFormat?.text as Record<string, unknown> | undefined;
-    expect(text?.mimeType).toBe("application/json");
-    expect(text?.schema).toEqual(RESPONSE_SCHEMA);
-    expect(JSON.stringify({ outcome, requestBody })).not.toContain(SECRET);
+    const captured = requireCapturedBody(requestBody as Record<string, unknown> | null);
+    const generationConfig = captured["generationConfig"] as Record<string, unknown>;
+    const responseFormat = generationConfig["responseFormat"] as Record<string, unknown>;
+    const text = responseFormat["text"] as Record<string, unknown>;
+    expect(text["mimeType"]).toBe("application/json");
+    expect(text["schema"]).toEqual(RESPONSE_SCHEMA);
+    expect(JSON.stringify({ outcome, captured })).not.toContain(SECRET);
   });
 
   it("classifies invalid structured provider output as OUTPUT_VALIDATION_FAILED and tries the next model", async () => {
@@ -148,7 +154,8 @@ describe("v1.2 structured AI runtime", () => {
     }, config(gemini, ollama));
 
     expect(outcome.ok).toBe(true);
-    expect(requestBody?.format).toEqual(RESPONSE_SCHEMA);
+    const captured = requireCapturedBody(requestBody as Record<string, unknown> | null);
+    expect(captured["format"]).toEqual(RESPONSE_SCHEMA);
     if (outcome.ok) expect(outcome.provenance.provider).toBe("ollama");
   });
 });
