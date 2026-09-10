@@ -49,7 +49,7 @@ describe("v1.2 primary Improve Resume UX", () => {
     expect(route).toContain("requireAuthenticatedSupabaseContext");
     expect(route).toContain("x-cvengine-byok-key");
     expect(route).toContain("targetTextHash: targetHash(targetText)");
-    expect(route).toContain('guardian.report.decision === "REPAIRED_PASS"');
+    expect(route).toContain('guarded.report.decision === "REPAIRED_PASS"');
   });
 
   it("serves all four deterministic artifact surfaces from the durable run", () => {
