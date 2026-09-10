@@ -45,8 +45,9 @@ function targetHash(value: string | null) {
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "V12_IMPROVEMENT_FAILED";
   console.info("CV_ENGINE_V12_IMPROVEMENT_FAILURE", message);
-  const publicCode = message.startsWith("V12_") || message.startsWith("SOURCE_") || message.startsWith("SEMANTIC_") || message.startsWith("FACT_")
-    ? message.split(":", 1)[0]
+  const candidateCode = message.includes(":") ? message.slice(0, message.indexOf(":")) : message;
+  const publicCode = candidateCode.length > 0 && (candidateCode.startsWith("V12_") || candidateCode.startsWith("SOURCE_") || candidateCode.startsWith("SEMANTIC_") || candidateCode.startsWith("FACT_"))
+    ? candidateCode
     : "V12_IMPROVEMENT_FAILED";
   const status = publicCode.includes("NOT_FOUND") ? 404 : publicCode.includes("UNREADABLE") ? 422 : 502;
   return NextResponse.json({ error: publicCode }, { status, headers: { "Cache-Control": "private, no-store" } });
