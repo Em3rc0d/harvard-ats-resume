@@ -48,6 +48,7 @@ Primary material:
 - `docs/market-v0.1/MARKET-04-OPPORTUNITY-SPACE.md`
 - `docs/release/RELEASE_SURFACE_AUDIT_v1.md`
 - `docs/vnext/00-FIRST-RUN-TRUST-AND-AI-ACCESS.md`
+- `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md`
 
 Purpose:
 
@@ -59,7 +60,11 @@ Purpose:
 - specific-job vs general-resume flows;
 - explainable gaps;
 - trusted failure/degradation surfaces;
-- release-visible product behavior.
+- release-visible product behavior;
+- candidate-authored source as authoritative candidate assertion;
+- AI transformation as the object that requires provenance/fact validation;
+- Truth Graph as a safety/provenance ledger rather than a prerequisite background-check gate;
+- upload → improve → validate → deliver as the primary product outcome.
 
 ## 02 — Architecture
 
@@ -69,6 +74,7 @@ Primary authority:
 - `docs/vnext/README.md`
 - `docs/vnext/01-AI-PROVIDER-ROUTING.md`
 - `docs/vnext/02-BYOK-SECRET-HANDLING.md`
+- `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md`
 - `docs/ats-v2/baseline/CURRENT_PRODUCT_CONTRACT.md`
 
 Supporting architecture:
@@ -101,6 +107,11 @@ AI proposal != truth
 Provider success != validation success
 ResumeVersion != Career Evidence
 API key != durable product state
+
+Candidate-provided assertion != externally verified assertion
+Not externally verified != false
+Candidate-provided assertion = sufficient source authority for CV transformation
+AI-generated addition = untrusted until source/provenance validation
 ```
 
 New vNext AI architecture:
@@ -122,7 +133,21 @@ Ollama (fallback provider)
 application-owned validation
 ```
 
-Exact Gemini model routing remains pending until the user provides the model list and the models are benchmarked per capability.
+Candidate-source transformation architecture:
+
+```text
+Candidate source assertion
+   ↓
+semantic understanding
+   ↓
+powerful resume transformation
+   ↓
+fact/provenance guardian
+   ↓
+accepted presentation / Resume Artifact
+```
+
+Exact Gemini model routing remains capability-specific and must be benchmarked against real representative CVs before a quality-sensitive transformation route is frozen.
 
 ## 03 — Historical implementation plan / design decisions
 
@@ -135,13 +160,16 @@ Primary material:
 
 These documents explain why many boundaries exist. They are valuable design history, but the rebuild must not reproduce their old code structure blindly.
 
+Contract 11 explicitly supersedes any historical interpretation that treats candidate-provided but externally unverified information as false, unusable, or ineligible for normal resume improvement.
+
 ## 04 — Zero-based build plan
 
 Primary authority:
 
 - `REBUILD-CONTRACT.md`
+- `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md` for the candidate-source / AI-transformation correction.
 
-Build sequence:
+Historical build sequence:
 
 ```text
 B0   Repository + typed contracts
@@ -154,15 +182,22 @@ B5   Resume import convenience + reconciliation + fallback
 B6   Gemini-primary / Ollama-fallback AI assistance runtime
 B7   Opportunity Space / market extension
 B8   Release hardening
+B9   Presentation / artifact / production browser closure
 ```
 
-Critical corrections from the first implementation:
+Critical corrections from the first implementation and subsequent real-user dogfood:
 
 > Resume import is not allowed to block the core product. Manual Career Evidence and deterministic trusted generation must work before importer sophistication is added.
 
 > AI provider routing is an availability/cost layer, not a truth layer. Gemini or Ollama success cannot bypass application-owned validation.
 
 > BYOK is transient secret material, never Career Vault/application state.
+
+> Candidate-authored source is authoritative candidate assertion. External verification is additive, not a prerequisite for improving that source.
+
+> The Truth Graph guards transformations and provenance. It must not force claim-by-claim biography verification before the user can receive an improved CV.
+
+> Before re-coding the product-coherence correction, the implementation graph listed in Contract 11 must be closed. Do not patch random symptoms.
 
 ## 05 — Test architecture
 
@@ -179,6 +214,7 @@ Primary material:
 - `docs/vnext/00-FIRST-RUN-TRUST-AND-AI-ACCESS.md`
 - `docs/vnext/01-AI-PROVIDER-ROUTING.md`
 - `docs/vnext/02-BYOK-SECRET-HANDLING.md`
+- `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md`
 
 Required layers in the rebuild:
 
@@ -193,6 +229,16 @@ BYOK secret-canary tests
 canonical personas
 browser E2E
 identified-runtime receipts
+real-CV product-quality acceptance
+source-vs-generated fact-guardian regression
+```
+
+The real-CV gate must distinguish:
+
+```text
+SAFE BUT USELESS != PASS
+PROVIDER UNAVAILABLE != INVALID PROVIDER OUTPUT
+CANDIDATE ASSERTION != UNSUPPORTED AI ADDITION
 ```
 
 ## 06 — Mining site / quarries / golden dataset
@@ -216,10 +262,13 @@ mining-site/
   quarry-ai-access-...
   quarry-ai-router-...
   quarry-byok-...
+  quarry-candidate-source-authority-...
+  quarry-resume-editor-guardian-...
 
 golden-dataset/
   personas/
   resume-import/
+  resume-improvement/
   job-match/
   provenance/
   provider-routing/
@@ -228,6 +277,8 @@ golden-dataset/
 ```
 
 Private real CVs and PII must remain outside the public repository. Public golden fixtures must be synthetic or safely anonymized.
+
+Real-user CV quality evidence may be referenced through opaque IDs/hashes/receipts but raw PII-bearing source material must not be committed.
 
 ## 07 — Runtime / system evidence
 
@@ -238,16 +289,18 @@ Historical evidence and constraints:
 - `docs/system/ATS-SYS-02-RUNTIME-POLICY-v0.1.json`
 - `docs/system/RUNTIME-IDENTITY-v0.1.md`
 
-Use these to design the new characterization system. Do not automatically inherit old runtime qualification into the new implementation.
+Use these to design the new characterization system. Do not automatically inherit old runtime qualification into a materially changed implementation.
 
-The new runtime characterization must separately identify:
+Runtime characterization must separately identify:
 
 - deterministic core health;
 - Gemini capability health;
 - resolved Gemini model per capability;
 - credential mode (platform/BYOK/local-only) without recording secrets;
 - Ollama capability health;
-- whether fallback was actually exercised.
+- whether fallback was actually exercised;
+- whether provider response was rejected by output validation;
+- whether fact-guardian validation accepted/repaired/rejected generated claims.
 
 ## 08 — Release gates
 
@@ -257,6 +310,7 @@ Primary material:
 - `docs/release/BROWSER_ACCEPTANCE_MATRIX_v1.md`
 - `docs/release/RELEASE_SURFACE_AUDIT_v1.md`
 - `docs/ats-v2/baseline/EXECUTION_EVIDENCE.md`
+- `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md`
 
 Release rule:
 
@@ -266,35 +320,55 @@ CI green
 product ready
 ```
 
-The rebuild reaches release only when the full user story and its failure/degradation paths have executable receipts on an identified runtime.
+A release reaches product qualification only when the full user story and its failure/degradation paths have executable receipts on an identified runtime.
 
-New vNext release evidence must include:
+AI/runtime release evidence must include:
 
 - platform-key secret isolation;
 - BYOK non-persistence;
 - BYOK HTTPS enforcement;
 - Gemini-primary routing receipts;
-- Gemini→Ollama fallback receipt;
+- Gemini→Ollama fallback receipt where applicable;
 - complete-AI-outage degradation receipt;
-- cost/retry budget enforcement.
+- cost/retry budget enforcement;
+- candidate-source authority preserved;
+- unsupported AI additions rejected or repaired;
+- representative real/private CV produces a materially improved downloadable resume;
+- candidate-provided assertions do not require external proof before normal CV optimization;
+- output-validation failure is not mislabeled as provider unavailability.
 
 ## Historical implementation archive
 
 `archive/current-implementation/` contains the README and Quick Start from the previous implementation.
 
-These files may contain stale runtime/model assumptions. They are kept to understand what was tried, not to dictate the new stack.
+These files may contain stale runtime/model assumptions. They are kept to understand what was tried, not to dictate the current product semantics.
 
 ## Working rule for the next phase
 
-Before writing production application code, every B0–B8 block must have:
+Before writing production application code for the candidate-source correction, the implementation plan must close:
 
-1. a purpose;
-2. an input/output contract;
-3. a truth boundary;
-4. acceptance criteria;
-5. at least one executable fixture or planned quarry;
-6. a clear definition of done.
+1. source-authority schema semantics;
+2. compatibility with existing Career Evidence / TruthClass storage;
+3. semantic document model;
+4. editor vs guardian capability split;
+5. structured-output/provider contract;
+6. partial-recovery strategy;
+7. primary user workflow;
+8. migration/backward-compatibility strategy;
+9. real-CV golden acceptance harness;
+10. release/re-certification scope.
 
-The Gemini model list must be documented and benchmark-mapped before B6 is considered implementation-ready.
+Then implementation may proceed in dependency order.
 
-Then we build once, in dependency order, instead of repeatedly rebuilding architecture around symptoms.
+Until then:
+
+```text
+DOCUMENT THE CORRECTION
+DO NOT PATCH RANDOM SYMPTOMS
+DO NOT REWRITE THE BACKEND UNNECESSARILY
+DO NOT WEAKEN PROVENANCE
+```
+
+The governing product rule is:
+
+> **Believe the user's source. Distrust the AI's additions.**
