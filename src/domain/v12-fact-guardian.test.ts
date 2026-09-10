@@ -122,22 +122,25 @@ const basePaths = [
   "projects[0].summary",
 ] as const;
 const pathOrdinal = new Map<string, number>([
-  ["header.displayName", 1],
-  ["header.headline", 2],
-  ["summary", 3],
-  ["experience[0].title", 4],
-  ["experience[0].subtitle", 5],
-  ["experience[0].bullets[0]", 6],
-  ["projects[0].title", 7],
+  ["header.displayName", 1], ["header.headline", 2], ["summary", 3],
+  ["experience[0].title", 4], ["experience[0].subtitle", 5],
+  ["experience[0].bullets[0]", 6], ["projects[0].title", 7],
   ["projects[0].summary", 8],
 ]);
+
+type EnvelopeFinding = {
+  generatedPath: string | null;
+  classification: "SOURCE_PRESERVED" | "SAFE_REPHRASE" | "SOURCE_OMISSION" | "UNSUPPORTED_NEW_CLAIM" | "SOURCE_CONFLICT";
+  sourceOrdinals: number[];
+  reasonCode: "EXACT_SOURCE_MEANING" | "SUPPORTED_REPHRASE" | "SOURCE_NOT_RENDERED" | "FACT_NOT_IN_SOURCE" | "CONTRADICTS_SOURCE";
+};
 
 function envelope(
   paths: readonly string[] = basePaths,
   overrides: Readonly<Record<string, "UNSUPPORTED_NEW_CLAIM" | "SOURCE_CONFLICT">> = {},
   omitted: readonly number[] = [],
 ) {
-  const findings = paths.map((path) => {
+  const findings: EnvelopeFinding[] = paths.map((path) => {
     const classification = overrides[path] ?? (path === "summary" || path === "header.headline" ? "SAFE_REPHRASE" : "SOURCE_PRESERVED");
     return {
       generatedPath: path,
@@ -154,10 +157,10 @@ function envelope(
   });
   for (const ordinal of omitted) {
     findings.push({
-      generatedPath: null as string | null,
-      classification: "SOURCE_OMISSION" as const,
+      generatedPath: null,
+      classification: "SOURCE_OMISSION",
       sourceOrdinals: [ordinal],
-      reasonCode: "SOURCE_NOT_RENDERED" as const,
+      reasonCode: "SOURCE_NOT_RENDERED",
     });
   }
   return {
@@ -251,15 +254,10 @@ describe("v1.2 Fact Guardian", () => {
 
   it("detects a factual omission even when the parent entity still carries that source ordinal", async () => {
     const input = draft();
-    input.projects[0] = {
-      ...input.projects[0]!,
-      summary: null,
-      sourceRefs: [ref(7), ref(8)],
-    };
+    input.projects[0] = { ...input.projects[0]!, summary: null, sourceRefs: [ref(7), ref(8)] };
     input.omittedSourceOrdinals = [8];
     const visiblePaths = basePaths.filter((path) => path !== "projects[0].summary");
-    const guarded = envelope(visiblePaths, {}, [8]);
-    const outcome = await guardAndRepairResume(source(), input, config(async () => geminiResponse(guarded)));
+    const outcome = await guardAndRepairResume(source(), input, config(async () => geminiResponse(envelope(visiblePaths, {}, [8]))));
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.report.decision).toBe("PASS");
