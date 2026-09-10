@@ -6,7 +6,6 @@ import {
   IMPORT_REVIEW_STRUCTURE_VERSION,
   ImportReviewBlockSchema,
   ImportReviewConfidenceSchema,
-  ImportReviewDecisionSchema,
   ImportReviewKindSchema,
   ImportReviewReasonCodeSchema,
   isCareerEvidenceReviewKind,
@@ -37,7 +36,7 @@ export type ImportStructuringRuntimeConfig = Readonly<{
   geminiBaseUrl: string;
   ollamaBaseUrl: string;
   ollamaApiKey: string | null;
-  logger?: SafeAILogger;
+  logger: SafeAILogger;
   skipProviderExecution?: boolean;
 }>;
 
