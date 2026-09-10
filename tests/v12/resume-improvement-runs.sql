@@ -42,6 +42,7 @@ select
   :'v12_run_resume_improvement_run_id'::uuid as run_id,
   :'v12_hash_source_hash'::text as source_hash;
 
+-- Owner-visible readback proves source authority came from the owned receipt.
 do $$
 declare
   v_run public.resume_improvement_runs%rowtype;
@@ -53,12 +54,24 @@ begin
   if v_run.source_sha256 <> (select source_hash from v12_context) then
     raise exception 'V12_SOURCE_HASH_NOT_DERIVED_FROM_RECEIPT';
   end if;
+end $$;
+
+-- The hash helper is intentionally not client-executable. Validate persisted hashes as the DB owner.
+reset role;
+do $$
+declare
+  v_run public.resume_improvement_runs%rowtype;
+begin
+  select * into v_run from public.resume_improvement_runs where id=(select run_id from v12_context);
   if v_run.semantic_document_sha256 <> public.cv_engine_sha256(v_run.semantic_document_json::text)
      or v_run.generated_document_sha256 <> public.cv_engine_sha256(v_run.generated_document_json::text)
      or v_run.guardian_report_sha256 <> public.cv_engine_sha256(v_run.guardian_report_json::text) then
     raise exception 'V12_DURABLE_HASH_MISMATCH';
   end if;
 end $$;
+
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000101';
 
 -- Direct mutation is denied; the terminal run is RPC-owned and immutable to the application role.
 do $$ begin
