@@ -22,7 +22,7 @@ export function CareerIntelligenceWorkspace({ aiAccessMode, onSignOut }: Props) 
     <main className="first-run-shell">
       <header className="brand-bar">
         <div><span className="brand-mark">C</span><div><strong>CV Engine</strong><span>Improve your resume · source-linked AI · factual guard · ATS-safe downloads</span></div></div>
-        <span className="build-label">v1.2</span>
+        <span className="build-label">vNext · B9</span>
       </header>
 
       <nav className="split-actions primary-task-nav" aria-label="CV Engine primary and account actions">
