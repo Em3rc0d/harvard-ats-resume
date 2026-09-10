@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuthenticatedSupabaseContext } from "../../../../application/auth/requireAuthenticatedUser";
 import { executeAICapability, getAIExecutionBudget, type SafeAIEvent } from "../../../../application/ai/AIGatewayRuntime";
-import { AICapabilityNameSchema, buildProviderAttemptPlan } from "../../../../application/ai/AIGatewayFoundation";
+import { buildProviderAttemptPlan } from "../../../../application/ai/AIGatewayFoundation";
 import {
   assertProviderEconomicsWithinPolicy,
   geminiActualPaidCostUsd,
@@ -11,12 +11,19 @@ import { GeminiCredentialInputSchema, type AIAccessMode } from "../../../../doma
 import type { CredentialMode } from "../../../../domain/ai/AICapability";
 import { CURRENT_TRUST_DISCLOSURE_VERSION } from "../../../../domain/trust/FirstRunTrust";
 
+const PublicAssistCapabilitySchema = z.enum([
+  "RESUME_IMPORT_FRAGMENT",
+  "JOB_DESCRIPTION_INTERPRETATION",
+  "OPPORTUNITY_EXPLANATION",
+  "INLINE_WORDING_OPTIMIZATION",
+]);
+
 const AssistInputSchema = z.object({
-  capability: AICapabilityNameSchema,
+  capability: PublicAssistCapabilitySchema,
   prompt: z.string().trim().min(1).max(20_000),
 }).strict();
 
-const SYSTEM_INSTRUCTIONS: Readonly<Record<z.infer<typeof AICapabilityNameSchema>, string>> = {
+const SYSTEM_INSTRUCTIONS: Readonly<Record<z.infer<typeof PublicAssistCapabilitySchema>, string>> = {
   RESUME_IMPORT_FRAGMENT: "You are a bounded resume-import assistant. Work only from supplied source text. Suggest possible structure or interpretation, never invent candidate facts, metrics, employers, dates, skills, achievements or credentials. Your output is a review proposal, never Career Evidence.",
   JOB_DESCRIPTION_INTERPRETATION: "You are a bounded employer-text interpretation assistant. Work only from supplied Job Truth. You may explain or classify employer requirements, but never convert job requirements into candidate evidence and never claim the candidate has a capability that is not present in Career Evidence.",
   OPPORTUNITY_EXPLANATION: "You explain a deterministic CV Engine opportunity assessment. Preserve MATCH/POTENTIAL_MATCH/GAP/UNKNOWN distinctions, explicitly preserve uncertainty, never estimate hiring probability, never invent candidate facts, and never upgrade unsupported evidence. The deterministic assessment remains authoritative; your response is explanatory only.",

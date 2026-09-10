@@ -18,7 +18,7 @@ import {
 export const B6_RUNTIME_CONTRACT_VERSION = "b6-ai-runtime-v1" as const;
 
 export const AIProposalSchema = z.object({
-  text: z.string().trim().min(1).max(10_000),
+  text: z.string().trim().min(1).max(20_000),
 }).strict();
 
 export const AIExecutionFailureCodeSchema = z.enum([
@@ -100,11 +100,23 @@ export type AIGatewayRuntimeConfig = Readonly<{
   budgetOverrides?: Partial<Record<AICapabilityName, AIExecutionBudget>>;
 }>;
 
+export type StructuredOutputValidator = (value: unknown) => void;
+
 export type AIExecutionInput = Readonly<{
   capability: AICapabilityName;
   credentialMode: CredentialMode;
   prompt: string;
   systemInstruction: string | null;
+  responseJsonSchema?: Readonly<Record<string, unknown>> | null;
+  structuredOutputValidator?: StructuredOutputValidator;
+}>;
+
+type NormalizedAIExecutionInput = Readonly<{
+  capability: AICapabilityName;
+  credentialMode: CredentialMode;
+  prompt: string;
+  systemInstruction: string | null;
+  responseJsonSchema: Record<string, unknown> | null;
 }>;
 
 type ProviderExecutionResult = Readonly<{
@@ -135,6 +147,13 @@ class ProviderResponseFailure extends Error {
   }
 }
 
+class StructuredOutputValidationFailure extends Error {
+  constructor() {
+    super("STRUCTURED_OUTPUT_VALIDATION_FAILED");
+    this.name = "StructuredOutputValidationFailure";
+  }
+}
+
 const BUDGETS: Readonly<Record<AICapabilityName, AIExecutionBudget>> = {
   RESUME_IMPORT_FRAGMENT: {
     capability: "RESUME_IMPORT_FRAGMENT",
@@ -145,6 +164,17 @@ const BUDGETS: Readonly<Record<AICapabilityName, AIExecutionBudget>> = {
     maxOutputTokens: 800,
     perAttemptTimeoutMs: 12_000,
     wholeOperationDeadlineMs: 28_000,
+    allowQualityEscalation: true,
+  },
+  RESUME_SEMANTIC_UNDERSTANDING: {
+    capability: "RESUME_SEMANTIC_UNDERSTANDING",
+    capabilityClass: "BOUNDED_ASSIST",
+    maxGeminiAttempts: 2,
+    maxOllamaAttempts: 1,
+    maxInputTokens: 45_000,
+    maxOutputTokens: 5_000,
+    perAttemptTimeoutMs: 18_000,
+    wholeOperationDeadlineMs: 42_000,
     allowQualityEscalation: true,
   },
   JOB_DESCRIPTION_INTERPRETATION: {
@@ -227,9 +257,19 @@ function mapHttpFailure(status: number): AIExecutionFailureCode {
 function normalizeFailure(error: unknown): AIExecutionFailureCode {
   if (error instanceof ProviderHttpFailure) return mapHttpFailure(error.status);
   if (error instanceof ProviderResponseFailure) return "INVALID_PROVIDER_RESPONSE";
+  if (error instanceof StructuredOutputValidationFailure) return "OUTPUT_VALIDATION_FAILED";
   if (error instanceof DOMException && error.name === "AbortError") return "PROVIDER_TIMEOUT";
   if (error instanceof Error && error.name === "AbortError") return "PROVIDER_TIMEOUT";
   return "PROVIDER_UNAVAILABLE";
+}
+
+function normalizeResponseJsonSchema(value: AIExecutionInput["responseJsonSchema"]): Record<string, unknown> | null {
+  if (value === undefined || value === null) return null;
+  const record = asRecord(value);
+  if (!record) throw new Error("STRUCTURED_OUTPUT_SCHEMA_INVALID");
+  const serialized = JSON.stringify(record);
+  if (Buffer.byteLength(serialized, "utf8") > 30_000) throw new Error("STRUCTURED_OUTPUT_SCHEMA_TOO_LARGE");
+  return record;
 }
 
 function attemptPlanForBudget(capability: AICapabilityName, credentialMode: CredentialMode, budget: AIExecutionBudget) {
@@ -249,16 +289,26 @@ async function executeGemini(
   fetchImpl: typeof fetch,
   config: AIGatewayRuntimeConfig,
   plan: AIProviderAttemptPlan,
-  input: AIExecutionInput,
+  input: NormalizedAIExecutionInput,
   budget: AIExecutionBudget,
   signal: AbortSignal,
 ): Promise<ProviderExecutionResult> {
   const apiKey = credentialForGemini(plan, config);
   if (!apiKey) throw new Error("CREDENTIAL_UNAVAILABLE");
 
+  const generationConfig: Record<string, unknown> = { maxOutputTokens: budget.maxOutputTokens };
+  if (input.responseJsonSchema) {
+    generationConfig.responseFormat = {
+      text: {
+        mimeType: "application/json",
+        schema: input.responseJsonSchema,
+      },
+    };
+  }
+
   const body: Record<string, unknown> = {
     contents: [{ role: "user", parts: [{ text: input.prompt }] }],
-    generationConfig: { maxOutputTokens: budget.maxOutputTokens },
+    generationConfig,
   };
   if (input.systemInstruction) body.systemInstruction = { parts: [{ text: input.systemInstruction }] };
 
@@ -294,7 +344,7 @@ async function executeOllama(
   fetchImpl: typeof fetch,
   config: AIGatewayRuntimeConfig,
   plan: AIProviderAttemptPlan,
-  input: AIExecutionInput,
+  input: NormalizedAIExecutionInput,
   budget: AIExecutionBudget,
   signal: AbortSignal,
 ): Promise<ProviderExecutionResult> {
@@ -308,6 +358,7 @@ async function executeOllama(
     options: { num_predict: budget.maxOutputTokens },
   };
   if (input.systemInstruction) body.system = input.systemInstruction;
+  if (input.responseJsonSchema) body.format = input.responseJsonSchema;
 
   const response = await fetchImpl(`${normalizeBaseUrl(config.ollamaBaseUrl)}/api/generate`, {
     method: "POST",
@@ -339,11 +390,16 @@ export async function executeAICapability(
   inputValue: AIExecutionInput,
   config: AIGatewayRuntimeConfig,
 ): Promise<AIExecutionOutcome> {
-  const input: AIExecutionInput = {
+  const responseJsonSchema = normalizeResponseJsonSchema(inputValue.responseJsonSchema);
+  const structuredOutputValidator = inputValue.structuredOutputValidator;
+  if (structuredOutputValidator && !responseJsonSchema) throw new Error("STRUCTURED_OUTPUT_SCHEMA_REQUIRED");
+
+  const input: NormalizedAIExecutionInput = {
     capability: AICapabilityNameSchema.parse(inputValue.capability),
     credentialMode: CredentialModeSchema.parse(inputValue.credentialMode),
-    prompt: z.string().trim().min(1).max(20_000).parse(inputValue.prompt),
-    systemInstruction: inputValue.systemInstruction === null ? null : z.string().trim().min(1).max(4_000).parse(inputValue.systemInstruction),
+    prompt: z.string().trim().min(1).max(40_000).parse(inputValue.prompt),
+    systemInstruction: inputValue.systemInstruction === null ? null : z.string().trim().min(1).max(8_000).parse(inputValue.systemInstruction),
+    responseJsonSchema,
   };
   const budget = getAIExecutionBudget(input.capability, config.budgetOverrides ?? {});
   const now = config.now ?? Date.now;
@@ -352,8 +408,9 @@ export async function executeAICapability(
   const requestId = randomUUID();
   const startedAt = now();
   const attempts: AIProviderAttemptReceipt[] = [];
+  const schemaBudgetText = input.responseJsonSchema ? JSON.stringify(input.responseJsonSchema) : "";
 
-  if (conservativeTokenUpperBound(`${input.systemInstruction ?? ""}\n${input.prompt}`) > budget.maxInputTokens) {
+  if (conservativeTokenUpperBound(`${input.systemInstruction ?? ""}\n${input.prompt}\n${schemaBudgetText}`) > budget.maxInputTokens) {
     return {
       ok: false,
       requestId,
@@ -405,6 +462,23 @@ export async function executeAICapability(
       const result = plan.provider === "GEMINI"
         ? await executeGemini(fetchImpl, config, plan, input, budget, controller.signal)
         : await executeOllama(fetchImpl, config, plan, input, budget, controller.signal);
+
+      if (input.responseJsonSchema) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(result.text);
+        } catch {
+          throw new StructuredOutputValidationFailure();
+        }
+        if (structuredOutputValidator) {
+          try {
+            structuredOutputValidator(parsed);
+          } catch {
+            throw new StructuredOutputValidationFailure();
+          }
+        }
+      }
+
       const proposal = AIProposalSchema.parse({ text: result.text });
       const durationMs = Math.max(0, now() - attemptStartedAt);
       const receipt: AIProviderAttemptReceipt = {
