@@ -275,7 +275,7 @@ export function ResumeImportWorkspace() {
                 <div className="evidence-meta"><span>{receipt.mediaType}</span><span>{receipt.status}</span></div>
                 <h2>{receipt.sourceName}</h2>
                 {receipt.status === "EXTRACTED"
-                  ? <p className="status">This import predates AI-first review. Upload the same file again to organize the existing mechanical receipt without duplicating source data.</p>
+                  ? <p className="status">This import predates AI-first review. Re-upload the file to create a new AI-organized review while keeping this historical import intact.</p>
                   : <p className="status">{receipt.warningCode ?? "Mechanical extraction unavailable."} Use manual Career Evidence for this document.</p>}
               </article>;
             }
