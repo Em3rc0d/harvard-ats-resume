@@ -9,15 +9,15 @@ PRODUCT / TRUTH ARCHITECTURE     CLOSED WITH AUTHORITY CORRECTION 11
 AI / BYOK ARCHITECTURE           CLOSED
 PF0 PRODUCTION FOUNDATION        CLOSED
 ZERO-BASED IMPLEMENTATION        AUTHORIZED
-PRODUCT COHERENCE REWORK         BLOCKED UNTIL CONTRACT 11 IMPLEMENTATION PLAN CLOSES
-PRODUCTION READY CLAIM           REQUIRES RELEASE EVIDENCE FOR THE IMPLEMENTED SHA
+PRODUCT COHERENCE IMPLEMENTATION AUTHORIZED BY CONTRACT 12
+PRODUCTION READY CLAIM           REQUIRES NEW EXACT-SHA + REAL-CV RELEASE EVIDENCE
 ```
 
 The documentation phase previously reached its stop condition. Broad conceptual redesign remains prohibited unless executable evidence demonstrates a genuinely missing boundary.
 
-Real-user resume dogfood subsequently demonstrated such a boundary: candidate-provided assertions had become over-constrained as if lack of external verification made them unusable for normal resume improvement. `11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md` is therefore an authorized truth-boundary correction, not an informal redesign.
+Real-user resume dogfood demonstrated such a boundary: candidate-provided assertions had become over-constrained as if lack of external verification made them unusable for normal resume improvement. `11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md` is therefore an authorized truth-boundary correction, not an informal redesign.
 
-No code should be changed merely to react to symptoms until the implementation nodes defined by Contract 11 are closed.
+`12-CV-IMPROVEMENT-IMPLEMENTATION-CONTRACT.md` closes the ten implementation nodes required by Contract 11 and authorizes a narrow additive implementation in dependency order. Random symptom patches and unnecessary backend rewrites remain prohibited.
 
 ## Authority set
 
@@ -97,29 +97,42 @@ No code should be changed merely to react to symptoms until the implementation n
     - AI transformations require provenance/fact-preservation validation;
     - unsupported AI additions are blocked, not candidate-provided claims;
     - Truth Graph is a provenance/safety ledger, not a background-check tribunal;
-    - core product path is upload → improve → validate → deliver;
-    - re-coding remains blocked until the implementation nodes in Contract 11 are closed.
+    - core product path is upload → improve → validate → deliver.
+
+13. `12-CV-IMPROVEMENT-IMPLEMENTATION-CONTRACT.md`
+    - closes all ten pre-code implementation nodes from Contract 11;
+    - preserves current CareerEvidence/TruthClass storage semantics without destructive renames;
+    - introduces a full-document semantic model above mechanical source lines;
+    - separates powerful Resume Editor from strict Fact Guardian;
+    - requires provider structured outputs and section/entity-level recovery;
+    - defines the task-first Improve CV UX;
+    - freezes an additive `ResumeImprovementRun` authority and lifecycle;
+    - makes real-CV quality acceptance a release gate;
+    - defines I1→I10 implementation order and exact-SHA re-certification.
 
 ## Governing architecture
 
 ```text
 Candidate source assertion = candidate authority
-Externally verified fact   = candidate authority + additional verification
+Candidate confirmation     = additional candidate review state
+External verification      = optional future provenance enhancement
 Job Snapshot               = market truth
 Career Target              = intent
 Assessment                 = derived analysis
 AI transformation          = proposed presentation
 Fact Guardian              = source-preservation gate
+Resume Improvement Run     = immutable transformation lineage
 Resume Artifact            = accepted projection
 ```
 
-The previous shorthand `Career Evidence = candidate authority` remains structurally useful, but Contract 11 clarifies the ingestion semantics: candidate-authored CV/source material may become candidate-authoritative assertions without first proving the candidate's biography externally.
+The previous shorthand `Career Evidence = candidate authority` remains structurally useful, but Contract 11 clarifies ingestion semantics: candidate-authored CV/source material may become candidate-authoritative assertions without first proving the candidate's biography externally.
 
 Hard distinction:
 
 ```text
 Not externally verified != false
 Candidate-provided assertion != unsupported AI addition
+UNVERIFIED/NEEDS_REVIEW/VERIFIED != external verification classes
 ```
 
 ```text
@@ -129,9 +142,7 @@ Ollama     = resilience fallback when available
 Redis      = optional operational accelerator
 ```
 
-## Build order
-
-Historical build order remains documented:
+## Historical build order
 
 ```text
 B0    empty implementation / typed contracts / CI
@@ -147,20 +158,50 @@ B8    production evidence / release qualification
 B9    presentation / artifact / production browser closure
 ```
 
-Contract 11 does not authorize blind rebuilding of these blocks. It requires a product-coherence implementation plan that reuses the existing trusted infrastructure wherever possible.
+## Product-coherence implementation order
+
+Contract 12 authorizes only this dependency-ordered path unless executable evidence proves a dependency conflict:
+
+```text
+I1  Source-authority policy helpers + regression contracts
+ ↓
+I2  CandidateResumeDocument semantic domain
+ ↓
+I3  Structured semantic-understanding capability
+ ↓
+I4  Resume Improvement Run persistence + RLS/lifecycle
+ ↓
+I5  Holistic Resume Editor capability
+ ↓
+I6  Fact Guardian + repair/recovery
+ ↓
+I7  Resume artifact adapter for improvement result
+ ↓
+I8  Primary Improve CV UX
+ ↓
+I9  Real-CV golden harness + quality rubric
+ ↓
+I10 Production E2E + release re-certification
+```
+
+No Market Intelligence, scraping, job discovery, external verification or global-navigation rewrite is required to complete this path.
 
 ## Current working rule
 
 ```text
-TRUTH AUTHORITY CORRECTION → DOCUMENTED
-IMPLEMENTATION GRAPH        → MUST CLOSE NEXT
-RANDOM RE-CODING            → PROHIBITED
+TRUTH AUTHORITY CORRECTION → CLOSED
+IMPLEMENTATION GRAPH        → CLOSED
+BUILD                        → AUTHORIZED I1→I10
+RANDOM RE-CODING             → PROHIBITED
+UNNECESSARY BACKEND REWRITE  → PROHIBITED
 ```
 
-Allowed next documentation includes the implementation plan, compatibility analysis, ADRs, migration design, quarries, benchmark receipts, security evidence and release records required by Contract 11.
+Provider routing improves availability. Truth contracts decide source authority and transformation acceptance. Production foundation decides ownership, durability, security and deployability.
 
-Provider routing improves availability. Truth contracts decide source authority and acceptance. Production foundation decides ownership, durability, security and deployability.
-
-The primary product principle is now:
+The primary product principle remains:
 
 > **Believe the user's source. Distrust the AI's additions.**
+
+And the primary product outcome is:
+
+> **Upload a CV, receive a materially improved source-faithful CV, and download it without operating CV Engine's internal ontology.**

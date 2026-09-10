@@ -49,6 +49,7 @@ Primary material:
 - `docs/release/RELEASE_SURFACE_AUDIT_v1.md`
 - `docs/vnext/00-FIRST-RUN-TRUST-AND-AI-ACCESS.md`
 - `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md`
+- `docs/vnext/12-CV-IMPROVEMENT-IMPLEMENTATION-CONTRACT.md`
 
 Purpose:
 
@@ -64,7 +65,8 @@ Purpose:
 - candidate-authored source as authoritative candidate assertion;
 - AI transformation as the object that requires provenance/fact validation;
 - Truth Graph as a safety/provenance ledger rather than a prerequisite background-check gate;
-- upload → improve → validate → deliver as the primary product outcome.
+- upload → improve → validate → deliver as the primary product outcome;
+- primary workflow that hides internal ontology and delivers the improved CV first.
 
 ## 02 — Architecture
 
@@ -75,6 +77,7 @@ Primary authority:
 - `docs/vnext/01-AI-PROVIDER-ROUTING.md`
 - `docs/vnext/02-BYOK-SECRET-HANDLING.md`
 - `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md`
+- `docs/vnext/12-CV-IMPROVEMENT-IMPLEMENTATION-CONTRACT.md`
 - `docs/ats-v2/baseline/CURRENT_PRODUCT_CONTRACT.md`
 
 Supporting architecture:
@@ -138,16 +141,20 @@ Candidate-source transformation architecture:
 ```text
 Candidate source assertion
    ↓
-semantic understanding
+CandidateResumeDocument semantic understanding
    ↓
-powerful resume transformation
+Holistic Resume Editor
    ↓
-fact/provenance guardian
+Fact Guardian
    ↓
-accepted presentation / Resume Artifact
+repair / conservative recovery
+   ↓
+Resume Improvement Run
+   ↓
+Resume Artifact
 ```
 
-Exact Gemini model routing remains capability-specific and must be benchmarked against real representative CVs before a quality-sensitive transformation route is frozen.
+Exact quality-sensitive Gemini model routing must be benchmarked against representative real CVs before a route is frozen. Provider structured outputs must be used for machine-critical structures where supported.
 
 ## 03 — Historical implementation plan / design decisions
 
@@ -162,12 +169,15 @@ These documents explain why many boundaries exist. They are valuable design hist
 
 Contract 11 explicitly supersedes any historical interpretation that treats candidate-provided but externally unverified information as false, unusable, or ineligible for normal resume improvement.
 
+Contract 12 supersedes any assumption that the implementation graph is still open: Nodes 1–10 are closed and the I1→I10 build sequence is authorized after Contract 12 is merged.
+
 ## 04 — Zero-based build plan
 
 Primary authority:
 
-- `REBUILD-CONTRACT.md`
-- `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md` for the candidate-source / AI-transformation correction.
+- `REBUILD-CONTRACT.md`;
+- `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md` for candidate-source authority;
+- `docs/vnext/12-CV-IMPROVEMENT-IMPLEMENTATION-CONTRACT.md` for product-coherence implementation.
 
 Historical build sequence:
 
@@ -197,7 +207,26 @@ Critical corrections from the first implementation and subsequent real-user dogf
 
 > The Truth Graph guards transformations and provenance. It must not force claim-by-claim biography verification before the user can receive an improved CV.
 
-> Before re-coding the product-coherence correction, the implementation graph listed in Contract 11 must be closed. Do not patch random symptoms.
+> Mechanical source lines remain provenance leaves; they must not define the user-facing semantic model.
+
+> The next implementation reuses existing trusted infrastructure and adds only the missing semantic/editor/guardian/product path.
+
+Product-coherence implementation sequence:
+
+```text
+I1  Source-authority policy helpers + regression contracts
+I2  CandidateResumeDocument semantic domain
+I3  Structured semantic-understanding capability
+I4  Resume Improvement Run persistence + RLS/lifecycle
+I5  Holistic Resume Editor capability
+I6  Fact Guardian + repair/recovery
+I7  Resume artifact adapter for improvement result
+I8  Primary Improve CV UX
+I9  Real-CV golden harness + quality rubric
+I10 Production E2E + release re-certification
+```
+
+No Market Intelligence, scraping, job discovery, global navigation rewrite or external verification feature is required to close I1→I10.
 
 ## 05 — Test architecture
 
@@ -215,8 +244,9 @@ Primary material:
 - `docs/vnext/01-AI-PROVIDER-ROUTING.md`
 - `docs/vnext/02-BYOK-SECRET-HANDLING.md`
 - `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md`
+- `docs/vnext/12-CV-IMPROVEMENT-IMPLEMENTATION-CONTRACT.md`
 
-Required layers in the rebuild:
+Required layers:
 
 ```text
 domain tests
@@ -225,12 +255,14 @@ application/API tests
 persistence + fault tests
 source-reconciliation fixtures
 provider-routing/fallback fixtures
+structured-output regression
 BYOK secret-canary tests
 canonical personas
 browser E2E
 identified-runtime receipts
 real-CV product-quality acceptance
 source-vs-generated fact-guardian regression
+DOCX/PDF validity
 ```
 
 The real-CV gate must distinguish:
@@ -239,6 +271,7 @@ The real-CV gate must distinguish:
 SAFE BUT USELESS != PASS
 PROVIDER UNAVAILABLE != INVALID PROVIDER OUTPUT
 CANDIDATE ASSERTION != UNSUPPORTED AI ADDITION
+ENGINEERING CERTIFIED != REAL-CV PRODUCT QUALITY ACCEPTED
 ```
 
 ## 06 — Mining site / quarries / golden dataset
@@ -300,7 +333,8 @@ Runtime characterization must separately identify:
 - Ollama capability health;
 - whether fallback was actually exercised;
 - whether provider response was rejected by output validation;
-- whether fact-guardian validation accepted/repaired/rejected generated claims.
+- whether fact-guardian validation accepted/repaired/rejected generated claims;
+- whether partial recovery preserved safe improved sections.
 
 ## 08 — Release gates
 
@@ -311,6 +345,7 @@ Primary material:
 - `docs/release/RELEASE_SURFACE_AUDIT_v1.md`
 - `docs/ats-v2/baseline/EXECUTION_EVIDENCE.md`
 - `docs/vnext/11-CANDIDATE-SOURCE-AUTHORITY-AND-AI-TRANSFORMATION.md`
+- `docs/vnext/12-CV-IMPROVEMENT-IMPLEMENTATION-CONTRACT.md`
 
 Release rule:
 
@@ -335,7 +370,17 @@ AI/runtime release evidence must include:
 - unsupported AI additions rejected or repaired;
 - representative real/private CV produces a materially improved downloadable resume;
 - candidate-provided assertions do not require external proof before normal CV optimization;
-- output-validation failure is not mislabeled as provider unavailability.
+- output-validation failure is not mislabeled as provider unavailability;
+- valid DOCX/PDF outputs;
+- source→generated provenance;
+- exact-SHA production browser evidence.
+
+Product qualification requires both:
+
+```text
+ENGINEERING_CERTIFIED = true
+REAL_CV_PRODUCT_QUALITY_ACCEPTED = true
+```
 
 ## Historical implementation archive
 
@@ -345,30 +390,21 @@ These files may contain stale runtime/model assumptions. They are kept to unders
 
 ## Working rule for the next phase
 
-Before writing production application code for the candidate-source correction, the implementation plan must close:
+Contract 12 closes all ten pre-code implementation nodes required by Contract 11.
 
-1. source-authority schema semantics;
-2. compatibility with existing Career Evidence / TruthClass storage;
-3. semantic document model;
-4. editor vs guardian capability split;
-5. structured-output/provider contract;
-6. partial-recovery strategy;
-7. primary user workflow;
-8. migration/backward-compatibility strategy;
-9. real-CV golden acceptance harness;
-10. release/re-certification scope.
-
-Then implementation may proceed in dependency order.
-
-Until then:
+Therefore:
 
 ```text
-DOCUMENT THE CORRECTION
-DO NOT PATCH RANDOM SYMPTOMS
-DO NOT REWRITE THE BACKEND UNNECESSARILY
-DO NOT WEAKEN PROVENANCE
+SOURCE-AUTHORITY CORRECTION  CLOSED
+IMPLEMENTATION GRAPH         CLOSED
+BUILD I1→I10                 AUTHORIZED
+RANDOM SYMPTOM PATCHES       PROHIBITED
+UNNECESSARY BACKEND REWRITE  PROHIBITED
+PROVENANCE WEAKENING         PROHIBITED
 ```
 
-The governing product rule is:
+Implementation may now proceed in dependency order, preserving current infrastructure unless executable evidence proves a specific incompatibility.
+
+The governing product rule remains:
 
 > **Believe the user's source. Distrust the AI's additions.**
