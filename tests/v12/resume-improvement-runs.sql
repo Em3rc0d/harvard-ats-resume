@@ -2,8 +2,8 @@
 
 reset role;
 insert into auth.users (id) values
-  ('00000000-0000-4000-8000-000000000101'),
-  ('00000000-0000-4000-8000-000000000202')
+  ('12000000-0000-4000-8000-000000000001'),
+  ('12000000-0000-4000-8000-000000000002')
 on conflict do nothing;
 
 select public.cv_engine_sha256('v12-source') source_hash,
@@ -11,7 +11,7 @@ select public.cv_engine_sha256('v12-source') source_hash,
        public.cv_engine_sha256('Senior Backend Engineer') line_hash \gset v12_hash_
 
 set role authenticated;
-set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000101';
+set request.jwt.claim.sub = '12000000-0000-4000-8000-000000000001';
 
 select receipt_id from public.cv_engine_record_resume_import(
   'resume-v12.pdf','PDF',1024,:'v12_hash_source_hash',:'v12_hash_extracted_hash','EXTRACTED',null,
@@ -48,7 +48,7 @@ declare
   v_run public.resume_improvement_runs%rowtype;
 begin
   select * into v_run from public.resume_improvement_runs where id=(select run_id from v12_context);
-  if v_run.owner_user_id <> '00000000-0000-4000-8000-000000000101'::uuid then
+  if v_run.owner_user_id <> '12000000-0000-4000-8000-000000000001'::uuid then
     raise exception 'V12_RUN_OWNER_MISMATCH';
   end if;
   if v_run.source_sha256 <> (select source_hash from v12_context) then
@@ -71,7 +71,7 @@ begin
 end $$;
 
 set role authenticated;
-set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000101';
+set request.jwt.claim.sub = '12000000-0000-4000-8000-000000000001';
 
 -- Direct mutation is denied; the terminal run is RPC-owned and immutable to the application role.
 do $$ begin
@@ -103,7 +103,7 @@ end $$;
 -- Cross-owner reads are hidden and cross-owner source receipts cannot be used by the RPC.
 reset role;
 set role authenticated;
-set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000202';
+set request.jwt.claim.sub = '12000000-0000-4000-8000-000000000002';
 
 do $$ declare v_count integer; begin
   select count(*) into v_count from public.resume_improvement_runs
@@ -142,7 +142,7 @@ end $$;
 -- Export and deletion include the new authority without changing the legacy export schema identifier.
 reset role;
 set role authenticated;
-set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000101';
+set request.jwt.claim.sub = '12000000-0000-4000-8000-000000000001';
 do $$ declare v_export jsonb; begin
   v_export := public.cv_engine_export_account();
   if v_export->>'schemaVersion' <> 'b8-account-export-v1'
@@ -157,7 +157,7 @@ reset role;
 do $$ begin
   if exists(
     select 1 from public.resume_improvement_runs
-    where owner_user_id='00000000-0000-4000-8000-000000000101'::uuid
+    where owner_user_id='12000000-0000-4000-8000-000000000001'::uuid
   ) then
     raise exception 'V12_ACCOUNT_DELETE_LEFT_IMPROVEMENT_RUN';
   end if;
