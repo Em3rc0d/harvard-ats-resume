@@ -49,6 +49,7 @@ const fallbackConfig = {
   geminiBaseUrl: "https://generativelanguage.googleapis.com",
   ollamaBaseUrl: "http://127.0.0.1:9",
   ollamaApiKey: null,
+  logger: () => undefined,
   skipProviderExecution: true,
 };
 
