@@ -1,0 +1,51 @@
+name: CV Engine v1.2 Production Browser E2E
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v12-production-browser-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  production-improve-resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CVENGINE_BASE_URL: https://harvard-ats-resume.vercel.app
+      CVENGINE_EXPECTED_SHA: ${{ github.sha }}
+      CVENGINE_E2E_OUTPUT_DIR: artifacts/v12-production-browser
+    steps:
+      - name: Checkout exact release candidate
+        uses: actions/checkout@v7
+
+      - name: Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Preflight exact Production runtime
+        run: python tests/b9/production-runtime-preflight.py
+
+      - name: Install pinned browser harness
+        run: |
+          python -m pip install --disable-pip-version-check playwright==1.55.0
+          python -m playwright install --with-deps chromium
+
+      - name: Certify v1.2 improve-resume golden path
+        run: python tests/v12/production-improve-resume-cert.py
+
+      - name: Upload sanitized v1.2 certification receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cvengine-v12-production-browser-${{ github.run_id }}
+          path: artifacts/v12-production-browser
+          if-no-files-found: error
+          retention-days: 14
