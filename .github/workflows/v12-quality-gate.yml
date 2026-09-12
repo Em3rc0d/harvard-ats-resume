@@ -1,0 +1,36 @@
+name: CV Engine v1.2 Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Run v1.2 quality contracts
+        run: >-
+          npx vitest run
+          src/domain/v12-real-cv-quality-gate.test.ts
+          src/domain/v12-fact-guardian.test.ts
+          src/domain/v12-primary-improvement-ux.test.ts
+          src/domain/v12-improvement-artifact.test.ts
+          src/domain/v12-holistic-resume-editor.test.ts
+          src/domain/v12-resume-semantic-understanding.test.ts
