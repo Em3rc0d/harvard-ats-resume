@@ -39,7 +39,7 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: Certify v1.2 improve-resume golden path
-        run: python tests/v12/production-improve-resume-e2e.py
+        run: python tests/v12/production-improve-resume-cert.py
 
       - name: Upload sanitized v1.2 certification receipt
         if: always()
