@@ -1,0 +1,79 @@
+.panel {
+  margin-top: 1rem;
+}
+
+.form textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: #0d1218;
+  color: var(--text);
+  padding: 0.9rem 1rem;
+  outline: none;
+  font: inherit;
+  line-height: 1.55;
+}
+
+.form textarea:focus {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 3px rgba(120, 151, 194, 0.12);
+}
+
+.optional {
+  color: var(--subtle);
+  font-size: 0.76rem;
+  font-weight: 400;
+}
+
+.safety {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1.4rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 1rem;
+  background: var(--panel-soft);
+}
+
+.safety strong {
+  font-size: 1rem;
+}
+
+.safety span {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.sectionTitle {
+  margin-top: 1.6rem !important;
+  font-size: 1rem !important;
+  letter-spacing: -0.01em !important;
+}
+
+.changeList {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.audit {
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 760px) {
+  .panel {
+    margin-top: 0.75rem;
+  }
+}
