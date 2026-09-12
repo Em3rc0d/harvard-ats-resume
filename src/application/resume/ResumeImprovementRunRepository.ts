@@ -108,7 +108,12 @@ export async function loadResumeImprovementRun(
   throw new Error("V12_IMPROVEMENT_READ_FAILED:RETRY_EXHAUSTED");
 }
 
-export async function listResumeImprovementRunSummaries(
+/**
+ * History cards intentionally fetch only their five display fields. Large
+ * semantic/editor/guardian JSON documents remain out of the list query and
+ * are loaded only when a specific run is opened or rendered.
+ */
+export async function listResumeImprovementRuns(
   client: SupabaseClient,
   ownerUserId: string,
   limit = 20,
