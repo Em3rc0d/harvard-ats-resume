@@ -10,12 +10,12 @@ describe("v1.2 production certification contract", () => {
     const workflow = read(".github/workflows/v12-production-browser-e2e.yml");
     expect(workflow).toContain("CVENGINE_EXPECTED_SHA: ${{ github.sha }}");
     expect(workflow).toContain("tests/b9/production-runtime-preflight.py");
-    expect(workflow).toContain("tests/v12/production-improve-resume-e2e.py");
+    expect(workflow).toContain("tests/v12/production-improve-resume-cert.py");
     expect(workflow).toContain("branches:\n      - main");
   });
 
   it("certifies the primary outcome rather than bounded-context administration", () => {
-    const harness = read("tests/v12/production-improve-resume-e2e.py");
+    const harness = read("tests/v12/production-improve-resume-cert.py");
     for (const required of [
       "PRIMARY_IMPROVE_RESUME_LANDING",
       "IMPROVEMENT_HTTP_201_GUARDIAN_ZERO",
@@ -31,11 +31,12 @@ describe("v1.2 production certification contract", () => {
     }
     expect(harness).toContain('name="Improve my resume"');
     expect(harness).toContain('"unsupportedNewClaims"');
+    expect(harness).toContain('payload.get("export")');
     expect(harness).not.toContain("Accept as NEEDS_REVIEW");
   });
 
   it("uses a representative complex resume without candidate PII", () => {
-    const harness = read("tests/v12/production-improve-resume-e2e.py");
+    const harness = read("tests/v12/production-improve-resume-cert.py");
     for (const section of ["PERFIL PROFESIONAL", "COMPETENCIAS TÉCNICAS", "EXPERIENCIA PROFESIONAL", "PRODUCTOS Y PROYECTOS", "EDUCACIÓN", "CERTIFICACIONES", "IDIOMAS"]) {
       expect(harness).toContain(section);
     }
@@ -48,7 +49,7 @@ describe("v1.2 production certification contract", () => {
   });
 
   it("emits the same privacy-preserving quality receipt contract frozen by I9", () => {
-    const harness = read("tests/v12/production-improve-resume-e2e.py");
+    const harness = read("tests/v12/production-improve-resume-cert.py");
     expect(harness).toContain('"schemaVersion": "v12-real-cv-quality-receipt-v1"');
     expect(harness).toContain('"evaluator": "AUTOMATED_REPRESENTATIVE_FIXTURE"');
     expect(harness).toContain('"unsupportedNewClaims"');
