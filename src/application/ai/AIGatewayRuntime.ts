@@ -320,12 +320,11 @@ async function executeGemini(
 
   const generationConfig: Record<string, unknown> = { maxOutputTokens: budget.maxOutputTokens };
   if (input.responseJsonSchema) {
-    generationConfig.responseFormat = {
-      text: {
-        mimeType: "application/json",
-        schema: input.responseJsonSchema,
-      },
-    };
+    // generateContent accepts JSON Schema directly through GenerationConfig. This path is
+    // deliberately used instead of the newer modality responseFormat wrapper because it
+    // remains compatible across the stable Gemini Flash models used by CV Engine.
+    generationConfig.responseMimeType = "application/json";
+    generationConfig.responseJsonSchema = input.responseJsonSchema;
   }
 
   const body: Record<string, unknown> = {
