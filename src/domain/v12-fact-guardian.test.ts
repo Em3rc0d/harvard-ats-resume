@@ -176,13 +176,6 @@ function geminiResponse(body: unknown) {
     usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 80 },
   }), { status: 200, headers: { "Content-Type": "application/json" } });
 }
-function ollamaResponse(body: unknown) {
-  return new Response(JSON.stringify({
-    response: JSON.stringify(body),
-    prompt_eval_count: 100,
-    eval_count: 80,
-  }), { status: 200, headers: { "Content-Type": "application/json" } });
-}
 function config(fetchImpl: typeof fetch) {
   return {
     credentialMode: "PLATFORM_KEY" as const,
@@ -238,18 +231,36 @@ describe("v1.2 Fact Guardian", () => {
     expect(outcome.report?.passes).toHaveLength(2);
   });
 
-  it("rejects incomplete guardian coverage across every configured provider instead of accepting a partial audit", async () => {
-    const invalid = envelope(basePaths.slice(0, -1));
-    const fetchImpl: typeof fetch = async (input) => String(input).includes("/api/generate")
-      ? ollamaResponse(invalid)
-      : geminiResponse(invalid);
+  it("repairs a generated unit when AI coverage is incomplete instead of discarding the whole audit", async () => {
+    let call = 0;
+    const incomplete = envelope(basePaths.slice(0, -1));
+    const fetchImpl: typeof fetch = async () => {
+      call += 1;
+      return geminiResponse(call === 1 ? incomplete : envelope());
+    };
     const outcome = await guardAndRepairResume(source(), draft(), config(fetchImpl));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.report.decision).toBe("REPAIRED_PASS");
+    expect(outcome.report.repairedPaths).toEqual(["projects[0].summary"]);
+    expect(outcome.report.passes[0]?.findings).toContainEqual(expect.objectContaining({
+      generatedPath: "projects[0].summary",
+      classification: "POSSIBLE_NEW_CLAIM",
+      reasonCode: "SUPPORT_AMBIGUOUS",
+      sourceOrdinals: [8],
+    }));
+    expect(outcome.document.projects[0]?.summary?.text).toBe("Resume improvement system.");
+  });
+
+  it("still fails closed when incomplete AI coverage persists after deterministic repair", async () => {
+    const incomplete = envelope(basePaths.slice(0, -1));
+    const outcome = await guardAndRepairResume(source(), draft(), config(async () => geminiResponse(incomplete)));
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
-    expect(outcome.failureCode).toBe("OUTPUT_VALIDATION_FAILED");
-    expect(outcome.report).toBeNull();
-    expect(outcome.attempts).toHaveLength(3);
-    expect(outcome.attempts.every((attempt) => attempt.status === "FAILED")).toBe(true);
+    expect(outcome.failureCode).toBe("FACT_GUARD_REJECTED");
+    expect(outcome.report?.decision).toBe("REJECTED");
+    expect(outcome.report?.passes).toHaveLength(2);
+    expect(outcome.report?.repairedPaths).toEqual(["projects[0].summary"]);
   });
 
   it("detects a factual omission even when the parent entity still carries that source ordinal", async () => {

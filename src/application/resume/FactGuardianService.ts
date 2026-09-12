@@ -47,6 +47,7 @@ const RawGuardianEnvelopeSchema = z.object({
   reviewedSourceOrdinals: z.array(z.number().int().min(1).max(100)).max(100),
   findings: z.array(RawFindingSchema).max(600),
 }).strict();
+type RawGuardianEnvelope = z.infer<typeof RawGuardianEnvelopeSchema>;
 
 const stringArray = { type: "array", items: { type: "string" } } as const;
 const integerArray = { type: "array", items: { type: "integer" } } as const;
@@ -75,6 +76,15 @@ const HARMFUL = new Set([
   "UNSUPPORTED_NEW_CLAIM",
   "SOURCE_CONFLICT",
 ] as const);
+const CLASSIFICATION_RISK: Readonly<Record<z.infer<typeof FactGuardianClassificationSchema>, number>> = {
+  SOURCE_PRESERVED: 0,
+  SAFE_REPHRASE: 0,
+  SAFE_RESTRUCTURE: 0,
+  SOURCE_OMISSION: 0,
+  POSSIBLE_NEW_CLAIM: 1,
+  UNSUPPORTED_NEW_CLAIM: 2,
+  SOURCE_CONFLICT: 3,
+};
 
 type GeneratedUnitDescriptor = Readonly<{
   path: string;
@@ -83,6 +93,11 @@ type GeneratedUnitDescriptor = Readonly<{
 type SourceFact = Readonly<{
   text: string;
   sourceRefs: readonly ResumeSourceRef[];
+}>;
+type NormalizedGuardianEnvelope = Readonly<{
+  reviewedPaths: readonly string[];
+  reviewedSourceOrdinals: readonly number[];
+  findings: readonly z.infer<typeof RawFindingSchema>[];
 }>;
 
 type GuardianPassOutcome =
@@ -132,12 +147,6 @@ function sortedUniqueNumbers(values: readonly number[]) {
 }
 function sortedUniqueStrings(values: readonly string[]) {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
-}
-function sameNumbers(a: readonly number[], b: readonly number[]) {
-  return JSON.stringify(sortedUniqueNumbers(a)) === JSON.stringify(sortedUniqueNumbers(b));
-}
-function sameStrings(a: readonly string[], b: readonly string[]) {
-  return JSON.stringify(sortedUniqueStrings(a)) === JSON.stringify(sortedUniqueStrings(b));
 }
 
 function collectGeneratedUnits(document: GeneratedResumeDocument): GeneratedUnitDescriptor[] {
@@ -286,63 +295,82 @@ function buildGuardianPrompt(source: CandidateResumeDocument, draft: GeneratedRe
     "Audit every generated factual text unit against the candidate-authoritative source facts.",
     "Classify meaning preservation, not writing style. Candidate assertions do not require external verification.",
     "Job requirements are never candidate facts. Unsupported additions, stronger metrics, changed dates/roles/skills, or contradictions are unsafe.",
-    "Return exactly one non-omission finding for every generated path. Return SOURCE_OMISSION findings with generatedPath=null for every genuinely omitted factual source ordinal.",
+    "Return one non-omission finding for each generated path you can audit. CV Engine derives final path/source coverage server-side; never invent paths or source ordinals.",
     "SOURCE FACTS:",
     JSON.stringify(sourceFacts),
     "GENERATED UNITS:",
     JSON.stringify(generatedUnits),
-    "EXPECTED OMITTED SOURCE ORDINALS:",
+    "EXPECTED OMITTED SOURCE ORDINALS (server-derived):",
     JSON.stringify(actualOmittedOrdinals(source, draft)),
   ].join("\n\n");
 }
 
-function guardianValidator(source: CandidateResumeDocument, draft: GeneratedResumeDocument) {
+function guardianShapeValidator(value: unknown) {
+  RawGuardianEnvelopeSchema.parse(value);
+}
+
+/**
+ * AI judges semantic meaning; CV Engine owns coverage and provenance.
+ * Missing/invalid AI coverage never becomes an implicit PASS. Instead, every
+ * unclassified generated path is conservatively marked POSSIBLE_NEW_CLAIM,
+ * which forces exact-source repair and a bounded second Guardian pass.
+ */
+function normalizeGuardianEnvelope(
+  source: CandidateResumeDocument,
+  draft: GeneratedResumeDocument,
+  raw: RawGuardianEnvelope,
+): NormalizedGuardianEnvelope {
   const units = collectGeneratedUnits(draft);
-  const unitsByPath = new Map(units.map((unit) => [unit.path, unit] as const));
-  const expectedPaths = units.map((unit) => unit.path);
-  const expectedSourceOrdinals = source.provenanceIndex.map((ref) => ref.ordinal);
-  const omitted = actualOmittedOrdinals(source, draft);
-  const known = new Set(expectedSourceOrdinals);
+  const unitsByPath = new Map(units.map((item) => [item.path, item.unit] as const));
+  const expectedPaths = units.map((item) => item.path);
+  const expectedSourceOrdinals = sortedUniqueNumbers(
+    source.provenanceIndex.map((ref) => ref.ordinal),
+  );
+  const byPath = new Map<string, z.infer<typeof RawFindingSchema>>();
 
-  return (value: unknown) => {
-    const parsed = RawGuardianEnvelopeSchema.parse(value);
-    if (!sameStrings(parsed.reviewedPaths, expectedPaths)) {
-      throw new Error("FACT_GUARD_PATH_COVERAGE_INVALID");
-    }
-    if (!sameNumbers(parsed.reviewedSourceOrdinals, expectedSourceOrdinals)) {
-      throw new Error("FACT_GUARD_SOURCE_COVERAGE_INVALID");
-    }
+  for (const finding of raw.findings) {
+    if (finding.classification === "SOURCE_OMISSION") continue;
+    const path = finding.generatedPath;
+    if (!path) continue;
+    const unit = unitsByPath.get(path);
+    if (!unit) continue;
 
-    const generatedFindings = parsed.findings.filter(
-      (finding) => finding.classification !== "SOURCE_OMISSION",
-    );
-    const generatedPaths = generatedFindings
-      .map((finding) => finding.generatedPath)
-      .filter((path): path is string => path !== null);
-    if (
-      !sameStrings(generatedPaths, expectedPaths) ||
-      new Set(generatedPaths).size !== generatedPaths.length
-    ) {
-      throw new Error("FACT_GUARD_FINDING_COVERAGE_INVALID");
+    const normalized: z.infer<typeof RawFindingSchema> = {
+      generatedPath: path,
+      classification: finding.classification,
+      sourceOrdinals: sortedUniqueNumbers(unit.sourceRefs.map((ref) => ref.ordinal)),
+      reasonCode: finding.reasonCode,
+    };
+    const previous = byPath.get(path);
+    if (!previous || CLASSIFICATION_RISK[normalized.classification] > CLASSIFICATION_RISK[previous.classification]) {
+      byPath.set(path, normalized);
     }
+  }
 
-    for (const finding of parsed.findings) {
-      if (finding.sourceOrdinals.some((ordinal) => !known.has(ordinal))) {
-        throw new Error("FACT_GUARD_REFERENCE_INVALID");
-      }
-      if (finding.classification === "SOURCE_OMISSION") {
-        if (finding.generatedPath !== null) throw new Error("FACT_GUARD_OMISSION_PATH_INVALID");
-      } else if (!finding.generatedPath || !unitsByPath.has(finding.generatedPath)) {
-        throw new Error("FACT_GUARD_PATH_INVALID");
-      }
-    }
+  for (const { path, unit } of units) {
+    if (byPath.has(path)) continue;
+    byPath.set(path, {
+      generatedPath: path,
+      classification: "POSSIBLE_NEW_CLAIM",
+      sourceOrdinals: sortedUniqueNumbers(unit.sourceRefs.map((ref) => ref.ordinal)),
+      reasonCode: "SUPPORT_AMBIGUOUS",
+    });
+  }
 
-    const omissionOrdinals = parsed.findings
-      .filter((finding) => finding.classification === "SOURCE_OMISSION")
-      .flatMap((finding) => finding.sourceOrdinals);
-    if (!sameNumbers(omissionOrdinals, omitted)) {
-      throw new Error("FACT_GUARD_OMISSION_COVERAGE_INVALID");
-    }
+  const findings = expectedPaths.map((path) => byPath.get(path)!);
+  for (const ordinal of actualOmittedOrdinals(source, draft)) {
+    findings.push({
+      generatedPath: null,
+      classification: "SOURCE_OMISSION",
+      sourceOrdinals: [ordinal],
+      reasonCode: "SOURCE_NOT_RENDERED",
+    });
+  }
+
+  return {
+    reviewedPaths: sortedUniqueStrings(expectedPaths),
+    reviewedSourceOrdinals: expectedSourceOrdinals,
+    findings,
   };
 }
 
@@ -382,9 +410,9 @@ async function runGuardianPass(
       credentialMode: config.credentialMode,
       prompt: buildGuardianPrompt(source, draft),
       systemInstruction:
-        "You are CV Engine's independent Fact Guardian. The Editor has no authority to approve its own output. Compare generated meaning to candidate-authoritative source only, classify every factual unit, and return structured findings without rewriting the resume.",
+        "You are CV Engine's independent Fact Guardian. The Editor has no authority to approve its own output. Compare generated meaning to candidate-authoritative source only, classify factual units, and return structured findings without rewriting the resume.",
       responseJsonSchema: RESUME_FACT_GUARD_SCHEMA,
-      structuredOutputValidator: guardianValidator(source, draft),
+      structuredOutputValidator: guardianShapeValidator,
     },
     config,
   );
@@ -392,10 +420,10 @@ async function runGuardianPass(
     return { ok: false, failureCode: outcome.failureCode, attempts: outcome.attempts };
   }
 
-  let raw: z.infer<typeof RawGuardianEnvelopeSchema>;
+  let normalized: NormalizedGuardianEnvelope;
   try {
-    raw = RawGuardianEnvelopeSchema.parse(JSON.parse(outcome.proposal.text));
-    guardianValidator(source, draft)(raw);
+    const raw = RawGuardianEnvelopeSchema.parse(JSON.parse(outcome.proposal.text));
+    normalized = normalizeGuardianEnvelope(source, draft, raw);
   } catch {
     return {
       ok: false,
@@ -405,7 +433,7 @@ async function runGuardianPass(
   }
 
   const unitsByPath = new Map(collectGeneratedUnits(draft).map((unit) => [unit.path, unit] as const));
-  const findings: FactGuardianFinding[] = raw.findings.map((finding) => ({
+  const findings: FactGuardianFinding[] = normalized.findings.map((finding) => ({
     generatedPath: finding.generatedPath,
     generatedTextSha256: finding.generatedPath
       ? sha256(unitsByPath.get(finding.generatedPath)!.unit.text)
@@ -430,8 +458,8 @@ async function runGuardianPass(
   const pass: FactGuardianPass = {
     passNumber,
     providerProvenance: providerProvenance(outcome.provenance),
-    reviewedPaths: sortedUniqueStrings(raw.reviewedPaths),
-    reviewedSourceOrdinals: sortedUniqueNumbers(raw.reviewedSourceOrdinals),
+    reviewedPaths: [...normalized.reviewedPaths],
+    reviewedSourceOrdinals: [...normalized.reviewedSourceOrdinals],
     findings,
   };
   return {
