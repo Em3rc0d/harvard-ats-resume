@@ -5,6 +5,34 @@ import {
   type ResumeImprovementRunStatus,
 } from "../../domain/resume/ResumeImprovementRun";
 
+const FULL_RUN_COLUMNS = [
+  "id",
+  "owner_user_id",
+  "source_receipt_id",
+  "source_sha256",
+  "semantic_document_json",
+  "semantic_document_sha256",
+  "editor_provenance_json",
+  "generated_document_json",
+  "generated_document_sha256",
+  "guardian_report_json",
+  "guardian_report_sha256",
+  "status",
+  "target_job_snapshot_id",
+  "target_text_hash",
+  "created_at",
+].join(",");
+const SUMMARY_COLUMNS = "id,owner_user_id,source_receipt_id,status,created_at";
+const MAX_TRANSIENT_READ_ATTEMPTS = 3;
+
+export type ResumeImprovementRunSummary = Readonly<{
+  id: string;
+  ownerUserId: string;
+  sourceReceiptId: string;
+  status: ResumeImprovementRunStatus;
+  createdAt: string;
+}>;
+
 function requiredString(value: unknown, field: string) {
   if (typeof value !== "string" || value.length === 0) throw new Error(`V12_IMPROVEMENT_READBACK_INVALID_${field}`);
   return value;
@@ -34,36 +62,66 @@ function mapRun(row: Record<string, unknown>): ResumeImprovementRun {
   });
 }
 
+function mapSummary(row: Record<string, unknown>): ResumeImprovementRunSummary {
+  const status = row.status;
+  if (status !== "IMPROVED" && status !== "PARTIALLY_IMPROVED" && status !== "FAILED_SOURCE_UNREADABLE") {
+    throw new Error("V12_IMPROVEMENT_READBACK_INVALID_STATUS");
+  }
+  return {
+    id: requiredString(row.id, "ID"),
+    ownerUserId: requiredString(row.owner_user_id, "OWNER"),
+    sourceReceiptId: requiredString(row.source_receipt_id, "SOURCE_RECEIPT"),
+    status,
+    createdAt: new Date(requiredString(row.created_at, "CREATED_AT")).toISOString(),
+  };
+}
+
+export function isTransientImprovementReadErrorMessage(message: string) {
+  return /gateway timeout|timed? out|timeout|fetch failed|network error|\b50[234]\b/i.test(message);
+}
+
+function waitForRetry(attempt: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, 125 * attempt));
+}
+
 export async function loadResumeImprovementRun(
   client: SupabaseClient,
   ownerUserId: string,
   runId: string,
 ): Promise<ResumeImprovementRun> {
-  const result = await client
-    .from("resume_improvement_runs")
-    .select("*")
-    .eq("owner_user_id", ownerUserId)
-    .eq("id", runId)
-    .maybeSingle();
-  if (result.error) throw new Error(`V12_IMPROVEMENT_READ_FAILED:${result.error.message}`);
-  if (!result.data) throw new Error("V12_IMPROVEMENT_RUN_NOT_FOUND");
-  return mapRun(result.data as Record<string, unknown>);
+  for (let attempt = 1; attempt <= MAX_TRANSIENT_READ_ATTEMPTS; attempt += 1) {
+    const result = await client
+      .from("resume_improvement_runs")
+      .select(FULL_RUN_COLUMNS)
+      .eq("owner_user_id", ownerUserId)
+      .eq("id", runId)
+      .maybeSingle();
+    if (!result.error) {
+      if (!result.data) throw new Error("V12_IMPROVEMENT_RUN_NOT_FOUND");
+      return mapRun(result.data as Record<string, unknown>);
+    }
+    if (!isTransientImprovementReadErrorMessage(result.error.message) || attempt === MAX_TRANSIENT_READ_ATTEMPTS) {
+      throw new Error(`V12_IMPROVEMENT_READ_FAILED:${result.error.message}`);
+    }
+    await waitForRetry(attempt);
+  }
+  throw new Error("V12_IMPROVEMENT_READ_FAILED:RETRY_EXHAUSTED");
 }
 
-export async function listResumeImprovementRuns(
+export async function listResumeImprovementRunSummaries(
   client: SupabaseClient,
   ownerUserId: string,
   limit = 20,
-): Promise<ResumeImprovementRun[]> {
+): Promise<ResumeImprovementRunSummary[]> {
   const boundedLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
   const result = await client
     .from("resume_improvement_runs")
-    .select("*")
+    .select(SUMMARY_COLUMNS)
     .eq("owner_user_id", ownerUserId)
     .order("created_at", { ascending: false })
     .limit(boundedLimit);
   if (result.error) throw new Error(`V12_IMPROVEMENT_LIST_FAILED:${result.error.message}`);
-  return (result.data ?? []).map((row) => mapRun(row as Record<string, unknown>));
+  return (result.data ?? []).map((row) => mapSummary(row as Record<string, unknown>));
 }
 
 export async function recordResumeImprovementRun(
