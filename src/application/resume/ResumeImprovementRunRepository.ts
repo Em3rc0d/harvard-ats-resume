@@ -22,7 +22,7 @@ const FULL_RUN_COLUMNS = [
   "target_text_hash",
   "created_at",
 ].join(",");
-const SUMMARY_COLUMNS = "id,owner_user_id,source_receipt_id,status,created_at" as const;
+const SUMMARY_COLUMNS = "id,owner_user_id,source_receipt_id,status,created_at";
 const MAX_TRANSIENT_READ_ATTEMPTS = 3;
 
 export type ResumeImprovementRunSummary = Readonly<{
@@ -98,7 +98,7 @@ export async function loadResumeImprovementRun(
       .maybeSingle();
     if (!result.error) {
       if (!result.data) throw new Error("V12_IMPROVEMENT_RUN_NOT_FOUND");
-      return mapRun(result.data as Record<string, unknown>);
+      return mapRun(result.data as unknown as Record<string, unknown>);
     }
     if (!isTransientImprovementReadErrorMessage(result.error.message) || attempt === MAX_TRANSIENT_READ_ATTEMPTS) {
       throw new Error(`V12_IMPROVEMENT_READ_FAILED:${result.error.message}`);
