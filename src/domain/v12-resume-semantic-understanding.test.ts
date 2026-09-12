@@ -158,8 +158,8 @@ describe("v1.2 resume semantic understanding", () => {
     }
     const captured = requireCapturedBody(bodySeen as Record<string, unknown> | null);
     const generationConfig = captured["generationConfig"] as Record<string, unknown>;
-    const responseFormat = generationConfig["responseFormat"] as Record<string, unknown>;
-    const textConfig = responseFormat["text"] as Record<string, unknown>;
-    expect(textConfig["schema"]).toEqual(RESUME_SEMANTIC_UNDERSTANDING_SCHEMA);
+    expect(generationConfig["responseMimeType"]).toBe("application/json");
+    expect(generationConfig["responseJsonSchema"]).toEqual(RESUME_SEMANTIC_UNDERSTANDING_SCHEMA);
+    expect(generationConfig["responseFormat"]).toBeUndefined();
   });
 });
