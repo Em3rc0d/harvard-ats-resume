@@ -41,13 +41,13 @@ const ROUTES: Readonly<Record<AICapabilityName, ModelRoute>> = {
   },
   RESUME_HOLISTIC_IMPROVEMENT: {
     capability: "RESUME_HOLISTIC_IMPROVEMENT",
-    geminiModels: ["gemini-3.7-flash", "gemini-3.6-flash"],
+    geminiModels: ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
     ollamaModel: "cv-engine-resume-editor",
     allowGeminiQualityEscalation: true,
   },
   RESUME_FACT_GUARD: {
     capability: "RESUME_FACT_GUARD",
-    geminiModels: ["gemini-3.7-flash", "gemini-3.6-flash"],
+    geminiModels: ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
     ollamaModel: "cv-engine-fact-guard",
     allowGeminiQualityEscalation: true,
   },
