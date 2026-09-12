@@ -69,7 +69,7 @@ function requireCapturedBody(value: Record<string, unknown> | null): Record<stri
 }
 
 describe("v1.2 structured AI runtime", () => {
-  it("sends JSON Schema through Gemini generationConfig without exposing secrets", async () => {
+  it("sends JSON Schema through the generateContent GenerationConfig contract without exposing secrets", async () => {
     let requestBody: Record<string, unknown> | null = null;
     const gemini = await listen((request, response) => {
       let body = "";
@@ -97,10 +97,9 @@ describe("v1.2 structured AI runtime", () => {
     expect(outcome.ok).toBe(true);
     const captured = requireCapturedBody(requestBody as Record<string, unknown> | null);
     const generationConfig = captured["generationConfig"] as Record<string, unknown>;
-    const responseFormat = generationConfig["responseFormat"] as Record<string, unknown>;
-    const text = responseFormat["text"] as Record<string, unknown>;
-    expect(text["mimeType"]).toBe("application/json");
-    expect(text["schema"]).toEqual(RESPONSE_SCHEMA);
+    expect(generationConfig["responseMimeType"]).toBe("application/json");
+    expect(generationConfig["responseJsonSchema"]).toEqual(RESPONSE_SCHEMA);
+    expect(generationConfig["responseFormat"]).toBeUndefined();
     expect(JSON.stringify({ outcome, captured })).not.toContain(SECRET);
   });
 
