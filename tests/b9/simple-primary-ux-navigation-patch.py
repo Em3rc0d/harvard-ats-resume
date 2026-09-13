@@ -17,8 +17,27 @@ LANDING_REPLACEMENT = '''            page.get_by_role("heading", name="Improve y
             page.get_by_role("button", name="Resume Import", exact=True).click()
 '''
 
-RESUME_NAV_ANCHOR = '            page.get_by_role("button", name="Resume", exact=True).click()\n'
-RESUME_NAV_REPLACEMENT = '            page.get_by_role("button", name="Legacy Resume Builder", exact=True).click()\n'
+FIRST_RESUME_NAV_ANCHOR = '''            report["checks"].append("CAREER_TARGET_ACTIVE")
+
+            page.get_by_role("button", name="Resume", exact=True).click()
+            page.get_by_role("heading", name="Turn verified career truth into a professional, provenance-backed resume.").wait_for(timeout=30_000)
+'''
+FIRST_RESUME_NAV_REPLACEMENT = '''            report["checks"].append("CAREER_TARGET_ACTIVE")
+
+            page.get_by_role("button", name="Legacy Resume Builder", exact=True).click()
+            page.get_by_role("heading", name="Turn verified career truth into a professional, provenance-backed resume.").wait_for(timeout=30_000)
+'''
+
+RELOAD_RESUME_NAV_ANCHOR = '''            page.reload(wait_until="domcontentloaded", timeout=30_000)
+            page.get_by_role("button", name="Resume", exact=True).wait_for(timeout=30_000)
+            page.get_by_role("button", name="Resume", exact=True).click()
+            reloaded_card = page.locator("article.evidence-card").filter(has_text=CANDIDATE_NAME).first
+'''
+RELOAD_RESUME_NAV_REPLACEMENT = '''            page.reload(wait_until="domcontentloaded", timeout=30_000)
+            page.get_by_role("button", name="Legacy Resume Builder", exact=True).wait_for(timeout=30_000)
+            page.get_by_role("button", name="Legacy Resume Builder", exact=True).click()
+            reloaded_card = page.locator("article.evidence-card").filter(has_text=CANDIDATE_NAME).first
+'''
 
 
 def replace_exactly_once(source: str, anchor: str, replacement: str, code: str) -> str:
@@ -38,9 +57,15 @@ def main() -> int:
     )
     source = replace_exactly_once(
         source,
-        RESUME_NAV_ANCHOR,
-        RESUME_NAV_REPLACEMENT,
-        "B9_SIMPLE_UX_RESUME_NAV_PATCH_MISMATCH",
+        FIRST_RESUME_NAV_ANCHOR,
+        FIRST_RESUME_NAV_REPLACEMENT,
+        "B9_SIMPLE_UX_FIRST_RESUME_NAV_PATCH_MISMATCH",
+    )
+    source = replace_exactly_once(
+        source,
+        RELOAD_RESUME_NAV_ANCHOR,
+        RELOAD_RESUME_NAV_REPLACEMENT,
+        "B9_SIMPLE_UX_RELOAD_RESUME_NAV_PATCH_MISMATCH",
     )
     SOURCE.write_text(source, encoding="utf-8")
     print("B9_SIMPLE_PRIMARY_UX_NAVIGATION_PATCHED")

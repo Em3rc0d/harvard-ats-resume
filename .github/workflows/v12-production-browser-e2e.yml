@@ -41,6 +41,9 @@ jobs:
       - name: Normalize initial browser readiness
         run: python tests/browser-navigation-readiness-patch.py tests/v12/production-improve-resume-cert.py
 
+      - name: Bind email confirmation to received state
+        run: python tests/v12/email-confirmation-state-patch.py
+
       - name: Certify v1.2 improve-resume golden path
         run: python tests/v12/production-improve-resume-cert.py
 
