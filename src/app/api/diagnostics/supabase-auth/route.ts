@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSupabasePublicConfig } from "../../../../../infrastructure/supabase/config";
+import { requireSupabasePublicConfig } from "../../../../infrastructure/supabase/config";
 
 function noStoreJson(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, {
