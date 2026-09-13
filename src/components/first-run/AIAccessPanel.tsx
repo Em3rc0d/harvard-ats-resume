@@ -46,25 +46,23 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
 
   function choose(nextMode: AIAccessMode) {
     if (nextMode === "PLATFORM_GEMINI" && !platformGeminiAvailable) {
-      setError("CV Engine Gemini access is not configured in this runtime.");
+      setError("CV Engine AI is not available in this runtime.");
       return;
     }
 
     if (nextMode === "BYOK_GEMINI" && !byokTransportAllowed) {
-      setError("BYOK is disabled on insecure remote HTTP. Use HTTPS or localhost development.");
+      setError("Using your own AI key requires HTTPS outside local development.");
       return;
     }
 
     setError(null);
     selectMode(nextMode);
-    if (nextMode !== "BYOK_GEMINI") {
-      setCredentialInput("");
-    }
+    if (nextMode !== "BYOK_GEMINI") setCredentialInput("");
   }
 
   function storeByokCredential() {
     if (!byokTransportAllowed) {
-      setError("BYOK is disabled on insecure remote HTTP. Use HTTPS or localhost development.");
+      setError("Using your own AI key requires HTTPS outside local development.");
       return;
     }
 
@@ -86,13 +84,12 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
 
   async function continueToProduct() {
     if (!mode || !canContinue) return;
-
     setBusy(true);
     setError(null);
     try {
       await onReady(mode);
     } catch {
-      setError("CV Engine could not record the non-secret AI access preference. Try again.");
+      setError("We couldn’t save your AI preference. Try again.");
     } finally {
       setBusy(false);
     }
@@ -102,10 +99,7 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
     <section className="panel" aria-labelledby="ai-access-title">
       <p className="eyebrow">AI access</p>
       <h2 id="ai-access-title">Choose how CV Engine may use AI</h2>
-      <p className="muted">
-        Provider choice changes assistance availability and quota ownership. It never changes who
-        owns your Career Evidence and never gives a model authority to create career truth.
-      </p>
+      <p className="muted">Choose the option you prefer. This changes how AI assistance runs, but AI never gets authority to invent facts about your career.</p>
 
       <div className="choice-grid" role="radiogroup" aria-label="AI access mode">
         {modes.map((candidate) => {
@@ -125,12 +119,8 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
             >
               <strong>{copy.title}</strong>
               <span>{copy.description}</span>
-              {candidate === "PLATFORM_GEMINI" && !platformGeminiAvailable ? (
-                <small>Not configured in this runtime</small>
-              ) : null}
-              {candidate === "BYOK_GEMINI" && !byokTransportAllowed ? (
-                <small>HTTPS required outside localhost</small>
-              ) : null}
+              {candidate === "PLATFORM_GEMINI" && !platformGeminiAvailable ? <small>Not available right now</small> : null}
+              {candidate === "BYOK_GEMINI" && !byokTransportAllowed ? <small>HTTPS required outside localhost</small> : null}
             </button>
           );
         })}
@@ -150,28 +140,18 @@ export function AIAccessPanel({ platformGeminiAvailable, onReady }: AIAccessPane
               onChange={(event) => setCredentialInput(event.target.value)}
             />
           </label>
-          <button
-            className="secondary"
-            disabled={busy || !byokTransportAllowed}
-            type="button"
-            onClick={storeByokCredential}
-          >
+          <button className="secondary" disabled={busy || !byokTransportAllowed} type="button" onClick={storeByokCredential}>
             {hasByokCredential ? "Replace session key" : "Use key for this session"}
           </button>
-          <p className="fine-print">
-            The raw key stays in browser memory only in this build. It is not written to local
-            storage, cookies, URLs, Redis, PostgreSQL, logs, analytics, or consent metadata.
-          </p>
-          {localHttpException ? (
-            <p className="fine-print">Local HTTP is enabled only as an explicit development exception.</p>
-          ) : null}
+          <p className="fine-print">Your raw key stays in browser memory for this session. CV Engine does not intentionally save it to your account, database, logs, analytics, cookies, URLs, or local storage.</p>
+          {localHttpException ? <p className="fine-print">Local HTTP is enabled only for development.</p> : null}
         </div>
       ) : null}
 
       {error ? <p className="status error" role="alert">{error}</p> : null}
 
       <button className="primary" disabled={!canContinue || busy} type="button" onClick={continueToProduct}>
-        {busy ? "Recording preference…" : "Continue to CV Engine"}
+        {busy ? "Saving preference…" : "Continue to CV Engine"}
       </button>
     </section>
   );

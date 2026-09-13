@@ -24,10 +24,7 @@ export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
       <section className="panel" aria-labelledby="auth-title">
         <p className="eyebrow">Account</p>
         <h2 id="auth-title">Authentication is not configured</h2>
-        <p className="muted">
-          Add the public Supabase URL and publishable key to enable durable CV Engine accounts.
-          The trusted product will not create an anonymous server-side Career Vault.
-        </p>
+        <p className="muted">CV Engine needs account access to save your work securely.</p>
       </section>
     );
   }
@@ -57,12 +54,12 @@ export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
     }
 
     if (result.data.session) {
-      setStatus("Authenticated.");
+      setStatus("Signed in.");
       onAuthenticated();
       return;
     }
 
-    setStatus("Check your email to complete authentication, then return to CV Engine.");
+    setStatus("Check your email to confirm your account, then return to CV Engine.");
   }
 
   async function sendMagicLink() {
@@ -83,10 +80,7 @@ export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
     <section className="panel" aria-labelledby="auth-title">
       <p className="eyebrow">Account</p>
       <h2 id="auth-title">{mode === "SIGN_IN" ? "Sign in" : "Create your account"}</h2>
-      <p className="muted">
-        Durable Career Evidence belongs to an authenticated user. Email is identity metadata, not
-        the authorization rule; server identity and database ownership remain authoritative.
-      </p>
+      <p className="muted">Sign in so your CV work, downloads, and preferences stay linked to your account.</p>
 
       <form className="stack" onSubmit={submit}>
         <label>
@@ -137,11 +131,7 @@ export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
         </button>
       </div>
 
-      {status ? (
-        <p className="status" role="status">
-          {status}
-        </p>
-      ) : null}
+      {status ? <p className="status" role="status">{status}</p> : null}
     </section>
   );
 }
