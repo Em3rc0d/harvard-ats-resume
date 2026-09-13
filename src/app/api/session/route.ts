@@ -11,11 +11,14 @@ export async function GET() {
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getClaims();
-  const userId = data?.claims?.sub;
+  const { data, error } = await supabase.auth.getUser();
+  const userId = data.user?.id;
 
   if (error || typeof userId !== "string" || userId.length === 0) {
-    return NextResponse.json({ authenticated: false }, { status: 401 });
+    return NextResponse.json(
+      { authenticated: false },
+      { status: 401, headers: { "Cache-Control": "private, no-store" } },
+    );
   }
 
   return NextResponse.json(
