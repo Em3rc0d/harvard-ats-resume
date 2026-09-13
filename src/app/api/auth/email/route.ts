@@ -11,7 +11,7 @@ const EmailAuthRequestSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("MAGIC_LINK"), email: EmailSchema }).strict(),
 ]);
 
-type AuthErrorLike = Error & { status?: number };
+type AuthErrorLike = Error & { status?: number | undefined };
 
 function noStoreJson(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, {
