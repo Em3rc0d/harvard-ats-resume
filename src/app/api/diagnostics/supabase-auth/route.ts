@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireSupabasePublicConfig } from "../../../../infrastructure/supabase/config";
 
+const CANDIDATE_HOST = "mcpygkebzetgzauelgjf.supabase.co";
+
 function noStoreJson(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, {
     status,
@@ -50,6 +52,34 @@ async function queryPublicDns(host: string) {
   }
 }
 
+async function probeAuthHealth(host: string, publishableKey: string) {
+  const startedAt = Date.now();
+
+  try {
+    const response = await fetch(`https://${host}/auth/v1/health`, {
+      method: "GET",
+      headers: { apikey: publishableKey },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5_000),
+    });
+
+    return {
+      reachable: true,
+      authHealthStatus: response.status,
+      keyAccepted: response.ok,
+      elapsedMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    return {
+      reachable: false,
+      authHealthStatus: null,
+      keyAccepted: false,
+      errorCode: safeErrorCode(error),
+      elapsedMs: Date.now() - startedAt,
+    };
+  }
+}
+
 export async function GET() {
   if (process.env.VERCEL_ENV !== "preview") {
     return noStoreJson({ error: "NOT_FOUND" }, 404);
@@ -57,36 +87,25 @@ export async function GET() {
 
   const { url, publishableKey } = requireSupabasePublicConfig();
   const upstream = new URL(url);
-  const startedAt = Date.now();
-  const dns = await queryPublicDns(upstream.host);
+  const [configuredDns, candidateDns, configuredHealth, candidateHealth] = await Promise.all([
+    queryPublicDns(upstream.host),
+    queryPublicDns(CANDIDATE_HOST),
+    probeAuthHealth(upstream.host, publishableKey),
+    probeAuthHealth(CANDIDATE_HOST, publishableKey),
+  ]);
 
-  try {
-    const response = await fetch(new URL("/auth/v1/health", upstream), {
-      method: "GET",
-      headers: { apikey: publishableKey },
-      cache: "no-store",
-      signal: AbortSignal.timeout(5_000),
-    });
-
-    return noStoreJson({
-      configuredHost: upstream.host,
-      configuredProtocol: upstream.protocol,
-      reachable: response.ok,
-      authHealthStatus: response.status,
-      elapsedMs: Date.now() - startedAt,
-      ...dns,
-    });
-  } catch (error) {
-    return noStoreJson(
-      {
-        configuredHost: upstream.host,
-        configuredProtocol: upstream.protocol,
-        reachable: false,
-        errorCode: safeErrorCode(error),
-        elapsedMs: Date.now() - startedAt,
-        ...dns,
-      },
-      503,
-    );
-  }
+  return noStoreJson({
+    configured: {
+      host: upstream.host,
+      protocol: upstream.protocol,
+      dns: configuredDns,
+      health: configuredHealth,
+    },
+    candidate: {
+      host: CANDIDATE_HOST,
+      protocol: "https:",
+      dns: candidateDns,
+      healthWithConfiguredKey: candidateHealth,
+    },
+  });
 }
