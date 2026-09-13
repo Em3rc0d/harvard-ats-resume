@@ -34,6 +34,8 @@ RELOAD_RESUME_NAV_ANCHOR = '''            page.reload(wait_until="domcontentload
             reloaded_card = page.locator("article.evidence-card").filter(has_text=CANDIDATE_NAME).first
 '''
 RELOAD_RESUME_NAV_REPLACEMENT = '''            page.reload(wait_until="domcontentloaded", timeout=30_000)
+            page.get_by_role("button", name="Advanced tools", exact=True).wait_for(timeout=30_000)
+            page.get_by_role("button", name="Advanced tools", exact=True).click()
             page.get_by_role("button", name="Legacy Resume Builder", exact=True).wait_for(timeout=30_000)
             page.get_by_role("button", name="Legacy Resume Builder", exact=True).click()
             reloaded_card = page.locator("article.evidence-card").filter(has_text=CANDIDATE_NAME).first
