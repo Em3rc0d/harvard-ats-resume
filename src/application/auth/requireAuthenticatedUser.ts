@@ -19,8 +19,10 @@ export class AuthenticationRequiredError extends Error {
 
 export async function requireAuthenticatedSupabaseContext(): Promise<AuthenticatedSupabaseContext> {
   const client = await createSupabaseServerClient();
-  const { data, error } = await client.auth.getClaims();
-  const userId = data?.claims?.sub;
+  // getUser() verifies the session with Supabase Auth instead of trusting a still-valid
+  // local JWT after the underlying user has been deleted.
+  const { data, error } = await client.auth.getUser();
+  const userId = data.user?.id;
 
   if (error || typeof userId !== "string" || userId.length === 0) {
     throw new AuthenticationRequiredError();
