@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { CredentialMode } from "../../../domain/ai/AICapability";
 import { GeminiCredentialInputSchema, type AIAccessMode } from "../../../domain/ai/AIAccess";
 import { CURRENT_TRUST_DISCLOSURE_VERSION } from "../../../domain/trust/FirstRunTrust";
-import { requireAuthenticatedSupabaseContext } from "../../../application/auth/requireAuthenticatedUser";
+import { AuthenticationRequiredError, requireAuthenticatedSupabaseContext } from "../../../application/auth/requireAuthenticatedUser";
 import { understandResumeSemantics } from "../../../application/import/ResumeSemanticUnderstandingService";
 import { createImportLineProposals, extractResumeMechanically, sha256Text } from "../../../application/import/ResumeExtractor";
 import { recordResumeImport } from "../../../application/import/ImportRepository";
@@ -43,6 +43,12 @@ function targetHash(value: string | null) {
   return value ? createHash("sha256").update(value, "utf8").digest("hex") : null;
 }
 function errorResponse(error: unknown) {
+  if (error instanceof AuthenticationRequiredError) {
+    return NextResponse.json(
+      { error: "UNAUTHENTICATED" },
+      { status: 401, headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
   const message = error instanceof Error ? error.message : "V12_IMPROVEMENT_FAILED";
   console.info("CV_ENGINE_V12_IMPROVEMENT_FAILURE", message);
   const candidateCode = message.includes(":") ? message.slice(0, message.indexOf(":")) : message;
@@ -139,7 +145,7 @@ export async function POST(request: Request) {
     const changes = [
       guarded.document.summary ? "Professional summary reviewed" : null,
       guarded.document.experience.length > 0 ? "Experience wording and structure reviewed" : null,
-      guarded.report.decision === "REPAIRED_PASS" ? "Unsafe wording reverted to source-supported text" : "Candidate facts passed the independent Fact Guardian",
+      guarded.report.decision === "REPAIRED_PASS" ? "Wording that was not fully supported was restored to match the uploaded resume" : "Candidate facts checked against the uploaded resume",
       "ATS-safe single-column output rendered",
     ].filter((value): value is string => value !== null);
 

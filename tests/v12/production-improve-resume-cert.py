@@ -241,7 +241,10 @@ def main() -> int:
                 page.get_by_role("radio", name=re.compile("Use CV Engine AI", re.I)).click()
                 page.get_by_role("button", name="Continue to CV Engine").click()
                 page.get_by_role("heading", name="Improve your resume").wait_for(timeout=30_000)
+                if page.get_by_label("Job description").is_visible():
+                    fail("V12_BROWSER_OPTIONAL_JOB_CONTEXT_NOT_COLLAPSED")
                 report["checks"].append("PRIMARY_IMPROVE_RESUME_LANDING")
+                report["checks"].append("OPTIONAL_JOB_CONTEXT_COLLAPSED")
 
                 page.get_by_label("Resume · PDF or DOCX").set_input_files(str(input_docx))
                 with page.expect_response(
@@ -262,9 +265,9 @@ def main() -> int:
                 report["checks"].append("IMPROVEMENT_HTTP_201_GUARDIAN_ZERO")
 
                 page.get_by_role("heading", name="Your improved resume is ready").wait_for(timeout=30_000)
-                page.get_by_text("Unsupported new claims: 0", exact=True).wait_for(timeout=30_000)
+                page.get_by_text("No unsupported claims were added.", exact=True).wait_for(timeout=30_000)
                 page.get_by_role("button", name="Review changes", exact=True).click()
-                page.get_by_role("heading", name="Source vs improved").wait_for(timeout=30_000)
+                page.get_by_role("heading", name="Original vs improved").wait_for(timeout=30_000)
                 articles = page.locator(".presentation-diff article")
                 original_text = articles.nth(0).locator("p").inner_text().strip()
                 improved_text = articles.nth(1).locator("p").inner_text().strip()

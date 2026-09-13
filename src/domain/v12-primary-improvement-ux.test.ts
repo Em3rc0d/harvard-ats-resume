@@ -12,22 +12,37 @@ describe("v1.2 primary Improve Resume UX", () => {
     expect(workspace).toContain("<ResumeImprovementWorkspace />");
     expect(workspace).toContain("Advanced tools");
     expect(workspace).toContain("Career Evidence");
+    expect(workspace).toContain("Improve your resume · facts checked · ATS-safe downloads");
     expect(workspace.indexOf("Improve Resume")).toBeLessThan(workspace.indexOf("Career Evidence"));
   });
 
-  it("keeps bounded-context mechanics out of the primary user task", () => {
+  it("keeps the default task simple and moves optional context behind progressive disclosure", () => {
     const primary = read("src/components/improve/ResumeImprovementWorkspace.tsx");
     expect(primary).toContain("Improve your resume");
     expect(primary).toContain("Resume · PDF or DOCX");
+    expect(primary).toContain("Tailor to a job");
+    expect(primary).toContain("<details");
     expect(primary).toContain("Job description");
     expect(primary).toContain("Your improved resume is ready");
-    expect(primary).toContain("Unsupported new claims");
+    expect(primary).toContain("Facts checked against your original CV");
+    expect(primary).toContain("No unsupported claims were added.");
     expect(primary).toContain("Download DOCX");
     expect(primary).toContain("Download PDF");
     expect(primary).toContain("Review changes");
+    expect(primary).toContain("Advanced downloads");
+    expect(primary).not.toContain("Independent Fact Guardian");
+    expect(primary).not.toContain("Unsupported new claims:");
     for (const internalTerm of ["TruthClass", "ResumePlan", "PresentationRevision", "NEEDS_REVIEW", "source ordinal", "evidence kind"]) {
       expect(primary).not.toContain(internalTerm);
     }
+  });
+
+  it("turns backend failure codes into actionable primary-workflow messages", () => {
+    const primary = read("src/components/improve/ResumeImprovementWorkspace.tsx");
+    expect(primary).toContain("Your session ended. Sign in again to continue.");
+    expect(primary).toContain("We couldn’t read this file. Try a text-based PDF or DOCX.");
+    expect(primary).toContain("Reconnect AI access and try again.");
+    expect(primary).toContain("We couldn’t finish your resume safely. Please try again.");
   });
 
   it("executes the one-shot server path through source, semantics, editor, Guardian, persistence and artifact rendering", () => {

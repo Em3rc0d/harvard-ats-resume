@@ -21,7 +21,7 @@ export function CareerIntelligenceWorkspace({ aiAccessMode, onSignOut }: Props) 
   return (
     <main className="first-run-shell">
       <header className="brand-bar">
-        <div><span className="brand-mark">C</span><div><strong>CV Engine</strong><span>Improve your resume · source-linked AI · factual guard · ATS-safe downloads</span></div></div>
+        <div><span className="brand-mark">C</span><div><strong>CV Engine</strong><span>Improve your resume · facts checked · ATS-safe downloads</span></div></div>
         <span className="build-label">vNext · B9</span>
       </header>
 

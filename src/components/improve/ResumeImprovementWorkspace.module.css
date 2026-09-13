@@ -5,7 +5,7 @@
 .form textarea {
   width: 100%;
   resize: vertical;
-  min-height: 9rem;
+  min-height: 8rem;
   border: 1px solid var(--border);
   border-radius: 0.8rem;
   background: #0d1218;
@@ -25,6 +25,34 @@
   color: var(--subtle);
   font-size: 0.76rem;
   font-weight: 400;
+}
+
+.selectedFile {
+  margin: -0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.tailor {
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  padding: 0.85rem 1rem;
+  background: var(--panel-soft);
+}
+
+.tailor summary {
+  cursor: pointer;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.tailor[open] summary {
+  margin-bottom: 0.7rem;
+}
+
+.tailor label {
+  margin-top: 0.65rem;
 }
 
 .safety {
