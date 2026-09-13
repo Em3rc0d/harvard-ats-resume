@@ -2,10 +2,13 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("B8 product acceptance source contracts", () => {
-  it("routes password signup through the PKCE callback instead of a deployment default", () => {
+  it("routes password signup through the exact-origin PKCE callback instead of a deployment default", () => {
     const auth = readFileSync("src/components/first-run/AuthPanel.tsx", "utf8");
-    expect(auth).toContain('`${window.location.origin}/auth/callback`');
-    expect(auth).toContain("emailRedirectTo: redirectTo");
+    const emailAuth = readFileSync("src/app/api/auth/email/route.ts", "utf8");
+    expect(auth).toContain('fetch("/api/auth/email"');
+    expect(emailAuth).toContain('new URL("/auth/callback", request.url).toString()');
+    expect(emailAuth).toContain("emailRedirectTo: redirectTo");
+    expect(emailAuth).not.toMatch(/VERCEL_URL|deployment.*url/i);
   });
 
   it("restores durable consent and AI preference for returning authenticated users", () => {
