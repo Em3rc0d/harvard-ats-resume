@@ -38,6 +38,9 @@ jobs:
           python -m pip install --disable-pip-version-check playwright==1.55.0
           python -m playwright install --with-deps chromium
 
+      - name: Normalize initial browser readiness
+        run: python tests/browser-navigation-readiness-patch.py tests/v12/production-improve-resume-cert.py
+
       - name: Certify v1.2 improve-resume golden path
         run: python tests/v12/production-improve-resume-cert.py
 
