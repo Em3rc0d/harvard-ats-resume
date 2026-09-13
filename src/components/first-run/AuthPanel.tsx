@@ -1,25 +1,44 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
-import { createSupabaseBrowserClient } from "../../infrastructure/supabase/browser";
+import { useState, type FormEvent } from "react";
 
 type AuthPanelProps = {
   authConfigured: boolean;
   onAuthenticated: () => void;
 };
 
+type EmailAuthResponse = {
+  authenticated?: boolean;
+  confirmationRequired?: boolean;
+  sent?: boolean;
+  message?: string;
+};
+
+async function requestEmailAuth(body: Record<string, string>): Promise<{ ok: boolean; payload: EmailAuthResponse }> {
+  try {
+    const response = await fetch("/api/auth/email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = (await response.json().catch(() => ({}))) as EmailAuthResponse;
+    return { ok: response.ok, payload };
+  } catch {
+    return {
+      ok: false,
+      payload: { message: "CV Engine could not reach the authentication service. Please try again." },
+    };
+  }
+}
+
 export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
-  const supabase = useMemo(
-    () => (authConfigured ? createSupabaseBrowserClient() : null),
-    [authConfigured],
-  );
   const [mode, setMode] = useState<"SIGN_IN" | "SIGN_UP">("SIGN_IN");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!authConfigured || !supabase) {
+  if (!authConfigured) {
     return (
       <section className="panel" aria-labelledby="auth-title">
         <p className="eyebrow">Account</p>
@@ -29,51 +48,40 @@ export function AuthPanel({ authConfigured, onAuthenticated }: AuthPanelProps) {
     );
   }
 
-  const client = supabase;
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setStatus(null);
 
-    const redirectTo = `${window.location.origin}/auth/callback`;
-    const result =
-      mode === "SIGN_IN"
-        ? await client.auth.signInWithPassword({ email, password })
-        : await client.auth.signUp({
-            email,
-            password,
-            options: { emailRedirectTo: redirectTo },
-          });
-
+    const { ok, payload } = await requestEmailAuth({ mode, email, password });
     setBusy(false);
 
-    if (result.error) {
-      setStatus(result.error.message);
+    if (!ok) {
+      setStatus(payload.message ?? "Authentication failed. Please try again.");
       return;
     }
 
-    if (result.data.session) {
+    if (payload.authenticated) {
       setStatus("Signed in.");
       onAuthenticated();
       return;
     }
 
-    setStatus("Check your email to confirm your account, then return to CV Engine.");
+    if (payload.confirmationRequired) {
+      setStatus("Check your email to confirm your account, then return to CV Engine.");
+      return;
+    }
+
+    setStatus("CV Engine could not start your session. Please try again.");
   }
 
   async function sendMagicLink() {
     setBusy(true);
     setStatus(null);
 
-    const redirectTo = `${window.location.origin}/auth/callback`;
-    const { error } = await client.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo },
-    });
-
+    const { ok, payload } = await requestEmailAuth({ mode: "MAGIC_LINK", email });
     setBusy(false);
-    setStatus(error ? error.message : "Magic link sent. Check your email.");
+    setStatus(ok && payload.sent ? "Magic link sent. Check your email." : payload.message ?? "Could not send the magic link. Please try again.");
   }
 
   return (

@@ -34,6 +34,7 @@ jobs:
       - name: Run v1.2 quality contracts
         run: >-
           npx vitest run
+          src/domain/same-origin-auth-contracts.test.ts
           src/domain/v12-real-cv-quality-gate.test.ts
           src/domain/v12-fact-guardian.test.ts
           src/domain/v12-primary-improvement-ux.test.ts
