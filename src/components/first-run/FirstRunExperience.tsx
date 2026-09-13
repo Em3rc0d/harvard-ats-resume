@@ -16,6 +16,7 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
   const [step, setStep] = useState<Step>("BOOTSTRAP");
   const [authStatus, setAuthStatus] = useState<string | null>("Restoring CV Engine session…");
   const [disclosureAcknowledged, setDisclosureAcknowledged] = useState(false);
+  const [serverSessionVerified, setServerSessionVerified] = useState(false);
   const { mode, selectMode, clearSessionSecrets, resetAIAccess } = useAIAccessSession();
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
     async function bootstrap() {
       if (!authConfigured) {
         if (!cancelled) {
+          setServerSessionVerified(false);
           setAuthStatus(null);
           setStep("TRUST");
         }
@@ -34,16 +36,18 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
       const sessionResponse = await fetch("/api/session", { cache: "no-store" }).catch(() => null);
       if (cancelled) return;
       if (!sessionResponse?.ok) {
+        setServerSessionVerified(false);
         setAuthStatus(null);
         setStep("TRUST");
         return;
       }
 
-      setAuthStatus("Restoring consent and AI access preference…");
+      setServerSessionVerified(true);
+      setAuthStatus("Restoring your preferences…");
       const consentResponse = await fetch("/api/consent", { cache: "no-store" }).catch(() => null);
       if (cancelled) return;
       if (!consentResponse?.ok) {
-        setAuthStatus("CV Engine could not restore your consent state. Review Trust before continuing.");
+        setAuthStatus("We couldn’t restore your preferences. Review the safety notice to continue.");
         setStep("TRUST");
         return;
       }
@@ -91,26 +95,55 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
   }
 
   async function resolveAuthenticatedStep() {
-    if (!authConfigured) { setStep("AUTH"); return; }
-    setAuthStatus("Verifying server session…");
-    const response = await fetch("/api/session", { cache: "no-store" });
-    if (!response.ok) { setAuthStatus(null); setStep("AUTH"); return; }
-    if (!disclosureAcknowledged) { setAuthStatus(null); setStep("TRUST"); return; }
-    setAuthStatus("Recording disclosure acknowledgement…");
-    try { await persistConsent(); setAuthStatus(null); setStep("AI_ACCESS"); }
-    catch { setAuthStatus("CV Engine could not record your disclosure acknowledgement. Try again."); }
+    if (!authConfigured) {
+      setServerSessionVerified(false);
+      setStep("AUTH");
+      return;
+    }
+    setAuthStatus("Verifying your account…");
+    const response = await fetch("/api/session", { cache: "no-store" }).catch(() => null);
+    if (!response?.ok) {
+      setServerSessionVerified(false);
+      setAuthStatus(null);
+      setStep("AUTH");
+      return;
+    }
+    setServerSessionVerified(true);
+    if (!disclosureAcknowledged) {
+      setAuthStatus(null);
+      setStep("TRUST");
+      return;
+    }
+    setAuthStatus("Saving your preferences…");
+    try {
+      await persistConsent();
+      setAuthStatus(null);
+      setStep("AI_ACCESS");
+    } catch {
+      setAuthStatus("We couldn’t save your preferences. Try again.");
+    }
   }
 
   async function acknowledgeDisclosure() {
     setDisclosureAcknowledged(true);
-    if (!authConfigured) { setStep("AUTH"); return; }
-    setAuthStatus("Checking account session…");
-    const response = await fetch("/api/session", { cache: "no-store" });
-    setAuthStatus(null);
-    if (!response.ok) { setStep("AUTH"); return; }
-    setAuthStatus("Recording disclosure acknowledgement…");
-    try { await persistConsent(); setAuthStatus(null); setStep("AI_ACCESS"); }
-    catch { setAuthStatus("CV Engine could not record your disclosure acknowledgement. Try again."); }
+
+    // Bootstrap already verifies the server-side user before showing Trust to an
+    // authenticated user. Repeating that network check here created a race right
+    // after email confirmation. Consent persistence below is itself protected by
+    // the same authoritative auth boundary, so no security check is bypassed.
+    if (!serverSessionVerified) {
+      setStep("AUTH");
+      return;
+    }
+
+    setAuthStatus("Saving your preferences…");
+    try {
+      await persistConsent();
+      setAuthStatus(null);
+      setStep("AI_ACCESS");
+    } catch {
+      setAuthStatus("We couldn’t save your preferences. Try again.");
+    }
   }
 
   async function finalizeAIAccess(selectedMode: AIAccessMode) {
@@ -119,8 +152,14 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
   }
 
   async function logout() {
-    clearSessionSecrets(); resetAIAccess(); setDisclosureAcknowledged(false);
-    if (authConfigured) { const supabase = createSupabaseBrowserClient(); await supabase.auth.signOut(); }
+    clearSessionSecrets();
+    resetAIAccess();
+    setDisclosureAcknowledged(false);
+    setServerSessionVerified(false);
+    if (authConfigured) {
+      const supabase = createSupabaseBrowserClient();
+      await supabase.auth.signOut();
+    }
     setStep("TRUST");
   }
 
@@ -128,13 +167,13 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
 
   return (
     <main className="first-run-shell">
-      <header className="brand-bar"><div><span className="brand-mark">C</span><div><strong>CV Engine</strong><span>Career intelligence</span></div></div><span className="build-label">vNext · B9</span></header>
+      <header className="brand-bar"><div><span className="brand-mark">C</span><div><strong>CV Engine</strong><span>Improve your CV without inventing facts</span></div></div><span className="build-label">vNext · B9</span></header>
       <div className="step-indicator" aria-label="First-run progress">
-        <span className={step === "TRUST" ? "active" : step === "BOOTSTRAP" ? "" : "done"}>1 Trust</span>
+        <span className={step === "TRUST" ? "active" : step === "BOOTSTRAP" ? "" : "done"}>1 Safety</span>
         <span className={step === "AUTH" ? "active" : step === "TRUST" || step === "BOOTSTRAP" ? "" : "done"}>2 Account</span>
-        <span className={step === "AI_ACCESS" ? "active" : ""}>3 AI access</span>
+        <span className={step === "AI_ACCESS" ? "active" : ""}>3 AI</span>
       </div>
-      {step === "BOOTSTRAP" ? <section className="panel"><p className="muted">Restoring your durable CV Engine state…</p></section> : null}
+      {step === "BOOTSTRAP" ? <section className="panel"><p className="muted">Opening CV Engine…</p></section> : null}
       {step === "TRUST" ? <TrustDisclosurePanel onAcknowledge={acknowledgeDisclosure} /> : null}
       {step === "AUTH" ? <AuthPanel authConfigured={authConfigured} onAuthenticated={resolveAuthenticatedStep} /> : null}
       {step === "AI_ACCESS" ? <AIAccessPanel platformGeminiAvailable={platformGeminiAvailable} onReady={finalizeAIAccess} /> : null}
