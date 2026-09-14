@@ -17,6 +17,37 @@ LANDING_REPLACEMENT = '''            page.get_by_role("heading", name="Improve y
             page.get_by_role("button", name="Resume Import", exact=True).click()
 '''
 
+IMPORT_ACCEPT_ANCHOR = '''            audit = page.locator("details").filter(has_text="Audit mode · source lines, hashes and manual override").first
+            audit.locator("summary").click()
+            audit.get_by_text(SOURCE_TEXT, exact=True).wait_for(timeout=30_000)
+            proposal_select = audit.locator('select[aria-label^="Evidence kind for proposal"]').first
+            proposal_select.select_option("PROJECT")
+            audit.get_by_role("button", name="Accept as NEEDS_REVIEW", exact=True).click()
+
+            page.get_by_role("button", name="Career Evidence", exact=True).click()
+'''
+IMPORT_ACCEPT_REPLACEMENT = '''            audit = page.locator("details").filter(has_text="Audit mode · source lines, hashes and manual override").first
+            audit.locator("summary").click()
+            source_proposal = audit.locator("div.panel").filter(has_text=SOURCE_TEXT).first
+            source_proposal.get_by_text(SOURCE_TEXT, exact=True).wait_for(timeout=30_000)
+            proposal_select = source_proposal.locator('select[aria-label^="Evidence kind for proposal"]')
+            proposal_select.select_option("PROJECT")
+            with page.expect_response(
+                lambda response: "/api/imports/proposals/" in response.url
+                and response.url.endswith("/accept")
+                and response.request.method == "POST",
+                timeout=30_000,
+            ) as import_accept_info:
+                source_proposal.get_by_role("button", name="Accept as NEEDS_REVIEW", exact=True).click()
+            import_accept_response = import_accept_info.value
+            report["importProposalHttpStatus"] = import_accept_response.status
+            if import_accept_response.status != 201:
+                fail("B9_BROWSER_IMPORT_PROPOSAL_HTTP_FAILURE", str(import_accept_response.status))
+            source_proposal.get_by_text(re.compile(r"Created Career Evidence ")).wait_for(timeout=30_000)
+
+            page.get_by_role("button", name="Career Evidence", exact=True).click()
+'''
+
 FIRST_RESUME_NAV_ANCHOR = '''            report["checks"].append("CAREER_TARGET_ACTIVE")
 
             page.get_by_role("button", name="Resume", exact=True).click()
@@ -56,6 +87,12 @@ def main() -> int:
         LANDING_ANCHOR,
         LANDING_REPLACEMENT,
         "B9_SIMPLE_UX_LANDING_PATCH_MISMATCH",
+    )
+    source = replace_exactly_once(
+        source,
+        IMPORT_ACCEPT_ANCHOR,
+        IMPORT_ACCEPT_REPLACEMENT,
+        "B9_SOURCE_ANCHORED_IMPORT_PATCH_MISMATCH",
     )
     source = replace_exactly_once(
         source,

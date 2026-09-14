@@ -14,4 +14,16 @@ describe("B9 production browser navigation readiness", () => {
     expect(script).toContain('page.get_by_role("button", name="Resume", exact=True).wait_for(timeout=30_000)');
     expect(script).toContain('reloaded_card.wait_for(timeout=30_000)');
   });
+
+  it("anchors manual import acceptance to the exact source line and waits for committed evidence", () => {
+    const patch = read("tests/b9/simple-primary-ux-navigation-patch.py");
+
+    expect(patch).toContain('source_proposal = audit.locator("div.panel").filter(has_text=SOURCE_TEXT).first');
+    expect(patch).toContain('source_proposal.locator(\'select[aria-label^="Evidence kind for proposal"]\')');
+    expect(patch).toContain('page.expect_response(');
+    expect(patch).toContain('response.url.endswith("/accept")');
+    expect(patch).toContain('report["importProposalHttpStatus"] = import_accept_response.status');
+    expect(patch).toContain('if import_accept_response.status != 201:');
+    expect(patch).toContain('Created Career Evidence ');
+  });
 });
