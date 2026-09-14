@@ -76,7 +76,7 @@ describe("B0.5 trust and AI access contracts", () => {
   it("freezes the vNext capability-specific model routing baseline", () => {
     expect(getModelRoute("RESUME_IMPORT_FRAGMENT").geminiModels).toEqual([
       "gemini-3.5-flash-lite",
-      "gemini-3.7-flash",
+      "gemini-3.6-flash",
     ]);
     expect(getModelRoute("INLINE_WORDING_OPTIMIZATION").geminiModels).toEqual([
       "gemini-3.5-flash-lite",
