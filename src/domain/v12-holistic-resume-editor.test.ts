@@ -139,20 +139,20 @@ describe("v1.2 holistic resume editor", () => {
     expect(outcome.document.projects[0]?.title?.sourceRefs[0]?.ordinal).toBe(7);
   });
 
-  it("uses the proven Gemini reserve when the quality-first model fails structured validation", async () => {
+  it("uses the qualified Gemini reserve when the default model fails structured validation", async () => {
     const urls: string[] = [];
     const fetchImpl: typeof fetch = async (input) => {
       const url = String(input);
       urls.push(url);
-      if (url.includes("gemini-3.7-flash")) return geminiResponse({ locale: "en-US" });
+      if (url.includes("gemini-3.5-flash-lite")) return geminiResponse({ locale: "en-US" });
       return geminiResponse(validProviderDraft());
     };
     const outcome = await improveResumeHolistically(source(), "Need a software engineer for reliable systems.", config(fetchImpl));
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
-    expect(urls[0]).toContain("gemini-3.7-flash");
-    expect(urls[1]).toContain("gemini-3.5-flash-lite");
-    expect(outcome.provenance.model).toBe("gemini-3.5-flash-lite");
+    expect(urls[0]).toContain("gemini-3.5-flash-lite");
+    expect(urls[1]).toContain("gemini-3.6-flash");
+    expect(outcome.provenance.model).toBe("gemini-3.6-flash");
     expect(outcome.provenance.fallbackUsed).toBe(true);
     expect(outcome.attempts[0]?.failureCode).toBe("OUTPUT_VALIDATION_FAILED");
   });

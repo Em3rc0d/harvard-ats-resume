@@ -126,7 +126,7 @@ describe("v1.2 structured AI runtime", () => {
     if (outcome.ok) {
       expect(outcome.attempts[0]?.failureCode).toBe("OUTPUT_VALIDATION_FAILED");
       expect(outcome.attempts[1]?.status).toBe("SUCCESS");
-      expect(outcome.provenance.model).toBe("gemini-3.5-flash-lite");
+      expect(outcome.provenance.model).toBe("gemini-3.6-flash");
     }
   });
 
