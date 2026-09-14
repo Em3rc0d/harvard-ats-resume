@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildProviderAttemptPlan, type AICapabilityName } from "../application/ai/AIGatewayFoundation";
+import { buildProviderAttemptPlan, getModelRoute, type AICapabilityName } from "../application/ai/AIGatewayFoundation";
 import { getAIExecutionBudget } from "../application/ai/AIGatewayRuntime";
 import {
   assertProviderEconomicsWithinPolicy,
@@ -32,6 +32,21 @@ describe("B6 AI economics", () => {
       expect(policy.pricingContractVersion).toBe(GEMINI_PRICING_CONTRACT_VERSION);
       expect(policy.pricingValidThrough).toBe(GEMINI_PRICING_VALID_THROUGH);
     }
+  });
+
+  it("uses the qualified Gemini reserve when the 3.7 lane is unhealthy", () => {
+    expect(getModelRoute("RESUME_SEMANTIC_UNDERSTANDING").geminiModels).toEqual([
+      "gemini-3.5-flash-lite",
+      "gemini-3.6-flash",
+    ]);
+    expect(getModelRoute("RESUME_HOLISTIC_IMPROVEMENT").geminiModels).toEqual([
+      "gemini-3.5-flash-lite",
+      "gemini-3.6-flash",
+    ]);
+    expect(getModelRoute("RESUME_FACT_GUARD").geminiModels).toEqual([
+      "gemini-3.6-flash",
+      "gemini-3.5-flash-lite",
+    ]);
   });
 
   it("prices actual Gemini usage deterministically", () => {
