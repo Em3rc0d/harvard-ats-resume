@@ -29,37 +29,37 @@ export type ModelRoute = Readonly<{
 const ROUTES: Readonly<Record<AICapabilityName, ModelRoute>> = {
   RESUME_IMPORT_FRAGMENT: {
     capability: "RESUME_IMPORT_FRAGMENT",
-    geminiModels: ["gemini-3.5-flash-lite", "gemini-3.7-flash"],
+    geminiModels: ["gemini-3.5-flash-lite", "gemini-3.6-flash"],
     ollamaModel: "cv-engine-import",
     allowGeminiQualityEscalation: true,
   },
   RESUME_SEMANTIC_UNDERSTANDING: {
     capability: "RESUME_SEMANTIC_UNDERSTANDING",
-    geminiModels: ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
+    geminiModels: ["gemini-3.5-flash-lite", "gemini-3.6-flash"],
     ollamaModel: "cv-engine-import",
     allowGeminiQualityEscalation: true,
   },
   RESUME_HOLISTIC_IMPROVEMENT: {
     capability: "RESUME_HOLISTIC_IMPROVEMENT",
-    geminiModels: ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
+    geminiModels: ["gemini-3.5-flash-lite", "gemini-3.6-flash"],
     ollamaModel: "cv-engine-resume-editor",
     allowGeminiQualityEscalation: true,
   },
   RESUME_FACT_GUARD: {
     capability: "RESUME_FACT_GUARD",
-    geminiModels: ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
+    geminiModels: ["gemini-3.6-flash", "gemini-3.5-flash-lite"],
     ollamaModel: "cv-engine-fact-guard",
     allowGeminiQualityEscalation: true,
   },
   JOB_DESCRIPTION_INTERPRETATION: {
     capability: "JOB_DESCRIPTION_INTERPRETATION",
-    geminiModels: ["gemini-3.5-flash-lite", "gemini-3.7-flash"],
+    geminiModels: ["gemini-3.5-flash-lite", "gemini-3.6-flash"],
     ollamaModel: "cv-engine-analysis",
     allowGeminiQualityEscalation: true,
   },
   OPPORTUNITY_EXPLANATION: {
     capability: "OPPORTUNITY_EXPLANATION",
-    geminiModels: ["gemini-3.5-flash-lite", "gemini-3.7-flash"],
+    geminiModels: ["gemini-3.5-flash-lite", "gemini-3.6-flash"],
     ollamaModel: "cv-engine-analysis",
     allowGeminiQualityEscalation: true,
   },
