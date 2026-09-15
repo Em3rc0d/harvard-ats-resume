@@ -34,7 +34,7 @@ describe("B6 AI economics", () => {
     }
   });
 
-  it("uses the qualified Gemini reserve when the 3.7 lane is unhealthy", () => {
+  it("uses the observed healthy Gemini lane first with the qualified reserve behind it", () => {
     expect(getModelRoute("RESUME_SEMANTIC_UNDERSTANDING").geminiModels).toEqual([
       "gemini-3.5-flash-lite",
       "gemini-3.6-flash",
@@ -44,8 +44,8 @@ describe("B6 AI economics", () => {
       "gemini-3.6-flash",
     ]);
     expect(getModelRoute("RESUME_FACT_GUARD").geminiModels).toEqual([
-      "gemini-3.6-flash",
       "gemini-3.5-flash-lite",
+      "gemini-3.6-flash",
     ]);
   });
 
