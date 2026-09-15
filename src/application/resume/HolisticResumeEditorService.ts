@@ -208,6 +208,10 @@ function buildPrompt(document: CandidateResumeDocument, targetText: string | nul
   return [
     "Rewrite this complete candidate-authored resume into a materially stronger professional resume.",
     "Candidate source is authoritative. You may improve structure, clarity, impact, ordering, concision and ATS readability, but you must not add facts, metrics, employers, roles, dates, credentials, technologies or skills absent from the source.",
+    `Preserve the candidate's source language and locale (${document.locale}). Do not translate section content or switch the resume language unless the source itself does so.`,
+    "Do not return a near-copy when a source-faithful rewrite is possible. Rewrite narrative summaries and bullets for sharper professional positioning, stronger information hierarchy, less repetition and clearer action-to-scope relationships while preserving exactly the supported meaning.",
+    "For the professional summary, preserve every distinct high-signal positioning theme already supported by the source (scope of work, technical breadth, domains, systems thinking, product orientation or equivalent). Concision may merge themes; it must not silently delete differentiating positioning.",
+    "Prefer compact, high-signal bullets. Remove redundant phrasing and unnecessary first-person repetition, but never manufacture impact, ownership, scale or seniority.",
     "Every generated factual text unit must carry sourceOrdinals that support that exact unit. Section labels may be presentational; factual units may not be ungrounded.",
     "Do not upgrade uncertainty. Do not infer numeric impact. Do not transform a project into employment or a skill into experience.",
     "If you omit source material for relevance, list those exact ordinals in omittedSourceOrdinals.",
@@ -347,7 +351,8 @@ function sourceLanguageGroups(document: CandidateResumeDocument): GeneratedResum
     const proficiency = sourceUnit(language.proficiency);
     if (proficiency) items.push(proficiency);
   }
-  return [{ label: "Languages", items, sourceRefs: [...refs.values()] }];
+  const label = document.locale.trim().toLowerCase().replace("_", "-").startsWith("es") ? "Idiomas" : "Languages";
+  return [{ label, items, sourceRefs: [...refs.values()] }];
 }
 function sourceOtherGroups(document: CandidateResumeDocument): GeneratedResumeListGroup[] {
   return document.otherSections.map((group) => ({
@@ -390,7 +395,7 @@ export async function improveResumeHolistically(
     capability,
     credentialMode: config.credentialMode,
     prompt: buildPrompt(source, targetText),
-    systemInstruction: "You are CV Engine's holistic resume editor. Improve presentation aggressively but remain epistemically conservative: candidate source is authoritative, job text is market truth only, and every factual output unit must cite supporting source ordinals. Return only the requested structured output.",
+    systemInstruction: "You are CV Engine's holistic resume editor. Produce a materially stronger professional rewrite, not a near-copy, while remaining epistemically conservative: candidate source is authoritative, source language must be preserved, job text is market truth only, and every factual output unit must cite supporting source ordinals. Return only the requested structured output.",
     responseJsonSchema: RESUME_HOLISTIC_IMPROVEMENT_SCHEMA,
     structuredOutputValidator: providerEnvelopeValidator,
   }, config);
@@ -440,7 +445,7 @@ export async function improveResumeHolistically(
     sourceDocumentSha256: source.sourceDocumentSha256,
     documentVersion: GENERATED_RESUME_DOCUMENT_VERSION,
     editorStatus: warnings.length === 0 ? "AI_EDITED" : "PARTIAL_RECOVERY",
-    locale: raw.locale,
+    locale: source.locale,
     header,
     summary,
     experience,
