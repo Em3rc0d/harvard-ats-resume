@@ -11,14 +11,20 @@ import { improveResumeHolistically } from "../../../application/resume/HolisticR
 import { guardAndRepairResume } from "../../../application/resume/FactGuardianService";
 import { listResumeImprovementRuns, loadResumeImprovementRun, recordResumeImprovementRun } from "../../../application/resume/ResumeImprovementRunRepository";
 import { renderResumeImprovementRunArtifact } from "../../../application/resume/ResumeImprovementArtifactAdapter";
-import type { SafeAIEvent } from "../../../application/ai/AIGatewayRuntime";
+import { getAIExecutionBudget, type SafeAIEvent } from "../../../application/ai/AIGatewayRuntime";
 
 export const runtime = "nodejs";
+export const maxDuration = 180;
 
 const MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 const MAX_TARGET_CHARS = 15_000;
 const PDF_MIME = "application/pdf";
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const FACT_GUARD_PRODUCTION_BUDGET = {
+  ...getAIExecutionBudget("RESUME_FACT_GUARD"),
+  perAttemptTimeoutMs: 45_000,
+  wholeOperationDeadlineMs: 70_000,
+} as const;
 
 function classifyUpload(file: File) {
   const name = file.name.toLowerCase();
@@ -42,6 +48,9 @@ function jsonRecord(value: unknown): Record<string, unknown> {
 function targetHash(value: string | null) {
   return value ? createHash("sha256").update(value, "utf8").digest("hex") : null;
 }
+function factGuardPublicFailure(failureCode: string) {
+  return failureCode === "FACT_GUARD_REJECTED" ? "FACT_GUARD_REJECTED" : "FACT_GUARD_UNAVAILABLE";
+}
 function errorResponse(error: unknown) {
   if (error instanceof AuthenticationRequiredError) {
     return NextResponse.json(
@@ -55,7 +64,13 @@ function errorResponse(error: unknown) {
   const publicCode = candidateCode.length > 0 && (candidateCode.startsWith("V12_") || candidateCode.startsWith("SOURCE_") || candidateCode.startsWith("SEMANTIC_") || candidateCode.startsWith("FACT_"))
     ? candidateCode
     : "V12_IMPROVEMENT_FAILED";
-  const status = publicCode.includes("NOT_FOUND") ? 404 : publicCode.includes("UNREADABLE") ? 422 : 502;
+  const status = publicCode.includes("NOT_FOUND")
+    ? 404
+    : publicCode.includes("UNREADABLE")
+      ? 422
+      : publicCode.includes("UNAVAILABLE")
+        ? 503
+        : 502;
   return NextResponse.json({ error: publicCode }, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 
@@ -86,6 +101,9 @@ async function resolveAIConfig(request: Request, client: Awaited<ReturnType<type
     ollamaBaseUrl: configuredOllamaUrl || (production ? "http://127.0.0.1:9" : "http://127.0.0.1:11434"),
     ollamaApiKey: process.env.OLLAMA_API_KEY?.trim() || null,
     logger: safeLogger,
+    budgetOverrides: {
+      RESUME_FACT_GUARD: FACT_GUARD_PRODUCTION_BUDGET,
+    },
   } as const;
 }
 
@@ -125,7 +143,7 @@ export async function POST(request: Request) {
     const editor = await improveResumeHolistically(semantic.document, targetText, aiConfig);
     if (!editor.ok) throw new Error(`V12_EDITOR_FAILED:${editor.failureCode}`);
     const guarded = await guardAndRepairResume(semantic.document, editor.document, aiConfig);
-    if (!guarded.ok) throw new Error(`FACT_GUARD_REJECTED:${guarded.failureCode}`);
+    if (!guarded.ok) throw new Error(`${factGuardPublicFailure(guarded.failureCode)}:${guarded.failureCode}`);
 
     const status = semantic.warnings.length > 0 || editor.warnings.length > 0 || guarded.report.decision === "REPAIRED_PASS"
       ? "PARTIALLY_IMPROVED"
