@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JobSnapshot } from "../../domain/jobs/JobSnapshot";
 import type { OpportunityAssessment } from "../../domain/matching/Assessment";
 import type { ResumeArtifact } from "../../domain/resume/ResumeArtifact";
@@ -59,9 +59,11 @@ export function ResumeWorkspace() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const profileMutationEpoch = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
+    const profileLoadEpoch = profileMutationEpoch.current;
     void Promise.all([
       fetchJson("/api/jobs"),
       fetchJson("/api/assessments"),
@@ -78,7 +80,7 @@ export function ResumeWorkspace() {
       if (assessmentResult.response.ok) setAssessments(Array.isArray(assessmentResult.body?.assessments) ? assessmentResult.body.assessments : []);
       if (planResult.response.ok) setPlans(Array.isArray(planResult.body?.plans) ? planResult.body.plans : []);
       if (artifactResult.response.ok) setArtifacts(Array.isArray(artifactResult.body?.artifacts) ? artifactResult.body.artifacts : []);
-      if (profileResult.response.ok) {
+      if (profileResult.response.ok && profileLoadEpoch === profileMutationEpoch.current) {
         const loadedProfile = (profileResult.body?.profile ?? null) as ResumeProfile | null;
         setProfile(loadedProfile);
         setProfileDraft(profileToDraft(loadedProfile));
@@ -94,6 +96,11 @@ export function ResumeWorkspace() {
   const selectedAssessmentId = jobAssessments.some((assessment) => assessment.id === opportunityAssessmentId)
     ? opportunityAssessmentId
     : (jobAssessments[0]?.id ?? "");
+
+  function updateProfileDraft(patch: Partial<ProfileDraft>) {
+    profileMutationEpoch.current += 1;
+    setProfileDraft((current) => ({ ...current, ...patch }));
+  }
 
   async function saveProfile() {
     setSavingProfile(true);
@@ -119,6 +126,7 @@ export function ResumeWorkspace() {
       return;
     }
     const saved = body.profile as ResumeProfile;
+    profileMutationEpoch.current += 1;
     setProfile(saved);
     setProfileDraft(profileToDraft(saved));
     setNotice(`ResumeProfile r${saved.revision} saved. Existing artifacts remain immutable.`);
@@ -198,22 +206,22 @@ export function ResumeWorkspace() {
             <p className="muted">Profile edits create immutable revisions. They never become Career Evidence and never rewrite an existing ResumeArtifact.</p>
           </div>
           <label>Display name
-            <input value={profileDraft.displayName} onChange={(event) => setProfileDraft((current) => ({ ...current, displayName: event.target.value }))} placeholder="Your name" />
+            <input value={profileDraft.displayName} onChange={(event) => updateProfileDraft({ displayName: event.target.value })} placeholder="Your name" />
           </label>
           <label>Professional headline
-            <input value={profileDraft.headline} onChange={(event) => setProfileDraft((current) => ({ ...current, headline: event.target.value }))} placeholder="Backend Engineer / Full Stack" />
+            <input value={profileDraft.headline} onChange={(event) => updateProfileDraft({ headline: event.target.value })} placeholder="Backend Engineer / Full Stack" />
           </label>
           <label>Location
-            <input value={profileDraft.location} onChange={(event) => setProfileDraft((current) => ({ ...current, location: event.target.value }))} placeholder="City, Country" />
+            <input value={profileDraft.location} onChange={(event) => updateProfileDraft({ location: event.target.value })} placeholder="City, Country" />
           </label>
           <label>Email
-            <input type="email" value={profileDraft.email} onChange={(event) => setProfileDraft((current) => ({ ...current, email: event.target.value }))} placeholder="you@example.com" />
+            <input type="email" value={profileDraft.email} onChange={(event) => updateProfileDraft({ email: event.target.value })} placeholder="you@example.com" />
           </label>
           <label>Phone
-            <input value={profileDraft.phone} onChange={(event) => setProfileDraft((current) => ({ ...current, phone: event.target.value }))} placeholder="Optional" />
+            <input value={profileDraft.phone} onChange={(event) => updateProfileDraft({ phone: event.target.value })} placeholder="Optional" />
           </label>
           <label>Links · one per line
-            <textarea rows={3} value={profileDraft.links} onChange={(event) => setProfileDraft((current) => ({ ...current, links: event.target.value }))} placeholder={"https://linkedin.com/in/...\nhttps://github.com/..."} />
+            <textarea rows={3} value={profileDraft.links} onChange={(event) => updateProfileDraft({ links: event.target.value })} placeholder={"https://linkedin.com/in/...\nhttps://github.com/..."} />
           </label>
           <button className="secondary" type="button" disabled={savingProfile || !profileDraft.displayName.trim()} onClick={() => void saveProfile()}>
             {savingProfile ? "Saving profile…" : profile ? `Save new profile revision · current r${profile.revision}` : "Save ResumeProfile"}
