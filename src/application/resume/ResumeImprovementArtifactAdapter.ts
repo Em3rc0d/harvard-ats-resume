@@ -19,6 +19,7 @@ import {
   type V12ResumeLayoutDiagnostics,
   type V12ResumeSemanticLine,
 } from "./V12ProfessionalResumeRenderer";
+import { wrapV12ResumeArtifactText } from "./V12ReadableResumeText";
 
 const JsonRecordSchema = z.record(z.string(), z.unknown());
 
@@ -196,7 +197,7 @@ export function renderResumeImprovementRunArtifact(input: ResumeImprovementRun):
   const provenance = editorProvenance(run);
   const lines = buildImprovementSemanticLines(generated);
   const layout = diagnoseImprovementLayout(lines);
-  const text = renderV12ResumeText(lines);
+  const text = wrapV12ResumeArtifactText(renderV12ResumeText(lines));
   const renderedSemanticTextSha256 = sha256Text(text);
   const replayIdentitySha256 = replayHash({
     sourceDocumentSha256: run.sourceSha256,

@@ -7,8 +7,13 @@ import {
 import {
   renderV12ResumeDocx,
   renderV12ResumePdf,
+  renderV12ResumeText,
   type V12ResumeSemanticLine,
 } from "../application/resume/V12ProfessionalResumeRenderer";
+import {
+  V12_RESUME_TEXT_MAX_LINE_LENGTH,
+  wrapV12ResumeArtifactText,
+} from "../application/resume/V12ReadableResumeText";
 
 const owner = "12000000-0000-4000-8000-000000000201";
 const sourceDocumentId = "12000000-0000-4000-8000-000000000202";
@@ -114,6 +119,27 @@ describe("v1.2 professional resume presentation", () => {
     expect(raw).toContain("Full Stack Developer | Example Labs");
     expect(raw).toContain("RG 0.6 w");
     expect(raw).not.toContain("/Subtype /Image");
+  });
+
+  it("keeps the auxiliary TXT artifact human-readable without changing resume semantics", () => {
+    const lines: V12ResumeSemanticLine[] = [
+      { kind: "HEADING", text: "Experience" },
+      {
+        kind: "BODY",
+        text: "Designed and delivered a production platform spanning application architecture, backend APIs, relational data modeling, automated tests, CI/CD workflows, observability, deployment controls, and operational support while preserving evidence and release traceability across the complete engineering lifecycle.",
+      },
+      {
+        kind: "BULLET",
+        text: "Built a deliberately long bullet that validates continuation indentation while keeping every generated text line inside the certified readability ceiling without weakening or deleting any factual content from the resume artifact.",
+      },
+    ];
+    const raw = renderV12ResumeText(lines);
+    const wrapped = wrapV12ResumeArtifactText(raw);
+    expect(raw.length).toBeGreaterThan(wrapped.split("\n")[1]!.length);
+    expect(Math.max(...wrapped.split("\n").map((line) => line.length))).toBeLessThanOrEqual(V12_RESUME_TEXT_MAX_LINE_LENGTH);
+    expect(wrapped).toContain("Designed and delivered a production platform");
+    expect(wrapped).toContain("- Built a deliberately long bullet");
+    expect(wrapped.endsWith("\n")).toBe(true);
   });
 
   it("diagnoses actual professional-layout pagination rather than a fixed line-count approximation", () => {
