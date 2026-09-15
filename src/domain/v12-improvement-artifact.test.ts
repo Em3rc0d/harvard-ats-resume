@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ResumeImprovementRun } from "./resume/ResumeImprovementRun";
-import { B9_RENDERER_CONTRACT_VERSION } from "./resume/ResumeArtifact";
+import { V12_IMPROVEMENT_RENDERER_CONTRACT_VERSION } from "./resume/ResumeImprovementArtifact";
 import { renderResumeImprovementRunArtifact } from "../application/resume/ResumeImprovementArtifactAdapter";
 
 const owner = "12000000-0000-4000-8000-000000000101";
@@ -93,9 +93,9 @@ function run(guardianDecision: "PASS" | "REPAIRED_PASS" | "REJECTED" = "PASS"): 
 }
 
 describe("v1.2 improvement artifact adapter", () => {
-  it("renders the guarded semantic result through the exact shared ATS renderer contract", () => {
+  it("renders the guarded semantic result through the versioned professional v1.2 renderer contract", () => {
     const bundle = renderResumeImprovementRunArtifact(run());
-    expect(bundle.artifact.manifest.rendererContractVersion).toBe(B9_RENDERER_CONTRACT_VERSION);
+    expect(bundle.artifact.manifest.rendererContractVersion).toBe(V12_IMPROVEMENT_RENDERER_CONTRACT_VERSION);
     expect(bundle.artifact.manifest.sourceDocumentSha256).toBe(sourceSha);
     expect(bundle.artifact.manifest.semanticDocumentSha256).toBe(semanticSha);
     expect(bundle.artifact.manifest.generatedDocumentSha256).toBe(generatedSha);
@@ -119,7 +119,7 @@ describe("v1.2 improvement artifact adapter", () => {
     expect(second.artifact.artifactSemanticSha256).toBe(first.artifact.artifactSemanticSha256);
   });
 
-  it("adds only deterministic structural labels/separators around already-approved generated text", () => {
+  it("adds only deterministic structural presentation around already-approved generated text", () => {
     const text = renderResumeImprovementRunArtifact(run()).text;
     for (const factual of ["Ada Candidate", "Software Engineer", "ada@example.test", "Builds reliable systems.", "Example Labs", "Built a deterministic evidence pipeline.", "TypeScript"]) {
       expect(text).toContain(factual);
