@@ -412,11 +412,19 @@ export async function improveResumeHolistically(
   const refsByOrdinal = new Map(source.provenanceIndex.map((ref) => [ref.ordinal, ref] as const));
   const warnings: HolisticEditorWarningCode[] = [];
 
-  let header = projectHeader(raw.header, refsByOrdinal);
-  if (header === undefined) {
-    header = sourceHeader(source);
+  const projectedHeader = projectHeader(raw.header, refsByOrdinal);
+  const authoritativeSourceHeader = sourceHeader(source);
+  let header: GeneratedResumeHeader | null;
+  if (authoritativeSourceHeader) {
+    header = authoritativeSourceHeader;
+    if (projectedHeader === undefined || projectedHeader === null) warnings.push("EDITOR_HEADER_RECOVERED");
+  } else if (projectedHeader === undefined) {
+    header = null;
     warnings.push("EDITOR_HEADER_RECOVERED");
+  } else {
+    header = projectedHeader;
   }
+
   let summary = projectNullableUnit(raw.summary, refsByOrdinal);
   if (summary === undefined) {
     summary = sourceUnit(source.profile);
