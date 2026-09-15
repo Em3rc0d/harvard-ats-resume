@@ -44,6 +44,9 @@ jobs:
       - name: Bind email confirmation to received state
         run: python tests/v12/email-confirmation-state-patch.py
 
+      - name: Apply real-CV quality receipt v2 contract
+        run: python tests/v12/quality-receipt-v2-patch.py
+
       - name: Certify v1.2 improve-resume golden path
         run: python tests/v12/production-improve-resume-cert.py
 
