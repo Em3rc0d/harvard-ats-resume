@@ -91,7 +91,9 @@ def summary_section(artifact_text: str) -> str:
 
 
 def summary_positioning_preserved(artifact_text: str) -> bool:
-    summary = summary_section(artifact_text).lower()
+    # TXT wrapping is presentation only. Normalize whitespace before checking the
+    # same positioning phrases so a safe line break cannot become a false failure.
+    summary = re.sub(r"\\s+", " ", summary_section(artifact_text).lower()).strip()
     return (
         "full stack" in summary
         and "end-to-end" in summary
