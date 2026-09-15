@@ -118,14 +118,27 @@ function geminiResponse(body: unknown) {
 }
 
 describe("v1.2 holistic resume editor", () => {
-  it("returns a source-linked full-document draft", async () => {
+  it("returns a source-linked full-document draft and source-locks the identity header", async () => {
     const outcome = await improveResumeHolistically(source(), null, config(async () => geminiResponse(validProviderDraft())));
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.document.editorStatus).toBe("AI_EDITED");
+    expect(outcome.document.header?.displayName?.text).toBe("Ada Candidate");
+    expect(outcome.document.header?.headline?.text).toBe("Software Engineer");
     expect(outcome.document.summary?.text).toContain("reliable systems");
     expect(outcome.document.experience[0]?.bullets[0]?.sourceRefs[0]?.ordinal).toBe(6);
     expect(GeneratedResumeDocumentSchema.safeParse(outcome.document).success).toBe(true);
+  });
+
+  it("recovers the exact source identity when the provider drops the header", async () => {
+    const provider = { ...validProviderDraft(), header: null };
+    const outcome = await improveResumeHolistically(source(), null, config(async () => geminiResponse(provider)));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.document.header?.displayName?.text).toBe("Ada Candidate");
+    expect(outcome.document.header?.headline?.text).toBe("Software Engineer");
+    expect(outcome.warnings).toContain("EDITOR_HEADER_RECOVERED");
+    expect(outcome.document.editorStatus).toBe("PARTIAL_RECOVERY");
   });
 
   it("recovers only the invalid section instead of discarding the whole improved CV", async () => {
