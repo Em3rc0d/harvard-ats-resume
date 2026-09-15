@@ -9,6 +9,13 @@ type ImprovementResult = {
   status: "IMPROVED" | "PARTIALLY_IMPROVED";
   unsupportedNewClaims: number;
   changes: string[];
+  quality?: {
+    localeConsistent: boolean;
+    summaryPositioningPreserved: boolean;
+    materialImprovementPresent: boolean;
+    passed: boolean;
+  };
+  layout?: { pageCount: number; sparseTrailingPage: boolean };
   review: { originalText: string; improvedText: string };
   downloads: { docx: string; pdf: string; text: string; provenance: string };
 };
@@ -70,16 +77,19 @@ export function ResumeImprovementWorkspace() {
   }
 
   if (result) {
+    const fullyQualified = result.status === "IMPROVED" && result.quality?.passed !== false && result.layout?.sparseTrailingPage !== true;
     return (
       <section className={`panel ${styles.panel}`} aria-labelledby="improvement-ready-heading">
         <p className="eyebrow">Resume improvement</p>
-        <h1 id="improvement-ready-heading">Your improved resume is ready</h1>
-        <p className="lead">Your resume was improved for clarity and ATS readability, then checked against the facts in your original CV.</p>
+        <h1 id="improvement-ready-heading">{fullyQualified ? "Your improved resume is ready" : "Your resume is ready for review"}</h1>
+        <p className="lead">{fullyQualified
+          ? "Your resume was improved for clarity and ATS readability, then checked against the facts in your original CV."
+          : "Your resume stayed source-backed, but CV Engine kept it in review because at least one quality gate did not fully qualify."}</p>
 
         <div className={styles.safety} aria-label="Quality and safety summary">
           <strong>Facts checked against your original CV</strong>
           <span>{result.unsupportedNewClaims === 0 ? "No unsupported claims were added." : "Unsupported wording was kept out of the final resume."}</span>
-          <span>{result.status === "PARTIALLY_IMPROVED" ? "Some wording was automatically restored to match your source CV." : "The final wording stayed within the facts from your uploaded CV."}</span>
+          <span>{fullyQualified ? "The final wording stayed within the facts from your uploaded CV." : "This result is safe to inspect, but it is not being presented as a final-quality improvement."}</span>
         </div>
 
         <h2 className={styles.sectionTitle}>What improved</h2>
