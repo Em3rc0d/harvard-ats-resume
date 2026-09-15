@@ -47,7 +47,7 @@ const ROUTES: Readonly<Record<AICapabilityName, ModelRoute>> = {
   },
   RESUME_FACT_GUARD: {
     capability: "RESUME_FACT_GUARD",
-    geminiModels: ["gemini-3.6-flash", "gemini-3.5-flash-lite"],
+    geminiModels: ["gemini-3.5-flash-lite", "gemini-3.6-flash"],
     ollamaModel: "cv-engine-fact-guard",
     allowGeminiQualityEscalation: true,
   },
