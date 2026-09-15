@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   RealCvQualityReceiptSchema,
@@ -81,5 +82,15 @@ describe("v1.2 real-CV quality gate", () => {
       email: "candidate@example.invalid",
     };
     expect(RealCvQualityReceiptSchema.safeParse(leaking).success).toBe(false);
+  });
+
+  it("gives real-CV Fact Guardian a bounded production window without weakening fail-closed semantics", () => {
+    const route = readFileSync("src/app/api/resume-improvements/route.ts", "utf8");
+    expect(route).toContain('export const maxDuration = 180');
+    expect(route).toContain('perAttemptTimeoutMs: 45_000');
+    expect(route).toContain('wholeOperationDeadlineMs: 70_000');
+    expect(route).toContain('RESUME_FACT_GUARD: FACT_GUARD_PRODUCTION_BUDGET');
+    expect(route).toContain('failureCode === "FACT_GUARD_REJECTED" ? "FACT_GUARD_REJECTED" : "FACT_GUARD_UNAVAILABLE"');
+    expect(route).toContain('if (!guarded.ok) throw new Error(`${factGuardPublicFailure(guarded.failureCode)}:${guarded.failureCode}`)');
   });
 });
