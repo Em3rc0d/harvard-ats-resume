@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { resumeDownloadBaseName } from "../application/resume/ResumeDownloadFilename";
 
 const root = process.cwd();
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
@@ -78,5 +79,21 @@ describe("v1.2 primary Improve Resume UX", () => {
     expect(route).toContain('format !== "text"');
     expect(route).toContain("loadResumeImprovementRun");
     expect(route).toContain("renderResumeImprovementRunArtifact(run)");
+  });
+
+  it("uses a professional candidate-facing filename instead of exposing an internal run UUID", () => {
+    const generated = {
+      header: {
+        displayName: { text: "Eduardo Faríd Merino Córdova" },
+      },
+    } as Record<string, unknown>;
+    expect(resumeDownloadBaseName(generated)).toBe("Eduardo_Farid_Merino_Cordova_CV");
+    expect(resumeDownloadBaseName(null)).toBe("CV_Optimizado");
+
+    const route = read("src/app/api/resume-improvements/route.ts");
+    expect(route).toContain("resumeDownloadBaseName(run.generatedDocumentJson)");
+    expect(route).not.toContain('filename="cvengine-${run.id}');
+    expect(route).toContain('filename="${downloadBaseName}.docx"');
+    expect(route).toContain('filename="${downloadBaseName}.pdf"');
   });
 });
