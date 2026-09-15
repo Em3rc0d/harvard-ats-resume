@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const REAL_CV_QUALITY_RECEIPT_VERSION = "v12-real-cv-quality-receipt-v1" as const;
+export const REAL_CV_QUALITY_RECEIPT_VERSION = "v12-real-cv-quality-receipt-v2" as const;
 
 export const ResumeQualityScoreSchema = z.number().int().min(1).max(5);
 
@@ -36,6 +36,10 @@ export const RealCvHardGatesSchema = z.object({
   docxValid: z.boolean(),
   pdfValid: z.boolean(),
   sourceToOutputProvenancePresent: z.boolean(),
+  localeConsistent: z.boolean(),
+  materialImprovementPresent: z.boolean(),
+  summaryPositioningPreserved: z.boolean(),
+  noSparseTrailingPage: z.boolean(),
 }).strict();
 
 export const RealCvQualityReceiptSchema = z.object({
@@ -79,7 +83,11 @@ export function realCvQualityAccepted(receipt: AcceptanceInput) {
     hard.inventedEmployersRolesDates !== 0 ||
     !hard.docxValid ||
     !hard.pdfValid ||
-    !hard.sourceToOutputProvenancePresent
+    !hard.sourceToOutputProvenancePresent ||
+    !hard.localeConsistent ||
+    !hard.materialImprovementPresent ||
+    !hard.summaryPositioningPreserved ||
+    !hard.noSparseTrailingPage
   ) {
     return false;
   }
