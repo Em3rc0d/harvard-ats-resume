@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { FactGuardianReportSchema } from "../../domain/resume/FactGuardian";
 import { GeneratedResumeDocumentSchema, type GeneratedResumeDocument, type GeneratedResumeEntry, type GeneratedResumeListGroup } from "../../domain/resume/GeneratedResumeDocument";
-import { B9_RENDERER_CONTRACT_VERSION } from "../../domain/resume/ResumeArtifact";
 import {
   RESUME_IMPROVEMENT_ARTIFACT_VERSION,
+  V12_IMPROVEMENT_RENDERER_CONTRACT_VERSION,
   ResumeImprovementArtifactManifestSchema,
   ResumeImprovementArtifactSchema,
   ResumeImprovementEditorProvenanceSchema,
@@ -12,22 +12,17 @@ import {
 } from "../../domain/resume/ResumeImprovementArtifact";
 import { ResumeImprovementRunSchema, type ResumeImprovementRun } from "../../domain/resume/ResumeImprovementRun";
 import {
-  renderSemanticLinesDocx,
-  renderSemanticLinesPdf,
-  renderSemanticLinesText,
-  type ResumeSemanticLine,
-} from "./ATSResumeRenderer";
+  diagnoseV12ResumeLayout,
+  renderV12ResumeDocx,
+  renderV12ResumePdf,
+  renderV12ResumeText,
+  type V12ResumeLayoutDiagnostics,
+  type V12ResumeSemanticLine,
+} from "./V12ProfessionalResumeRenderer";
 
 const JsonRecordSchema = z.record(z.string(), z.unknown());
-const PDF_LINES_PER_PAGE = 48;
-const SPARSE_TRAILING_PAGE_RATIO = 0.32;
 
-export type ResumeImprovementLayoutDiagnostics = Readonly<{
-  visualLineCount: number;
-  pageCount: number;
-  trailingPageFillRatio: number;
-  sparseTrailingPage: boolean;
-}>;
+export type ResumeImprovementLayoutDiagnostics = V12ResumeLayoutDiagnostics;
 
 export type ResumeImprovementArtifactBundle = Readonly<{
   artifact: ResumeImprovementArtifact;
@@ -80,31 +75,48 @@ function sha256Text(value: string) {
 function sha256Bytes(value: Uint8Array) {
   return createHash("sha256").update(value).digest("hex");
 }
-function pushUnit(lines: ResumeSemanticLine[], kind: ResumeSemanticLine["kind"], value: { text: string } | null) {
+function pushUnit(lines: V12ResumeSemanticLine[], kind: V12ResumeSemanticLine["kind"], value: { text: string } | null) {
   if (value) lines.push({ kind, text: value.text });
 }
-function entryLines(lines: ResumeSemanticLine[], entry: GeneratedResumeEntry) {
+function entryLines(lines: V12ResumeSemanticLine[], entry: GeneratedResumeEntry) {
   const identity = [entry.title?.text, entry.subtitle?.text].filter((value): value is string => Boolean(value));
   const meta = entry.metaLines.map((item) => item.text).filter(Boolean);
-  const identityAndMeta = [...identity, ...meta];
-  if (identityAndMeta.length > 0) lines.push({ kind: "BODY", text: identityAndMeta.join(" | ") });
+  if (identity.length > 0) lines.push({ kind: "ENTRY", text: identity.join(" | ") });
+  if (meta.length > 0) lines.push({ kind: "ENTRY_META", text: meta.join(" | ") });
   pushUnit(lines, "BODY", entry.summary);
   for (const bullet of entry.bullets) lines.push({ kind: "BULLET", text: bullet.text });
 }
-function listGroupLines(lines: ResumeSemanticLine[], group: GeneratedResumeListGroup) {
+function listGroupLines(lines: V12ResumeSemanticLine[], group: GeneratedResumeListGroup) {
   const content = group.items.map((item) => item.text).join(" | ");
-  lines.push({ kind: "BODY", text: group.label ? `${group.label}: ${content}` : content });
+  lines.push({ kind: "LABELED_BODY", text: group.label ? `${group.label}: ${content}` : content });
+}
+function packContactLines(values: readonly string[], maxLength = 88): string[] {
+  const result: string[] = [];
+  let current = "";
+  for (const raw of values) {
+    const value = raw.trim();
+    if (!value) continue;
+    const candidate = current ? `${current} | ${value}` : value;
+    if (current && candidate.length > maxLength) {
+      result.push(current);
+      current = value;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) result.push(current);
+  return result;
 }
 
-export function buildImprovementSemanticLines(input: GeneratedResumeDocument): ResumeSemanticLine[] {
+export function buildImprovementSemanticLines(input: GeneratedResumeDocument): V12ResumeSemanticLine[] {
   const document = GeneratedResumeDocumentSchema.parse(input);
   const labels = sectionLabels(document.locale);
-  const lines: ResumeSemanticLine[] = [];
+  const lines: V12ResumeSemanticLine[] = [];
   if (document.header) {
     pushUnit(lines, "NAME", document.header.displayName);
-    pushUnit(lines, "META", document.header.headline);
+    pushUnit(lines, "HEADLINE", document.header.headline);
     const contacts = document.header.contactLines.map((contact) => contact.text).filter(Boolean);
-    if (contacts.length > 0) lines.push({ kind: "META", text: contacts.join(" | ") });
+    for (const contactLine of packContactLines(contacts)) lines.push({ kind: "CONTACT", text: contactLine });
   }
   if (document.summary) {
     lines.push({ kind: "HEADING", text: labels.summary });
@@ -134,41 +146,8 @@ export function buildImprovementSemanticLines(input: GeneratedResumeDocument): R
   return lines;
 }
 
-function wrappedLineCount(text: string, width: number) {
-  const words = text.split(/\s+/).filter(Boolean);
-  let count = 0;
-  let current = "";
-  for (const word of words) {
-    if (word.length > width) {
-      if (current) { count += 1; current = ""; }
-      count += Math.floor((word.length - 1) / width);
-      current = word.slice(Math.floor((word.length - 1) / width) * width);
-    } else if (!current) current = word;
-    else if (`${current} ${word}`.length <= width) current += ` ${word}`;
-    else { count += 1; current = word; }
-  }
-  if (current || words.length === 0) count += 1;
-  return count;
-}
-
-export function diagnoseImprovementLayout(lines: readonly ResumeSemanticLine[]): ResumeImprovementLayoutDiagnostics {
-  let visualLineCount = 0;
-  for (const line of lines) {
-    const prefix = line.kind === "BULLET" ? "- " : "";
-    const width = line.kind === "NAME" ? 64 : line.kind === "HEADING" ? 70 : 92;
-    visualLineCount += wrappedLineCount(`${prefix}${line.text}`, width);
-  }
-  const pageCount = Math.max(1, Math.ceil(visualLineCount / PDF_LINES_PER_PAGE));
-  const trailingLines = visualLineCount === 0
-    ? 0
-    : visualLineCount % PDF_LINES_PER_PAGE || PDF_LINES_PER_PAGE;
-  const trailingPageFillRatio = pageCount === 1 ? 1 : trailingLines / PDF_LINES_PER_PAGE;
-  return {
-    visualLineCount,
-    pageCount,
-    trailingPageFillRatio,
-    sparseTrailingPage: pageCount > 1 && trailingPageFillRatio < SPARSE_TRAILING_PAGE_RATIO,
-  };
+export function diagnoseImprovementLayout(lines: readonly V12ResumeSemanticLine[]): ResumeImprovementLayoutDiagnostics {
+  return diagnoseV12ResumeLayout(lines);
 }
 
 function editorProvenance(run: ResumeImprovementRun) {
@@ -217,7 +196,7 @@ export function renderResumeImprovementRunArtifact(input: ResumeImprovementRun):
   const provenance = editorProvenance(run);
   const lines = buildImprovementSemanticLines(generated);
   const layout = diagnoseImprovementLayout(lines);
-  const text = renderSemanticLinesText(lines);
+  const text = renderV12ResumeText(lines);
   const renderedSemanticTextSha256 = sha256Text(text);
   const replayIdentitySha256 = replayHash({
     sourceDocumentSha256: run.sourceSha256,
@@ -225,7 +204,7 @@ export function renderResumeImprovementRunArtifact(input: ResumeImprovementRun):
     generatedDocumentSha256: run.generatedDocumentSha256,
     editorProvenance: provenance,
     guardianReportSha256: run.guardianReportSha256,
-    rendererContractVersion: B9_RENDERER_CONTRACT_VERSION,
+    rendererContractVersion: V12_IMPROVEMENT_RENDERER_CONTRACT_VERSION,
   });
   const manifest = ResumeImprovementArtifactManifestSchema.parse({
     schemaVersion: RESUME_IMPROVEMENT_ARTIFACT_VERSION,
@@ -237,7 +216,7 @@ export function renderResumeImprovementRunArtifact(input: ResumeImprovementRun):
     generatedDocumentSha256: run.generatedDocumentSha256,
     editorProvenance: provenance,
     guardianReportSha256: run.guardianReportSha256,
-    rendererContractVersion: B9_RENDERER_CONTRACT_VERSION,
+    rendererContractVersion: V12_IMPROVEMENT_RENDERER_CONTRACT_VERSION,
     renderedSemanticTextSha256,
     replayIdentitySha256,
   });
@@ -247,8 +226,8 @@ export function renderResumeImprovementRunArtifact(input: ResumeImprovementRun):
     manifest,
     artifactSemanticSha256: sha256Text(JSON.stringify({ manifest, text })),
   });
-  const docx = renderSemanticLinesDocx(lines);
-  const pdf = renderSemanticLinesPdf(lines);
+  const docx = renderV12ResumeDocx(lines);
+  const pdf = renderV12ResumePdf(lines);
   const provenanceJson = `${JSON.stringify({
     schemaVersion: RESUME_IMPROVEMENT_ARTIFACT_VERSION,
     artifact,
