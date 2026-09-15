@@ -96,12 +96,12 @@ function collectHyperlinks(lines: readonly V12ResumeSemanticLine[]) {
 
 function wordRun(input: {
   text: string;
-  bold?: boolean;
-  italic?: boolean;
-  caps?: boolean;
+  bold: boolean | undefined;
+  italic: boolean | undefined;
+  caps: boolean | undefined;
   sizeHalfPoints: number;
   color: string;
-  hyperlinkId?: string | null;
+  hyperlinkId: string | null;
 }) {
   const linkStyle = input.hyperlinkId ? '<w:u w:val="single"/>' : "";
   const properties = [
