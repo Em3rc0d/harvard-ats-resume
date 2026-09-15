@@ -11,6 +11,11 @@ import { improveResumeHolistically } from "../../../application/resume/HolisticR
 import { guardAndRepairResume } from "../../../application/resume/FactGuardianService";
 import { listResumeImprovementRuns, loadResumeImprovementRun, recordResumeImprovementRun } from "../../../application/resume/ResumeImprovementRunRepository";
 import { renderResumeImprovementRunArtifact } from "../../../application/resume/ResumeImprovementArtifactAdapter";
+import {
+  assessResumeOutputQuality,
+  preserveCriticalSourcePresentation,
+  resumeOutputQualityRank,
+} from "../../../application/resume/ResumeOutputQualityService";
 import { getAIExecutionBudget, type SafeAIEvent } from "../../../application/ai/AIGatewayRuntime";
 
 export const runtime = "nodejs";
@@ -140,31 +145,58 @@ export async function POST(request: Request) {
     const aiConfig = await resolveAIConfig(request, client, user.userId);
     const semantic = await understandResumeSemantics(receipt, aiConfig);
     if (!semantic.ok) throw new Error(`SEMANTIC_UNDERSTANDING_FAILED:${semantic.failureCode}`);
+
     const editor = await improveResumeHolistically(semantic.document, targetText, aiConfig);
     if (!editor.ok) throw new Error(`V12_EDITOR_FAILED:${editor.failureCode}`);
-    const guarded = await guardAndRepairResume(semantic.document, editor.document, aiConfig);
+    const stabilized = preserveCriticalSourcePresentation(semantic.document, editor.document);
+    const guarded = await guardAndRepairResume(semantic.document, stabilized, aiConfig);
     if (!guarded.ok) throw new Error(`${factGuardPublicFailure(guarded.failureCode)}:${guarded.failureCode}`);
 
-    const status = semantic.warnings.length > 0 || editor.warnings.length > 0 || guarded.report.decision === "REPAIRED_PASS"
+    let selectedEditor = editor;
+    let selectedGuarded = guarded;
+    let selectedQuality = assessResumeOutputQuality(semantic.document, guarded.document);
+
+    // A factual near-copy is not a successful improvement. Give the editor one bounded
+    // additional opportunity, then keep only the stronger independently fact-checked result.
+    if (!selectedQuality.passed) {
+      const retryEditor = await improveResumeHolistically(semantic.document, targetText, aiConfig);
+      if (retryEditor.ok) {
+        const retryStabilized = preserveCriticalSourcePresentation(semantic.document, retryEditor.document);
+        const retryGuarded = await guardAndRepairResume(semantic.document, retryStabilized, aiConfig);
+        if (retryGuarded.ok) {
+          const retryQuality = assessResumeOutputQuality(semantic.document, retryGuarded.document);
+          if (resumeOutputQualityRank(retryQuality) > resumeOutputQualityRank(selectedQuality)) {
+            selectedEditor = retryEditor;
+            selectedGuarded = retryGuarded;
+            selectedQuality = retryQuality;
+          }
+        }
+      }
+    }
+
+    const status = semantic.warnings.length > 0 ||
+      selectedEditor.warnings.length > 0 ||
+      selectedGuarded.report.decision === "REPAIRED_PASS" ||
+      !selectedQuality.passed
       ? "PARTIALLY_IMPROVED"
       : "IMPROVED";
     const run = await recordResumeImprovementRun(client, user.userId, {
       sourceReceiptId: receipt.id,
       semanticDocumentJson: jsonRecord(semantic.document),
-      editorProvenanceJson: jsonRecord(editor.provenance),
-      generatedDocumentJson: jsonRecord(guarded.document),
-      guardianReportJson: jsonRecord(guarded.report),
+      editorProvenanceJson: jsonRecord(selectedEditor.provenance),
+      generatedDocumentJson: jsonRecord(selectedGuarded.document),
+      guardianReportJson: jsonRecord(selectedGuarded.report),
       status,
       targetTextHash: targetHash(targetText),
     });
     const artifact = renderResumeImprovementRunArtifact(run);
-    const finalPass = guarded.report.passes.at(-1);
+    const finalPass = selectedGuarded.report.passes.at(-1);
     const unsupportedNewClaims = finalPass?.findings.filter((finding) => finding.classification === "UNSUPPORTED_NEW_CLAIM" || finding.classification === "POSSIBLE_NEW_CLAIM").length ?? 0;
     const changes = [
-      guarded.document.summary ? "Professional summary reviewed" : null,
-      guarded.document.experience.length > 0 ? "Experience wording and structure reviewed" : null,
-      guarded.report.decision === "REPAIRED_PASS" ? "Wording that was not fully supported was restored to match the uploaded resume" : "Candidate facts checked against the uploaded resume",
-      "ATS-safe single-column output rendered",
+      selectedGuarded.document.summary ? (selectedQuality.summaryPositioningPreserved ? "Professional positioning preserved while the summary was reviewed" : "Professional summary conservatively preserved from the uploaded resume") : null,
+      selectedGuarded.document.experience.length > 0 ? (selectedQuality.materialImprovementPresent ? "Experience wording materially revised without changing career facts" : "Experience kept conservative because a stronger rewrite could not be safely qualified") : null,
+      selectedGuarded.report.decision === "REPAIRED_PASS" ? "Wording that was not fully supported was restored to match the uploaded resume" : "Candidate facts checked against the uploaded resume",
+      artifact.layout.sparseTrailingPage ? "ATS-safe single-column output rendered; pagination still requires review" : "ATS-safe single-column output rendered without a sparse trailing page",
     ].filter((value): value is string => value !== null);
 
     return NextResponse.json({
@@ -173,6 +205,8 @@ export async function POST(request: Request) {
       sourceReceiptId: receipt.id,
       unsupportedNewClaims,
       changes,
+      quality: selectedQuality,
+      layout: artifact.layout,
       review: {
         originalText: receipt.proposals.map((proposal) => proposal.canonicalText).join("\n"),
         improvedText: artifact.text,

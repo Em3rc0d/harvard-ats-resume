@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
+import { CandidateResumeDocumentSchema } from "../../domain/resume/CandidateResumeDocument";
 import { FactGuardianReportSchema } from "../../domain/resume/FactGuardian";
+import { GeneratedResumeDocumentSchema } from "../../domain/resume/GeneratedResumeDocument";
 import {
   REAL_CV_QUALITY_RECEIPT_VERSION,
   RealCvQualityReceiptSchema,
@@ -9,6 +11,7 @@ import {
 } from "../../domain/resume/ResumeQualityAcceptance";
 import { ResumeImprovementRunSchema, type ResumeImprovementRun } from "../../domain/resume/ResumeImprovementRun";
 import type { ResumeImprovementArtifactBundle } from "./ResumeImprovementArtifactAdapter";
+import { assessResumeOutputQuality } from "./ResumeOutputQualityService";
 
 export type RealCvQualityHumanAssessment = Readonly<{
   semanticEntitiesMateriallyCorrect: boolean;
@@ -50,6 +53,7 @@ function provenancePresent(bundle: ResumeImprovementArtifactBundle, run: ResumeI
     const parsed = JSON.parse(bundle.provenanceJson) as {
       artifact?: { manifest?: { runId?: string; sourceDocumentSha256?: string; generatedDocumentSha256?: string; guardianReportSha256?: string } };
       fileHashes?: { docxSha256?: string; pdfSha256?: string; textSha256?: string };
+      layout?: { sparseTrailingPage?: boolean };
     };
     return parsed.artifact?.manifest?.runId === run.id &&
       parsed.artifact?.manifest?.sourceDocumentSha256 === run.sourceSha256 &&
@@ -57,7 +61,8 @@ function provenancePresent(bundle: ResumeImprovementArtifactBundle, run: ResumeI
       parsed.artifact?.manifest?.guardianReportSha256 === run.guardianReportSha256 &&
       typeof parsed.fileHashes?.docxSha256 === "string" &&
       typeof parsed.fileHashes?.pdfSha256 === "string" &&
-      typeof parsed.fileHashes?.textSha256 === "string";
+      typeof parsed.fileHashes?.textSha256 === "string" &&
+      parsed.layout?.sparseTrailingPage === bundle.layout.sparseTrailingPage;
   } catch {
     return false;
   }
@@ -69,6 +74,11 @@ export function buildRealCvQualityReceipt(
   assessment: RealCvQualityHumanAssessment,
 ): RealCvQualityReceipt {
   const run = ResumeImprovementRunSchema.parse(inputRun);
+  if (!run.semanticDocumentJson || !run.generatedDocumentJson) throw new Error("V12_QUALITY_RUN_INCOMPLETE");
+  const source = CandidateResumeDocumentSchema.parse(run.semanticDocumentJson);
+  const generated = GeneratedResumeDocumentSchema.parse(run.generatedDocumentJson);
+  const outputQuality = assessResumeOutputQuality(source, generated);
+
   const hardGates = {
     sourceParsedSuccessfully: run.status !== "FAILED_SOURCE_UNREADABLE",
     semanticEntitiesMateriallyCorrect: assessment.semanticEntitiesMateriallyCorrect,
@@ -79,6 +89,10 @@ export function buildRealCvQualityReceipt(
     docxValid: isDocx(bundle.docx),
     pdfValid: isPdf(bundle.pdf),
     sourceToOutputProvenancePresent: provenancePresent(bundle, run),
+    localeConsistent: outputQuality.localeConsistent,
+    materialImprovementPresent: outputQuality.materialImprovementPresent,
+    summaryPositioningPreserved: outputQuality.summaryPositioningPreserved,
+    noSparseTrailingPage: !bundle.layout.sparseTrailingPage,
   } as const;
 
   const partial = {
@@ -92,7 +106,12 @@ export function buildRealCvQualityReceipt(
     hardGates,
     scores: assessment.scores,
     evaluatedAt: assessment.evaluatedAt,
-    notes: [...(assessment.notes ?? [])],
+    notes: [
+      ...(assessment.notes ?? []),
+      `materialChangeRatio=${outputQuality.materialChangeRatio.toFixed(3)}`,
+      `layoutPages=${bundle.layout.pageCount}`,
+      `trailingPageFillRatio=${bundle.layout.trailingPageFillRatio.toFixed(3)}`,
+    ],
   };
 
   return RealCvQualityReceiptSchema.parse({

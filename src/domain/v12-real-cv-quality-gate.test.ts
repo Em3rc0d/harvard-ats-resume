@@ -7,7 +7,7 @@ import {
 } from "./resume/ResumeQualityAcceptance";
 
 const baseReceipt: RealCvQualityReceipt = {
-  schemaVersion: "v12-real-cv-quality-receipt-v1",
+  schemaVersion: "v12-real-cv-quality-receipt-v2",
   sourceSha256: "a".repeat(64),
   runId: "12000000-0000-4000-8000-000000000901",
   generatedDocumentSha256: "b".repeat(64),
@@ -24,6 +24,10 @@ const baseReceipt: RealCvQualityReceipt = {
     docxValid: true,
     pdfValid: true,
     sourceToOutputProvenancePresent: true,
+    localeConsistent: true,
+    materialImprovementPresent: true,
+    summaryPositioningPreserved: true,
+    noSparseTrailingPage: true,
   },
   scores: {
     factualFidelity: 5,
@@ -41,7 +45,7 @@ const baseReceipt: RealCvQualityReceipt = {
 };
 
 describe("v1.2 real-CV quality gate", () => {
-  it("accepts only when every factual hard gate and every rubric threshold passes", () => {
+  it("accepts only when every factual, presentation and material-improvement gate passes", () => {
     expect(realCvQualityAccepted(baseReceipt)).toBe(true);
     expect(RealCvQualityReceiptSchema.safeParse(baseReceipt).success).toBe(true);
   });
@@ -56,7 +60,22 @@ describe("v1.2 real-CV quality gate", () => {
     expect(RealCvQualityReceiptSchema.safeParse(receipt).success).toBe(true);
   });
 
-  it("blocks release when the output is factual but not materially better", () => {
+  it.each([
+    "localeConsistent",
+    "materialImprovementPresent",
+    "summaryPositioningPreserved",
+    "noSparseTrailingPage",
+  ] as const)("blocks release when %s fails", (gate) => {
+    const receipt = {
+      ...baseReceipt,
+      hardGates: { ...baseReceipt.hardGates, [gate]: false },
+      accepted: false,
+    };
+    expect(realCvQualityAccepted(receipt)).toBe(false);
+    expect(RealCvQualityReceiptSchema.safeParse(receipt).success).toBe(true);
+  });
+
+  it("blocks release when the output is factual but not professionally strong enough", () => {
     const receipt = {
       ...baseReceipt,
       scores: { ...baseReceipt.scores, clarity: 3 },

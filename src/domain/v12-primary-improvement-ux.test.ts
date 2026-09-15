@@ -45,7 +45,7 @@ describe("v1.2 primary Improve Resume UX", () => {
     expect(primary).toContain("We couldn’t finish your resume safely. Please try again.");
   });
 
-  it("executes the one-shot server path through source, semantics, editor, Guardian, persistence and artifact rendering", () => {
+  it("executes source, semantics, quality-aware editor selection, Guardian, persistence and artifact rendering", () => {
     const route = read("src/app/api/resume-improvements/route.ts");
     const sequence = [
       "recordResumeImport",
@@ -64,7 +64,10 @@ describe("v1.2 primary Improve Resume UX", () => {
     expect(route).toContain("requireAuthenticatedSupabaseContext");
     expect(route).toContain("x-cvengine-byok-key");
     expect(route).toContain("targetTextHash: targetHash(targetText)");
-    expect(route).toContain('guarded.report.decision === "REPAIRED_PASS"');
+    expect(route).toContain('selectedGuarded.report.decision === "REPAIRED_PASS"');
+    expect(route).toContain("assessResumeOutputQuality");
+    expect(route).toContain("preserveCriticalSourcePresentation");
+    expect(route).toContain("resumeOutputQualityRank");
   });
 
   it("serves all four deterministic artifact surfaces from the durable run", () => {
