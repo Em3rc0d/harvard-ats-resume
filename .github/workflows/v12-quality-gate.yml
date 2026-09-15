@@ -20,7 +20,6 @@ jobs:
         run: |
           python tests/b9/simple-primary-ux-navigation-patch.py
           python tests/v12/email-confirmation-state-patch.py
-          python tests/v12/quality-receipt-v2-patch.py
           python -m py_compile tests/b9/production-browser-e2e.py tests/v12/production-improve-resume-cert.py
           git diff --check
       - name: Node 22
@@ -38,6 +37,7 @@ jobs:
           src/domain/same-origin-auth-contracts.test.ts
           src/domain/v12-real-cv-quality-gate.test.ts
           src/domain/v12-real-cv-output-quality.test.ts
+          src/domain/v12-professional-resume-format.test.ts
           src/domain/v12-fact-guardian.test.ts
           src/domain/v12-primary-improvement-ux.test.ts
           src/domain/v12-improvement-artifact.test.ts
