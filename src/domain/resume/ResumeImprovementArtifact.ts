@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { B9_RENDERER_CONTRACT_VERSION } from "./ResumeArtifact";
 
 export const RESUME_IMPROVEMENT_ARTIFACT_VERSION = "v12-resume-improvement-artifact-v1" as const;
+export const V12_IMPROVEMENT_RENDERER_CONTRACT_VERSION = "v12-professional-single-column-v1" as const;
 const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 const UUIDSchema = z.string().uuid();
 
@@ -25,7 +25,7 @@ export const ResumeImprovementArtifactManifestSchema = z.object({
   generatedDocumentSha256: Sha256Schema,
   editorProvenance: ResumeImprovementEditorProvenanceSchema.nullable(),
   guardianReportSha256: Sha256Schema,
-  rendererContractVersion: z.literal(B9_RENDERER_CONTRACT_VERSION),
+  rendererContractVersion: z.literal(V12_IMPROVEMENT_RENDERER_CONTRACT_VERSION),
   renderedSemanticTextSha256: Sha256Schema,
   replayIdentitySha256: Sha256Schema,
 }).strict().superRefine((manifest, context) => {

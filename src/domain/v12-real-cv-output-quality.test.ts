@@ -128,8 +128,8 @@ describe("v1.2 real-CV output quality", () => {
     expect(headings).not.toContain("Experience");
   });
 
-  it("flags a mostly-empty trailing PDF page before release", () => {
-    const lines = Array.from({ length: 50 }, (_, index) => ({ kind: "BODY" as const, text: `Line ${index + 1}` }));
+  it("flags a mostly-empty trailing professional-layout PDF page before release", () => {
+    const lines = Array.from({ length: 60 }, (_, index) => ({ kind: "BODY" as const, text: `Line ${index + 1}` }));
     const layout = diagnoseImprovementLayout(lines);
     expect(layout.pageCount).toBe(2);
     expect(layout.sparseTrailingPage).toBe(true);
