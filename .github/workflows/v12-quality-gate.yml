@@ -20,6 +20,7 @@ jobs:
         run: |
           python tests/b9/simple-primary-ux-navigation-patch.py
           python tests/v12/email-confirmation-state-patch.py
+          python tests/v12/quality-receipt-v2-patch.py
           python -m py_compile tests/b9/production-browser-e2e.py tests/v12/production-improve-resume-cert.py
           git diff --check
       - name: Node 22
