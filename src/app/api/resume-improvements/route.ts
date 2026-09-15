@@ -11,6 +11,7 @@ import { improveResumeHolistically } from "../../../application/resume/HolisticR
 import { guardAndRepairResume } from "../../../application/resume/FactGuardianService";
 import { listResumeImprovementRuns, loadResumeImprovementRun, recordResumeImprovementRun } from "../../../application/resume/ResumeImprovementRunRepository";
 import { renderResumeImprovementRunArtifact } from "../../../application/resume/ResumeImprovementArtifactAdapter";
+import { resumeDownloadBaseName } from "../../../application/resume/ResumeDownloadFilename";
 import {
   assessResumeOutputQuality,
   preserveCriticalSourcePresentation,
@@ -234,12 +235,13 @@ export async function GET(request: Request) {
     }
     const run = await loadResumeImprovementRun(client, user.userId, runId);
     const bundle = renderResumeImprovementRunArtifact(run);
+    const downloadBaseName = resumeDownloadBaseName(run.generatedDocumentJson);
     const format = url.searchParams.get("format") ?? "text";
-    if (format === "docx") return new Response(Buffer.from(bundle.docx), { headers: { "Content-Type": DOCX_MIME, "Content-Disposition": `attachment; filename="cvengine-${run.id}.docx"`, "Cache-Control": "private, no-store" } });
-    if (format === "pdf") return new Response(Buffer.from(bundle.pdf), { headers: { "Content-Type": PDF_MIME, "Content-Disposition": `attachment; filename="cvengine-${run.id}.pdf"`, "Cache-Control": "private, no-store" } });
-    if (format === "json") return new Response(bundle.provenanceJson, { headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="cvengine-${run.id}-provenance.json"`, "Cache-Control": "private, no-store" } });
+    if (format === "docx") return new Response(Buffer.from(bundle.docx), { headers: { "Content-Type": DOCX_MIME, "Content-Disposition": `attachment; filename="${downloadBaseName}.docx"`, "Cache-Control": "private, no-store" } });
+    if (format === "pdf") return new Response(Buffer.from(bundle.pdf), { headers: { "Content-Type": PDF_MIME, "Content-Disposition": `attachment; filename="${downloadBaseName}.pdf"`, "Cache-Control": "private, no-store" } });
+    if (format === "json") return new Response(bundle.provenanceJson, { headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${downloadBaseName}_provenance.json"`, "Cache-Control": "private, no-store" } });
     if (format !== "text") return NextResponse.json({ error: "UNSUPPORTED_ARTIFACT_FORMAT" }, { status: 400 });
-    return new Response(bundle.text, { headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": `attachment; filename="cvengine-${run.id}.txt"`, "Cache-Control": "private, no-store" } });
+    return new Response(bundle.text, { headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": `attachment; filename="${downloadBaseName}.txt"`, "Cache-Control": "private, no-store" } });
   } catch (error) {
     return errorResponse(error);
   }
