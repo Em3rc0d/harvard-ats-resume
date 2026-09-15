@@ -103,6 +103,13 @@ describe("v1.2 real-CV quality gate", () => {
     expect(RealCvQualityReceiptSchema.safeParse(leaking).success).toBe(false);
   });
 
+  it("normalizes presentation-only line wraps before independently certifying summary positioning", () => {
+    const patch = readFileSync("tests/v12/quality-receipt-v2-patch.py", "utf8");
+    expect(patch).toContain('summary = re.sub(r"\\\\s+", " ", summary_section(artifact_text).lower()).strip()');
+    expect(patch).toContain('"inteligencia artificial" in summary');
+    expect(patch).toContain('quality_payload.get("summaryPositioningPreserved") is True');
+  });
+
   it("gives real-CV Fact Guardian a bounded production window without weakening fail-closed semantics", () => {
     const route = readFileSync("src/app/api/resume-improvements/route.ts", "utf8");
     expect(route).toContain('export const maxDuration = 180');
