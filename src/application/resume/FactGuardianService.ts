@@ -36,21 +36,35 @@ import {
 import { assertProviderEconomicsWithinPolicy } from "../ai/AIProviderEconomics";
 
 const GeneratedPathSchema = z.string().trim().min(1).max(300);
-const RawFindingSchema = z.object({
+
+/**
+ * The provider is only responsible for semantic classification. Paths and
+ * provenance are authoritative server-side data, so provider-owned coverage
+ * arrays must never be required for a valid Guardian response.
+ *
+ * The optional fields make the runtime tolerant to an otherwise useful
+ * partially-structured response. Missing/invalid coverage is still fail-closed:
+ * normalizeGuardianEnvelope turns every unclassified generated path into
+ * POSSIBLE_NEW_CLAIM, which requires exact-source repair and a second pass.
+ */
+const ProviderGuardianFindingSchema = z.object({
+  generatedPath: GeneratedPathSchema.nullable().optional(),
+  classification: FactGuardianClassificationSchema.optional(),
+  reasonCode: FactGuardianReasonCodeSchema.optional(),
+}).passthrough();
+const ProviderGuardianEnvelopeSchema = z.object({
+  findings: z.array(ProviderGuardianFindingSchema).max(600),
+}).passthrough();
+type ProviderGuardianEnvelope = z.infer<typeof ProviderGuardianEnvelopeSchema>;
+
+const NormalizedFindingSchema = z.object({
   generatedPath: GeneratedPathSchema.nullable(),
   classification: FactGuardianClassificationSchema,
   sourceOrdinals: z.array(z.number().int().min(1).max(100)).max(100),
   reasonCode: FactGuardianReasonCodeSchema,
 }).strict();
-const RawGuardianEnvelopeSchema = z.object({
-  reviewedPaths: z.array(GeneratedPathSchema).max(500),
-  reviewedSourceOrdinals: z.array(z.number().int().min(1).max(100)).max(100),
-  findings: z.array(RawFindingSchema).max(600),
-}).strict();
-type RawGuardianEnvelope = z.infer<typeof RawGuardianEnvelopeSchema>;
+type NormalizedFinding = z.infer<typeof NormalizedFindingSchema>;
 
-const stringArray = { type: "array", items: { type: "string" } } as const;
-const integerArray = { type: "array", items: { type: "integer" } } as const;
 function objectSchema(properties: Record<string, unknown>) {
   return {
     type: "object",
@@ -59,15 +73,18 @@ function objectSchema(properties: Record<string, unknown>) {
     required: Object.keys(properties),
   };
 }
+
+/**
+ * Keep the model contract deliberately small. Gemini only needs to return the
+ * semantic judgment. CV Engine derives path coverage, source coverage and
+ * source ordinals itself after the model responds.
+ */
 const findingSchema = objectSchema({
   generatedPath: { type: ["string", "null"] },
   classification: { type: "string", enum: FactGuardianClassificationSchema.options },
-  sourceOrdinals: integerArray,
   reasonCode: { type: "string", enum: FactGuardianReasonCodeSchema.options },
 });
 export const RESUME_FACT_GUARD_SCHEMA: Readonly<Record<string, unknown>> = objectSchema({
-  reviewedPaths: stringArray,
-  reviewedSourceOrdinals: integerArray,
   findings: { type: "array", items: findingSchema },
 });
 
@@ -97,7 +114,7 @@ type SourceFact = Readonly<{
 type NormalizedGuardianEnvelope = Readonly<{
   reviewedPaths: readonly string[];
   reviewedSourceOrdinals: readonly number[];
-  findings: readonly z.infer<typeof RawFindingSchema>[];
+  findings: readonly NormalizedFinding[];
 }>;
 
 type GuardianPassOutcome =
@@ -295,18 +312,28 @@ function buildGuardianPrompt(source: CandidateResumeDocument, draft: GeneratedRe
     "Audit every generated factual text unit against the candidate-authoritative source facts.",
     "Classify meaning preservation, not writing style. Candidate assertions do not require external verification.",
     "Job requirements are never candidate facts. Unsupported additions, stronger metrics, changed dates/roles/skills, or contradictions are unsafe.",
-    "Return one non-omission finding for each generated path you can audit. CV Engine derives final path/source coverage server-side; never invent paths or source ordinals.",
+    "Return exactly one finding for each generated path you can audit. Return only generatedPath, classification, and reasonCode. CV Engine derives coverage and provenance server-side; do not echo source ordinals or reviewed-path arrays.",
     "SOURCE FACTS:",
     JSON.stringify(sourceFacts),
     "GENERATED UNITS:",
     JSON.stringify(generatedUnits),
-    "EXPECTED OMITTED SOURCE ORDINALS (server-derived):",
-    JSON.stringify(actualOmittedOrdinals(source, draft)),
   ].join("\n\n");
 }
 
 function guardianShapeValidator(value: unknown) {
-  RawGuardianEnvelopeSchema.parse(value);
+  ProviderGuardianEnvelopeSchema.parse(value);
+}
+
+function defaultReasonCode(
+  classification: z.infer<typeof FactGuardianClassificationSchema>,
+): z.infer<typeof FactGuardianReasonCodeSchema> {
+  if (classification === "SOURCE_PRESERVED") return "EXACT_SOURCE_MEANING";
+  if (classification === "SAFE_REPHRASE") return "SUPPORTED_REPHRASE";
+  if (classification === "SAFE_RESTRUCTURE") return "SUPPORTED_RESTRUCTURE";
+  if (classification === "SOURCE_OMISSION") return "SOURCE_NOT_RENDERED";
+  if (classification === "UNSUPPORTED_NEW_CLAIM") return "FACT_NOT_IN_SOURCE";
+  if (classification === "SOURCE_CONFLICT") return "CONTRADICTS_SOURCE";
+  return "SUPPORT_AMBIGUOUS";
 }
 
 /**
@@ -318,7 +345,7 @@ function guardianShapeValidator(value: unknown) {
 function normalizeGuardianEnvelope(
   source: CandidateResumeDocument,
   draft: GeneratedResumeDocument,
-  raw: RawGuardianEnvelope,
+  raw: ProviderGuardianEnvelope,
 ): NormalizedGuardianEnvelope {
   const units = collectGeneratedUnits(draft);
   const unitsByPath = new Map(units.map((item) => [item.path, item.unit] as const));
@@ -326,20 +353,20 @@ function normalizeGuardianEnvelope(
   const expectedSourceOrdinals = sortedUniqueNumbers(
     source.provenanceIndex.map((ref) => ref.ordinal),
   );
-  const byPath = new Map<string, z.infer<typeof RawFindingSchema>>();
+  const byPath = new Map<string, NormalizedFinding>();
 
   for (const finding of raw.findings) {
-    if (finding.classification === "SOURCE_OMISSION") continue;
+    if (!finding.classification || finding.classification === "SOURCE_OMISSION") continue;
     const path = finding.generatedPath;
     if (!path) continue;
     const unit = unitsByPath.get(path);
     if (!unit) continue;
 
-    const normalized: z.infer<typeof RawFindingSchema> = {
+    const normalized: NormalizedFinding = {
       generatedPath: path,
       classification: finding.classification,
       sourceOrdinals: sortedUniqueNumbers(unit.sourceRefs.map((ref) => ref.ordinal)),
-      reasonCode: finding.reasonCode,
+      reasonCode: finding.reasonCode ?? defaultReasonCode(finding.classification),
     };
     const previous = byPath.get(path);
     if (!previous || CLASSIFICATION_RISK[normalized.classification] > CLASSIFICATION_RISK[previous.classification]) {
@@ -422,7 +449,7 @@ async function runGuardianPass(
 
   let normalized: NormalizedGuardianEnvelope;
   try {
-    const raw = RawGuardianEnvelopeSchema.parse(JSON.parse(outcome.proposal.text));
+    const raw = ProviderGuardianEnvelopeSchema.parse(JSON.parse(outcome.proposal.text));
     normalized = normalizeGuardianEnvelope(source, draft, raw);
   } catch {
     return {
