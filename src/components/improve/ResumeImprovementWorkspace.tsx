@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { runBrowserLocalAITask, type BrowserLocalAITask } from "../../application/ai/BrowserLocalModelClient";
 import { useAIAccessSession } from "../providers/AIAccessSessionProvider";
 import styles from "./ResumeImprovementWorkspace.module.css";
 
@@ -42,6 +43,7 @@ export function ResumeImprovementWorkspace() {
   const [result, setResult] = useState<ImprovementResult | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
+  const [localProgress, setLocalProgress] = useState<string | null>(null);
   const { mode, readByokCredential } = useAIAccessSession();
 
   async function improve() {
@@ -51,10 +53,8 @@ export function ResumeImprovementWorkspace() {
     setResult(null);
     setReviewOpen(false);
     setAuditOpen(false);
+    setLocalProgress(null);
     try {
-      const form = new FormData();
-      form.set("file", file);
-      if (targetText.trim()) form.set("targetText", targetText.trim());
       const headers: Record<string, string> = {};
       if (mode?.startsWith("BYOK_")) {
         const credential = readByokCredential();
@@ -64,17 +64,44 @@ export function ResumeImprovementWorkspace() {
         }
         headers["x-cvengine-byok-key"] = credential;
       }
-      const response = await fetch("/api/resume-improvements", { method: "POST", body: form, headers });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) {
-        setError(friendlyError(body?.error));
+
+      let receiptId: string | null = null;
+      const localResponses: Record<string, string> = {};
+      for (let round = 0; round < 12; round += 1) {
+        const form = new FormData();
+        if (receiptId) form.set("receiptId", receiptId);
+        else form.set("file", file);
+        if (targetText.trim()) form.set("targetText", targetText.trim());
+        if (mode === "LOCAL_BROWSER") form.set("localResponses", JSON.stringify(localResponses));
+
+        const response = await fetch("/api/resume-improvements", { method: "POST", body: form, headers });
+        const body = await response.json().catch(() => null);
+
+        if (mode === "LOCAL_BROWSER" && response.status === 428 && body?.error === "LOCAL_AI_TASK_REQUIRED") {
+          if (typeof body.receiptId === "string") receiptId = body.receiptId;
+          const task = body.task as BrowserLocalAITask | undefined;
+          if (!task?.id) throw new Error("LOCAL_AI_TASK_INVALID");
+          const localText = await runBrowserLocalAITask(task, setLocalProgress);
+          localResponses[task.id] = localText;
+          continue;
+        }
+
+        if (!response.ok) {
+          setError(friendlyError(body?.error));
+          return;
+        }
+        setResult(body as ImprovementResult);
+        setLocalProgress(null);
         return;
       }
-      setResult(body as ImprovementResult);
-    } catch {
-      setError("We couldn’t finish your resume safely. Please try again.");
+      setError("Local AI exceeded the safe task limit for one resume.");
+    } catch (error) {
+      setError(mode === "LOCAL_BROWSER"
+        ? `Local AI could not finish safely: ${error instanceof Error ? error.message : "unknown error"}`
+        : "We couldn’t finish your resume safely. Please try again.");
     } finally {
       setBusy(false);
+      setLocalProgress(null);
     }
   }
 
@@ -147,7 +174,7 @@ export function ResumeImprovementWorkspace() {
       </div>
 
       <button className="primary" type="button" disabled={!file || busy} onClick={() => void improve()}>{busy ? "Improving your resume…" : "Improve my resume"}</button>
-      {busy ? <p className="status" role="status">Improving your resume and checking every fact…</p> : null}
+      {busy ? <p className="status" role="status">{localProgress ?? (mode === "LOCAL_BROWSER" ? "Preparing local AI…" : "Improving your resume and checking every fact…")}</p> : null}
       {error ? <p className="status error" role="alert">{error}</p> : null}
       <p className="fine-print">CV Engine can improve wording and structure, but it does not invent employers, skills, dates, metrics, responsibilities, or achievements.</p>
     </section>

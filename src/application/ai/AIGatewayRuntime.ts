@@ -38,7 +38,7 @@ export const AIExecutionFailureCodeSchema = z.enum([
 export type AIExecutionFailureCode = z.infer<typeof AIExecutionFailureCodeSchema>;
 
 export const AIProviderAttemptReceiptSchema = z.object({
-  provider: z.enum(["GEMINI", "OLLAMA"]),
+  provider: z.enum(["GEMINI", "OPENAI", "ANTHROPIC", "BROWSER_LOCAL", "OLLAMA"]),
   model: z.string().min(1).max(200),
   attempt: z.number().int().positive(),
   credentialMode: z.enum(["PLATFORM", "BYOK", "LOCAL_ONLY"]),
@@ -102,7 +102,33 @@ export type AIGatewayRuntimeConfig = Readonly<{
   logger?: SafeAILogger;
   now?: () => number;
   budgetOverrides?: Partial<Record<AICapabilityName, AIExecutionBudget>>;
+  browserLocalExecution?: {
+    model: string;
+    responses: Readonly<Record<string, string>>;
+    state: { nextIndex: number };
+  };
 }>;
+
+export type BrowserLocalAITask = Readonly<{
+  id: string;
+  sequence: number;
+  capability: AICapabilityName;
+  model: string;
+  prompt: string;
+  systemInstruction: string | null;
+  responseJsonSchema: Record<string, unknown> | null;
+  maxOutputTokens: number;
+}>;
+
+export class BrowserLocalExecutionRequired extends Error {
+  readonly task: BrowserLocalAITask;
+
+  constructor(task: BrowserLocalAITask) {
+    super("BROWSER_LOCAL_EXECUTION_REQUIRED");
+    this.name = "BrowserLocalExecutionRequired";
+    this.task = task;
+  }
+}
 
 export type StructuredOutputValidator = (value: unknown) => void;
 
@@ -522,6 +548,84 @@ export async function executeAICapability(
       failureCode: "INPUT_BUDGET_EXCEEDED",
       attempts,
       durationMs: Math.max(0, now() - startedAt),
+    };
+  }
+
+  if (config.browserLocalExecution) {
+    const sequence = config.browserLocalExecution.state.nextIndex++;
+    const taskId = outputHash(JSON.stringify({
+      version: "cvengine-browser-local-task-v1",
+      sequence,
+      capability: input.capability,
+      prompt: input.prompt,
+      systemInstruction: input.systemInstruction,
+      responseJsonSchema: input.responseJsonSchema,
+    }));
+    const responseText = config.browserLocalExecution.responses[taskId];
+    if (typeof responseText !== "string" || responseText.trim().length === 0) {
+      throw new BrowserLocalExecutionRequired({
+        id: taskId,
+        sequence,
+        capability: input.capability,
+        model: config.browserLocalExecution.model,
+        prompt: input.prompt,
+        systemInstruction: input.systemInstruction,
+        responseJsonSchema: input.responseJsonSchema,
+        maxOutputTokens: budget.maxOutputTokens,
+      });
+    }
+
+    const normalizedText = responseText.trim();
+    if (input.responseJsonSchema) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(normalizedText);
+      } catch {
+        throw new StructuredOutputValidationFailure();
+      }
+      if (structuredOutputValidator) {
+        try {
+          structuredOutputValidator(parsed);
+        } catch {
+          throw new StructuredOutputValidationFailure();
+        }
+      }
+    }
+
+    const proposal = AIProposalSchema.parse({ text: normalizedText });
+    const durationMs = Math.max(0, now() - startedAt);
+    const receipt: AIProviderAttemptReceipt = {
+      provider: "BROWSER_LOCAL",
+      model: config.browserLocalExecution.model,
+      attempt: 1,
+      credentialMode: "LOCAL_ONLY",
+      status: "SUCCESS",
+      failureCode: null,
+      durationMs,
+      inputTokens: null,
+      outputTokens: null,
+    };
+    logger({ requestId, capability: input.capability, provider: "BROWSER_LOCAL", model: config.browserLocalExecution.model, attempt: 1, status: "SUCCESS", failureCode: null, durationMs });
+    return {
+      ok: true,
+      requestId,
+      capability: input.capability,
+      proposal,
+      resultSha256: outputHash(proposal.text),
+      provenance: {
+        provider: "browser-local",
+        model: config.browserLocalExecution.model,
+        capability: input.capability,
+        contractVersion: B6_RUNTIME_CONTRACT_VERSION,
+        attempt: 1,
+        fallbackUsed: false,
+        credentialMode: "LOCAL_ONLY",
+        requestId,
+      },
+      attempts: [receipt],
+      durationMs,
+      inputTokens: null,
+      outputTokens: null,
     };
   }
 

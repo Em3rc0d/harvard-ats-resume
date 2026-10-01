@@ -16,7 +16,7 @@ export const AICapabilityNameSchema = z.enum([
 
 export type AICapabilityName = z.infer<typeof AICapabilityNameSchema>;
 
-export const AIProviderSchema = z.enum(["GEMINI", "OPENAI", "ANTHROPIC", "OLLAMA"]);
+export const AIProviderSchema = z.enum(["GEMINI", "OPENAI", "ANTHROPIC", "BROWSER_LOCAL", "OLLAMA"]);
 export type AIProvider = z.infer<typeof AIProviderSchema>;
 
 export type ModelRoute = Readonly<{
@@ -78,7 +78,7 @@ export type AIProviderAttemptPlan = Readonly<{
 }>;
 
 export type AIExecutionProvenance = Readonly<{
-  provider: "gemini" | "openai" | "anthropic" | "ollama";
+  provider: "gemini" | "openai" | "anthropic" | "browser-local" | "ollama";
   model: string;
   capability: AICapabilityName;
   contractVersion: string;
