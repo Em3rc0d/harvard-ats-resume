@@ -91,7 +91,11 @@ export type SafeAILogger = (event: SafeAIEvent) => void;
 export type AIGatewayRuntimeConfig = Readonly<{
   platformGeminiKey: string | null;
   byokGeminiKey: string | null;
+  byokProvider?: "GEMINI" | "OPENAI" | "ANTHROPIC";
+  byokCredential?: string | null;
   geminiBaseUrl: string;
+  openaiBaseUrl?: string;
+  anthropicBaseUrl?: string;
   ollamaBaseUrl: string;
   ollamaApiKey: string | null;
   fetchImpl?: typeof fetch;
@@ -261,10 +265,12 @@ function credentialLabel(plan: AIProviderAttemptPlan): "PLATFORM" | "BYOK" | "LO
   return plan.credentialMode === "PLATFORM_KEY" ? "PLATFORM" : "BYOK";
 }
 
-function credentialForGemini(plan: AIProviderAttemptPlan, config: AIGatewayRuntimeConfig): string | null {
-  if (plan.provider !== "GEMINI") return null;
-  if (plan.credentialMode === "PLATFORM_KEY") return config.platformGeminiKey;
-  if (plan.credentialMode === "BYOK_REQUEST_SCOPED") return config.byokGeminiKey;
+function credentialForPlan(plan: AIProviderAttemptPlan, config: AIGatewayRuntimeConfig): string | null {
+  if (plan.provider === "OLLAMA") return config.ollamaApiKey;
+  if (plan.credentialMode === "PLATFORM_KEY") return plan.provider === "GEMINI" ? config.platformGeminiKey : null;
+  if (plan.credentialMode !== "BYOK_REQUEST_SCOPED") return null;
+  if (config.byokCredential) return config.byokCredential;
+  if (plan.provider === "GEMINI") return config.byokGeminiKey;
   return null;
 }
 
@@ -294,11 +300,11 @@ function normalizeResponseJsonSchema(value: AIExecutionInput["responseJsonSchema
   return record;
 }
 
-function attemptPlanForBudget(capability: AICapabilityName, credentialMode: CredentialMode, budget: AIExecutionBudget) {
+function attemptPlanForBudget(capability: AICapabilityName, credentialMode: CredentialMode, budget: AIExecutionBudget, byokProvider: "GEMINI" | "OPENAI" | "ANTHROPIC" = "GEMINI") {
   let gemini = 0;
   let ollama = 0;
-  return buildProviderAttemptPlan(capability, credentialMode).filter((attempt) => {
-    if (attempt.provider === "GEMINI") {
+  return buildProviderAttemptPlan(capability, credentialMode, byokProvider).filter((attempt) => {
+    if (attempt.provider !== "OLLAMA") {
       gemini += 1;
       return gemini <= budget.maxGeminiAttempts;
     }
@@ -315,7 +321,7 @@ async function executeGemini(
   budget: AIExecutionBudget,
   signal: AbortSignal,
 ): Promise<ProviderExecutionResult> {
-  const apiKey = credentialForGemini(plan, config);
+  const apiKey = credentialForPlan(plan, config);
   if (!apiKey) throw new Error("CREDENTIAL_UNAVAILABLE");
 
   const generationConfig: Record<string, unknown> = { maxOutputTokens: budget.maxOutputTokens };
@@ -359,6 +365,83 @@ async function executeGemini(
     inputTokens: safeInteger(usage?.promptTokenCount),
     outputTokens: safeInteger(usage?.candidatesTokenCount),
   };
+}
+
+async function executeOpenAI(
+  fetchImpl: typeof fetch,
+  config: AIGatewayRuntimeConfig,
+  plan: AIProviderAttemptPlan,
+  input: NormalizedAIExecutionInput,
+  budget: AIExecutionBudget,
+  signal: AbortSignal,
+): Promise<ProviderExecutionResult> {
+  const apiKey = credentialForPlan(plan, config);
+  if (!apiKey) throw new Error("CREDENTIAL_UNAVAILABLE");
+  const body: Record<string, unknown> = {
+    model: plan.model,
+    input: input.prompt,
+    max_output_tokens: budget.maxOutputTokens,
+  };
+  if (input.systemInstruction) body.instructions = input.systemInstruction;
+  if (input.responseJsonSchema) {
+    body.text = { format: { type: "json_schema", name: "cvengine_response", strict: true, schema: input.responseJsonSchema } };
+  }
+  const response = await fetchImpl(`${normalizeBaseUrl(config.openaiBaseUrl ?? "https://api.openai.com")}/v1/responses`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+    signal,
+    cache: "no-store",
+  });
+  if (!response.ok) throw new ProviderHttpFailure("OPENAI", response.status);
+  const payload = asRecord(await response.json().catch(() => null));
+  const output = Array.isArray(payload?.output) ? payload.output : [];
+  const text = output.flatMap((item) => {
+    const content = asRecord(item);
+    return Array.isArray(content?.content) ? content.content : [];
+  }).map((part) => {
+    const record = asRecord(part);
+    return record?.type === "output_text" && typeof record.text === "string" ? record.text : "";
+  }).join("").trim();
+  if (!text) throw new ProviderResponseFailure("OPENAI");
+  const usage = asRecord(payload?.usage);
+  return { text, inputTokens: safeInteger(usage?.input_tokens), outputTokens: safeInteger(usage?.output_tokens) };
+}
+
+async function executeAnthropic(
+  fetchImpl: typeof fetch,
+  config: AIGatewayRuntimeConfig,
+  plan: AIProviderAttemptPlan,
+  input: NormalizedAIExecutionInput,
+  budget: AIExecutionBudget,
+  signal: AbortSignal,
+): Promise<ProviderExecutionResult> {
+  const apiKey = credentialForPlan(plan, config);
+  if (!apiKey) throw new Error("CREDENTIAL_UNAVAILABLE");
+  const body: Record<string, unknown> = {
+    model: plan.model,
+    max_tokens: budget.maxOutputTokens,
+    messages: [{ role: "user", content: input.prompt }],
+  };
+  if (input.systemInstruction) body.system = input.systemInstruction;
+  if (input.responseJsonSchema) body.output_config = { format: { type: "json_schema", schema: input.responseJsonSchema } };
+  const response = await fetchImpl(`${normalizeBaseUrl(config.anthropicBaseUrl ?? "https://api.anthropic.com")}/v1/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify(body),
+    signal,
+    cache: "no-store",
+  });
+  if (!response.ok) throw new ProviderHttpFailure("ANTHROPIC", response.status);
+  const payload = asRecord(await response.json().catch(() => null));
+  const content = Array.isArray(payload?.content) ? payload.content : [];
+  const text = content.map((part) => {
+    const record = asRecord(part);
+    return record?.type === "text" && typeof record.text === "string" ? record.text : "";
+  }).join("").trim();
+  if (!text) throw new ProviderResponseFailure("ANTHROPIC");
+  const usage = asRecord(payload?.usage);
+  return { text, inputTokens: safeInteger(usage?.input_tokens), outputTokens: safeInteger(usage?.output_tokens) };
 }
 
 async function executeOllama(
@@ -442,7 +525,7 @@ export async function executeAICapability(
     };
   }
 
-  const plans = attemptPlanForBudget(input.capability, input.credentialMode, budget);
+  const plans = attemptPlanForBudget(input.capability, input.credentialMode, budget, config.byokProvider ?? "GEMINI");
   let lastFailure: AIExecutionFailureCode = "TOTAL_PROVIDER_OUTAGE";
 
   for (const [index, plan] of plans.entries()) {
@@ -455,7 +538,7 @@ export async function executeAICapability(
 
     const attemptNumber = index + 1;
     const credentialMode = credentialLabel(plan);
-    if (plan.provider === "GEMINI" && !credentialForGemini(plan, config)) {
+    if (plan.provider !== "OLLAMA" && !credentialForPlan(plan, config)) {
       const receipt: AIProviderAttemptReceipt = {
         provider: plan.provider,
         model: plan.model,
@@ -482,7 +565,11 @@ export async function executeAICapability(
     try {
       const result = plan.provider === "GEMINI"
         ? await executeGemini(fetchImpl, config, plan, input, budget, controller.signal)
-        : await executeOllama(fetchImpl, config, plan, input, budget, controller.signal);
+        : plan.provider === "OPENAI"
+          ? await executeOpenAI(fetchImpl, config, plan, input, budget, controller.signal)
+          : plan.provider === "ANTHROPIC"
+            ? await executeAnthropic(fetchImpl, config, plan, input, budget, controller.signal)
+            : await executeOllama(fetchImpl, config, plan, input, budget, controller.signal);
 
       if (input.responseJsonSchema) {
         let parsed: unknown;
@@ -517,7 +604,13 @@ export async function executeAICapability(
       logger({ requestId, capability: input.capability, provider: plan.provider, model: plan.model, attempt: attemptNumber, status: "SUCCESS", failureCode: null, durationMs });
 
       const provenance: AIExecutionProvenance = {
-        provider: plan.provider === "GEMINI" ? "gemini" : "ollama",
+        provider: plan.provider === "GEMINI"
+          ? "gemini"
+          : plan.provider === "OPENAI"
+            ? "openai"
+            : plan.provider === "ANTHROPIC"
+              ? "anthropic"
+              : "ollama",
         model: plan.model,
         capability: input.capability,
         contractVersion: B6_RUNTIME_CONTRACT_VERSION,

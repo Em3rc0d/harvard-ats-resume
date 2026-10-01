@@ -54,7 +54,7 @@ export function geminiActualPaidCostUsd(model: string, inputTokens: number | nul
 
 export function plannedMaximumPaidCostUsd(plans: readonly AIProviderAttemptPlan[], budget: AIExecutionBudget): number {
   return plans.reduce((total, plan) => {
-    if (plan.provider !== "GEMINI") return total;
+    if (plan.provider !== "GEMINI" || plan.credentialMode !== "PLATFORM_KEY") return total;
     const estimate = geminiAttemptMaximumPaidCostUsd(plan.model, budget);
     if (estimate === null) return Number.POSITIVE_INFINITY;
     return total + estimate;

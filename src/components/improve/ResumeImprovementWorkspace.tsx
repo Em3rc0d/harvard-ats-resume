@@ -27,7 +27,9 @@ function friendlyError(code: unknown) {
   if (code === "EMPTY_FILE") return "This file is empty. Choose another PDF or DOCX.";
   if (code === "SOURCE_TOO_LARGE") return "This file is too large. Choose a resume under 5 MB.";
   if (code === "SUPPORTED_FORMATS_ARE_PDF_AND_DOCX") return "Choose a PDF or DOCX resume.";
-  if (code === "V12_AI_ACCESS_REQUIRED" || code === "V12_BYOK_REQUIRED") return "Reconnect AI access and try again.";
+  if (code === "V12_AI_ACCESS_REQUIRED" || code === "V12_BYOK_REQUIRED") return "Reconnect your AI provider and try again.";
+  if (code === "V12_PLATFORM_AI_PRIVATE") return "Managed CV Engine AI is private and is not available for public usage.";
+  if (code === "V12_LOCAL_AI_BROWSER_REQUIRED") return "Local AI must run in your browser, not on CV Engine servers.";
   if (code === "TARGET_TEXT_TOO_LARGE") return "The job description is too long. Shorten it and try again.";
   return "We couldn’t finish your resume safely. Please try again.";
 }
@@ -54,10 +56,10 @@ export function ResumeImprovementWorkspace() {
       form.set("file", file);
       if (targetText.trim()) form.set("targetText", targetText.trim());
       const headers: Record<string, string> = {};
-      if (mode === "BYOK_GEMINI") {
+      if (mode?.startsWith("BYOK_")) {
         const credential = readByokCredential();
         if (!credential) {
-          setError("Reconnect AI access and try again.");
+          setError("Reconnect your AI provider and try again.");
           return;
         }
         headers["x-cvengine-byok-key"] = credential;
