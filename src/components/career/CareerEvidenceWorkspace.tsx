@@ -54,7 +54,7 @@ function reviewIndex(reviews: PresentationReview[]) {
 }
 
 export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvidenceWorkspaceProps) {
-  const { readByokCredential } = useAIAccessSession();
+  const { provider, readByokCredential } = useAIAccessSession();
   const [evidence, setEvidence] = useState<CareerEvidenceCurrent[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -204,6 +204,7 @@ export function CareerEvidenceWorkspace({ aiAccessMode, onSignOut }: CareerEvide
         return;
       }
       headers["x-cvengine-byok-key"] = credential;
+      headers["x-cvengine-ai-provider"] = provider;
     }
 
     const response = await fetch(`/api/presentation/evidence/${item.id}/proposals`, {
