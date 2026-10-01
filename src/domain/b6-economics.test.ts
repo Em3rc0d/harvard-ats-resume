@@ -65,6 +65,19 @@ describe("B6 AI economics", () => {
     )).toThrow("GEMINI_PRICING_CONTRACT_EXPIRED");
   });
 
+  it("BYOK has zero CV Engine platform cost regardless of selected cloud provider", () => {
+    const capability = "RESUME_FACT_GUARD" as const;
+    for (const provider of ["GEMINI", "OPENAI", "ANTHROPIC"] as const) {
+      const policy = assertProviderEconomicsWithinPolicy(
+        capability,
+        buildProviderAttemptPlan(capability, "BYOK_REQUEST_SCOPED", provider),
+        getAIExecutionBudget(capability),
+        new Date("2027-01-01T00:00:00Z"),
+      );
+      expect(policy.maximumPaidCostUsd).toBe(0);
+    }
+  });
+
   it("NO_CLOUD_AI has no paid Gemini route", () => {
     const capability = "RESUME_FACT_GUARD" as const;
     const policy = assertProviderEconomicsWithinPolicy(
