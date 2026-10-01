@@ -46,6 +46,9 @@ describe("public BYO AI and local-compute contracts", () => {
     expect(localRuntime).toContain('"gpu" in navigator');
     expect(localRuntime).toContain('typeof WebAssembly !== "undefined"');
     const route = read("src/app/api/resume-improvements/route.ts");
-    expect(route).toContain('if (accessMode === "LOCAL_BROWSER") throw new Error("V12_LOCAL_AI_BROWSER_REQUIRED")');
+    expect(route).toContain('if (accessMode === "LOCAL_BROWSER") {');
+    expect(route).toContain("browserLocalExecution:");
+    expect(route).toContain("platformGeminiKey: null");
+    expect(route).toContain("BrowserLocalExecutionRequired");
   });
 });
