@@ -47,7 +47,7 @@ export function AssessmentWorkspace() {
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
   const [aiExplanations, setAiExplanations] = useState<Record<string, string>>({});
   const [aiReceipts, setAiReceipts] = useState<Record<string, string>>({});
-  const { mode, readByokCredential } = useAIAccessSession();
+  const { mode, provider, readByokCredential } = useAIAccessSession();
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +104,10 @@ export function AssessmentWorkspace() {
     setAiBusyId(id);
     setError(null);
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (byok) headers["x-cvengine-byok-key"] = byok;
+    if (byok) {
+      headers["x-cvengine-byok-key"] = byok;
+      headers["x-cvengine-ai-provider"] = provider;
+    }
     const response = await fetch("/api/ai/assist", {
       method: "POST",
       headers,
