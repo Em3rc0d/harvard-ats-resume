@@ -19,6 +19,7 @@ from playwright.sync_api import BrowserContext, TimeoutError as PlaywrightTimeou
 BASE_URL = os.environ.get("CVENGINE_BASE_URL", "https://harvard-ats-resume.vercel.app").rstrip("/")
 EXPECTED_SHA = os.environ.get("CVENGINE_EXPECTED_SHA", "").strip()
 OUTPUT_DIR = Path(os.environ.get("CVENGINE_E2E_OUTPUT_DIR", "artifacts/v12-production-browser"))
+E2E_BYOK_KEY = os.environ.get("CVENGINE_E2E_BYOK_KEY", "").strip()
 
 SOURCE_LINES = [
     "CV ENGINE SYNTHETIC CANDIDATE",
@@ -225,21 +226,27 @@ def main() -> int:
                 page.get_by_label("Password", exact=True).fill(mailbox.password)
                 page.get_by_role("button", name="Create account", exact=True).click()
 
-                ai_heading = page.get_by_role("heading", name="Choose how CV Engine may use AI")
+                ai_heading = page.get_by_role("heading", name="Choose who provides the compute")
                 try:
                     ai_heading.wait_for(timeout=5_000)
                 except PlaywrightTimeoutError:
                     page.get_by_role("status").filter(has_text="Check your email").wait_for(timeout=20_000)
                     page.goto(mailbox.wait_for_confirmation_url(), wait_until="domcontentloaded", timeout=30_000)
                     if not ai_heading.is_visible():
-                        page.get_by_role("heading", name="Your career evidence stays separate from AI suggestions.").wait_for(timeout=30_000)
+                        page.get_by_role("heading", name="Your CV is your information.").wait_for(timeout=30_000)
                         page.get_by_label("I understand this disclosure and will review career/application content before using it.").check()
                         page.get_by_role("button", name="Acknowledge and continue").click()
                     ai_heading.wait_for(timeout=30_000)
                 report["checks"].append("EMAIL_CONFIRMED_AUTH_SESSION")
 
-                page.get_by_role("radio", name=re.compile("Use CV Engine AI", re.I)).click()
+                if not E2E_BYOK_KEY:
+                    fail("V12_BROWSER_BYOK_CERT_KEY_MISSING")
+                page.get_by_role("radio", name=re.compile("Use my AI provider", re.I)).click()
+                page.get_by_role("radio", name=re.compile("Google Gemini", re.I)).click()
+                page.get_by_label("Gemini API key", exact=True).fill(E2E_BYOK_KEY)
+                page.get_by_role("button", name="Use key for this session", exact=True).click()
                 page.get_by_role("button", name="Continue to CV Engine").click()
+                report["checks"].append("BYOK_GEMINI_SELECTED")
                 page.get_by_role("heading", name="Improve your resume").wait_for(timeout=30_000)
                 if page.get_by_label("Job description").is_visible():
                     fail("V12_BROWSER_OPTIONAL_JOB_CONTEXT_NOT_COLLAPSED")
