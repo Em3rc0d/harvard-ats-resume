@@ -107,8 +107,8 @@ describe("B0.5 trust and AI access contracts", () => {
 
   it("routes BYOK only through the provider chosen by the user", () => {
     expect(buildProviderAttemptPlan("RESUME_HOLISTIC_IMPROVEMENT", "BYOK_REQUEST_SCOPED", "OPENAI").map((attempt) => attempt.provider))
-      .toEqual(["OPENAI", "OLLAMA"]);
+      .toEqual(["OPENAI"]);
     expect(buildProviderAttemptPlan("RESUME_HOLISTIC_IMPROVEMENT", "BYOK_REQUEST_SCOPED", "ANTHROPIC").map((attempt) => attempt.provider))
-      .toEqual(["ANTHROPIC", "OLLAMA"]);
+      .toEqual(["ANTHROPIC"]);
   });
 });
