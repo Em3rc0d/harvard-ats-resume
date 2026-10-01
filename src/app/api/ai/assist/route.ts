@@ -7,8 +7,11 @@ import {
   assertProviderEconomicsWithinPolicy,
   geminiActualPaidCostUsd,
 } from "../../../../application/ai/AIProviderEconomics";
-import { GeminiCredentialInputSchema, type AIAccessMode } from "../../../../domain/ai/AIAccess";
-import type { CredentialMode } from "../../../../domain/ai/AICapability";
+import type { AIAccessMode } from "../../../../domain/ai/AIAccess";
+import {
+  AIRequestPolicyError,
+  resolveAIRequestCredential,
+} from "../../../../application/ai/RequestScopedAIConfig";
 import { CURRENT_TRUST_DISCLOSURE_VERSION } from "../../../../domain/trust/FirstRunTrust";
 
 const PublicAssistCapabilitySchema = z.enum([
@@ -29,12 +32,6 @@ const SYSTEM_INSTRUCTIONS: Readonly<Record<z.infer<typeof PublicAssistCapability
   OPPORTUNITY_EXPLANATION: "You explain a deterministic CV Engine opportunity assessment. Preserve MATCH/POTENTIAL_MATCH/GAP/UNKNOWN distinctions, explicitly preserve uncertainty, never estimate hiring probability, never invent candidate facts, and never upgrade unsupported evidence. The deterministic assessment remains authoritative; your response is explanatory only.",
   INLINE_WORDING_OPTIMIZATION: "You provide optional wording suggestions that preserve the exact supplied facts and metrics. Do not add, infer, strengthen or fabricate facts. The suggestion is not authoritative and must remain source-preserving.",
 };
-
-function credentialModeForAccess(mode: AIAccessMode): CredentialMode {
-  if (mode === "PLATFORM_GEMINI") return "PLATFORM_KEY";
-  if (mode === "BYOK_GEMINI") return "BYOK_REQUEST_SCOPED";
-  return "NO_CLOUD_AI";
-}
 
 function safeLogger(event: SafeAIEvent) {
   console.info("CV_ENGINE_AI_EVENT", JSON.stringify(event));
@@ -69,21 +66,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "AI_ACCESS_MODE_NOT_CONFIGURED" }, { status: 409 });
     }
 
-    const suppliedByok = request.headers.get("x-cvengine-byok-key");
-    if (accessMode !== "BYOK_GEMINI" && suppliedByok) {
-      return NextResponse.json({ error: "UNEXPECTED_BYOK_CREDENTIAL" }, { status: 400 });
+    if (accessMode === "NO_CLOUD_AI") {
+      return NextResponse.json({ error: "AI_ASSIST_BROWSER_LOCAL_ONLY" }, { status: 409 });
     }
 
-    let byokGeminiKey: string | null = null;
-    if (accessMode === "BYOK_GEMINI") {
-      const key = GeminiCredentialInputSchema.safeParse(suppliedByok);
-      if (!key.success) return NextResponse.json({ error: "BYOK_CREDENTIAL_REQUIRED" }, { status: 400 });
-      byokGeminiKey = key.data;
+    let resolved;
+    try {
+      resolved = resolveAIRequestCredential(request, accessMode);
+    } catch (error) {
+      const code = error instanceof AIRequestPolicyError ? error.code : "AI_ACCESS_REQUEST_INVALID";
+      return NextResponse.json({ error: code }, { status: code === "PLATFORM_AI_NOT_ENTITLED" ? 403 : 400 });
     }
 
-    const credentialMode = credentialModeForAccess(accessMode);
+    const credentialMode = resolved.credentialMode;
     const budget = getAIExecutionBudget(parsed.data.capability);
-    const plannedAttempts = buildProviderAttemptPlan(parsed.data.capability, credentialMode);
+    const plannedAttempts = buildProviderAttemptPlan(
+      parsed.data.capability,
+      credentialMode,
+      resolved.byokProvider,
+    );
     let economics;
     try {
       economics = assertProviderEconomicsWithinPolicy(parsed.data.capability, plannedAttempts, budget);
@@ -102,8 +103,13 @@ export async function POST(request: Request) {
       systemInstruction: SYSTEM_INSTRUCTIONS[parsed.data.capability],
     }, {
       platformGeminiKey: process.env.GEMINI_API_KEY?.trim() || null,
-      byokGeminiKey,
-      geminiBaseUrl: process.env.GEMINI_API_BASE_URL?.trim() || "https://generativelanguage.googleapis.com",
+      byokGeminiKey: resolved.byokGeminiKey,
+      byokProvider: resolved.byokProvider,
+      byokProviderKey: resolved.byokProviderKey,
+      byokModelOverride: resolved.byokModelOverride,
+      geminiBaseUrl: resolved.geminiBaseUrl,
+      openaiBaseUrl: resolved.openaiBaseUrl,
+      anthropicBaseUrl: resolved.anthropicBaseUrl,
       ollamaBaseUrl,
       ollamaApiKey: process.env.OLLAMA_API_KEY?.trim() || null,
       logger: safeLogger,
@@ -120,7 +126,7 @@ export async function POST(request: Request) {
     }
 
     const estimatedPaidCostUsd = outcome.attempts.reduce((total, attempt) => {
-      if (attempt.provider !== "GEMINI") return total;
+      if (attempt.provider !== "GEMINI" || attempt.credentialMode !== "PLATFORM") return total;
       const estimate = geminiActualPaidCostUsd(attempt.model, attempt.inputTokens, attempt.outputTokens);
       return estimate === null ? total : total + estimate;
     }, 0);
