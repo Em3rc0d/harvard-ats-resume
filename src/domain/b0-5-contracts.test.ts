@@ -26,6 +26,9 @@ describe("B0.5 trust and AI access contracts", () => {
       jobDescriptionCannotCreateCandidateTruth: true,
       cloudProcessingDisclosed: true,
       byokIsTransient: true,
+      commercialUseProhibited: true,
+      localInferenceDisclosed: true,
+      thirdPartyProviderTermsDisclosed: true,
     });
   });
 
@@ -95,10 +98,17 @@ describe("B0.5 trust and AI access contracts", () => {
     ]);
   });
 
-  it("routes cloud-enabled modes through Gemini before Ollama", () => {
+  it("routes private platform access through Gemini before Ollama", () => {
     const plan = buildProviderAttemptPlan("RESUME_IMPORT_FRAGMENT", "PLATFORM_KEY");
     expect(plan.map((attempt) => attempt.provider)).toEqual(["GEMINI", "GEMINI", "OLLAMA"]);
     expect(plan[0]?.model).toBe("gemini-3.5-flash-lite");
     expect(plan.at(-1)?.credentialMode).toBe("NO_CLOUD_AI");
+  });
+
+  it("routes BYOK only through the provider chosen by the user", () => {
+    expect(buildProviderAttemptPlan("RESUME_HOLISTIC_IMPROVEMENT", "BYOK_REQUEST_SCOPED", "OPENAI").map((attempt) => attempt.provider))
+      .toEqual(["OPENAI", "OLLAMA"]);
+    expect(buildProviderAttemptPlan("RESUME_HOLISTIC_IMPROVEMENT", "BYOK_REQUEST_SCOPED", "ANTHROPIC").map((attempt) => attempt.provider))
+      .toEqual(["ANTHROPIC", "OLLAMA"]);
   });
 });
