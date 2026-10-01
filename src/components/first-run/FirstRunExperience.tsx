@@ -10,9 +10,9 @@ import { TrustDisclosurePanel } from "./TrustDisclosurePanel";
 import { useAIAccessSession } from "../providers/AIAccessSessionProvider";
 
 type Step = "BOOTSTRAP" | "TRUST" | "AUTH" | "AI_ACCESS" | "READY";
-type FirstRunExperienceProps = { authConfigured: boolean; platformGeminiAvailable: boolean };
+type FirstRunExperienceProps = { authConfigured: boolean };
 
-export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: FirstRunExperienceProps) {
+export function FirstRunExperience({ authConfigured }: FirstRunExperienceProps) {
   const [step, setStep] = useState<Step>("BOOTSTRAP");
   const [authStatus, setAuthStatus] = useState<string | null>("Restoring CV Engine session…");
   const [disclosureAcknowledged, setDisclosureAcknowledged] = useState(false);
@@ -72,11 +72,12 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
       selectMode(restoredMode);
       setAuthStatus(null);
 
-      if (restoredMode === "BYOK_GEMINI") {
+      if (!restoredMode.startsWith("BYOK_") && restoredMode !== "LOCAL_BROWSER") {
         setStep("AI_ACCESS");
         return;
       }
-      if (restoredMode === "PLATFORM_GEMINI" && !platformGeminiAvailable) {
+      if (restoredMode.startsWith("BYOK_")) {
+        // Raw provider keys are intentionally request/session scoped and are not restored.
         setStep("AI_ACCESS");
         return;
       }
@@ -87,7 +88,7 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
     return () => {
       cancelled = true;
     };
-  }, [authConfigured, platformGeminiAvailable, selectMode]);
+  }, [authConfigured, selectMode]);
 
   async function persistConsent(aiAccessModePreference?: AIAccessMode) {
     const response = await fetch("/api/consent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(aiAccessModePreference ? { aiAccessModePreference } : {}) });
@@ -176,7 +177,7 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
       {step === "BOOTSTRAP" ? <section className="panel"><p className="muted">Opening CV Engine…</p></section> : null}
       {step === "TRUST" ? <TrustDisclosurePanel onAcknowledge={acknowledgeDisclosure} /> : null}
       {step === "AUTH" ? <AuthPanel authConfigured={authConfigured} onAuthenticated={resolveAuthenticatedStep} /> : null}
-      {step === "AI_ACCESS" ? <AIAccessPanel platformGeminiAvailable={platformGeminiAvailable} onReady={finalizeAIAccess} /> : null}
+      {step === "AI_ACCESS" ? <AIAccessPanel onReady={finalizeAIAccess} /> : null}
       {authStatus ? <p className="floating-status" role="status">{authStatus}</p> : null}
     </main>
   );

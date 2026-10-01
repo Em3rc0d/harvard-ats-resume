@@ -4,14 +4,9 @@ import { getSupabasePublicConfig } from "../infrastructure/supabase/config";
 
 export default function Home() {
   const authConfigured = getSupabasePublicConfig() !== null;
-  const platformGeminiAvailable = Boolean(process.env.GEMINI_API_KEY?.trim());
-
   return (
     <AIAccessSessionProvider>
-      <FirstRunExperience
-        authConfigured={authConfigured}
-        platformGeminiAvailable={platformGeminiAvailable}
-      />
+      <FirstRunExperience authConfigured={authConfigured} />
     </AIAccessSessionProvider>
   );
 }

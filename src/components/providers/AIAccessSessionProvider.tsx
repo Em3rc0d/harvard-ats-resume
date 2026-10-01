@@ -26,9 +26,7 @@ const AIAccessSessionContext = createContext<AIAccessSessionContextValue | null>
 
 export function AIAccessSessionProvider({ children }: { children: ReactNode }) {
   const storeRef = useRef<TransientBYOKStore | null>(null);
-  if (storeRef.current === null) {
-    storeRef.current = new TransientBYOKStore();
-  }
+  if (storeRef.current === null) storeRef.current = new TransientBYOKStore();
 
   const [mode, setMode] = useState<AIAccessMode | null>(null);
   const [hasByokCredential, setHasByokCredential] = useState(false);
@@ -38,15 +36,10 @@ export function AIAccessSessionProvider({ children }: { children: ReactNode }) {
     setHasByokCredential(false);
   }, []);
 
-  const selectMode = useCallback(
-    (nextMode: AIAccessMode) => {
-      if (nextMode !== "BYOK_GEMINI") {
-        clearSessionSecrets();
-      }
-      setMode(nextMode);
-    },
-    [clearSessionSecrets],
-  );
+  const selectMode = useCallback((nextMode: AIAccessMode) => {
+    if (!nextMode.startsWith("BYOK_")) clearSessionSecrets();
+    setMode(nextMode);
+  }, [clearSessionSecrets]);
 
   const setByokCredential = useCallback((credential: string) => {
     storeRef.current?.set(credential);
@@ -60,34 +53,21 @@ export function AIAccessSessionProvider({ children }: { children: ReactNode }) {
     setMode(null);
   }, [clearSessionSecrets]);
 
-  const value = useMemo<AIAccessSessionContextValue>(
-    () => ({
-      mode,
-      hasByokCredential,
-      selectMode,
-      setByokCredential,
-      readByokCredential,
-      clearSessionSecrets,
-      resetAIAccess,
-    }),
-    [
-      mode,
-      hasByokCredential,
-      selectMode,
-      setByokCredential,
-      readByokCredential,
-      clearSessionSecrets,
-      resetAIAccess,
-    ],
-  );
+  const value = useMemo<AIAccessSessionContextValue>(() => ({
+    mode,
+    hasByokCredential,
+    selectMode,
+    setByokCredential,
+    readByokCredential,
+    clearSessionSecrets,
+    resetAIAccess,
+  }), [mode, hasByokCredential, selectMode, setByokCredential, readByokCredential, clearSessionSecrets, resetAIAccess]);
 
   return <AIAccessSessionContext.Provider value={value}>{children}</AIAccessSessionContext.Provider>;
 }
 
 export function useAIAccessSession() {
   const context = useContext(AIAccessSessionContext);
-  if (!context) {
-    throw new Error("useAIAccessSession must be used inside AIAccessSessionProvider");
-  }
+  if (!context) throw new Error("useAIAccessSession must be used inside AIAccessSessionProvider");
   return context;
 }
