@@ -209,11 +209,11 @@ export function AIAccessPanel({ onReady }: AIAccessPanelProps) {
 
       {mode === "NO_CLOUD_AI" ? (
         <div className="local-ai-box">
-          <strong>Local AI uses this computer</strong>
+          <strong>Local AI beta uses this computer</strong>
           <p className="fine-print">
             The model is downloaded by your browser and inference runs on your own
             CPU/GPU. CV Engine does not spend Gemini/OpenAI/Claude tokens for this path.
-            The first run can require a large model download and may be slower on older hardware.
+            The first run downloads roughly 0.5 GB of model assets and may be slower on older hardware.
           </p>
           {device.hardwareConcurrency ? (
             <p className="fine-print">Detected logical CPU threads: {device.hardwareConcurrency}.</p>
