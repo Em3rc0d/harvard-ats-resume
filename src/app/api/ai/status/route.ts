@@ -10,8 +10,11 @@ export async function GET() {
 
     return NextResponse.json({
       platformGeminiConfigured,
+      publicPlatformAIEnabled: process.env.CVENGINE_ALLOW_PLATFORM_AI?.trim() === "1",
       ollamaConfigured,
       byokSupported: true,
+      byokProviders: ["GEMINI", "OPENAI", "ANTHROPIC"],
+      browserLocalSupported: true,
       noCloudTrustedCoreAvailable: true,
       aiOptional: true,
     }, { headers: { "Cache-Control": "private, no-store" } });
