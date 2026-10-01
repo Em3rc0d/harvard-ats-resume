@@ -42,7 +42,7 @@ describe("v1.2 primary Improve Resume UX", () => {
     const primary = read("src/components/improve/ResumeImprovementWorkspace.tsx");
     expect(primary).toContain("Your session ended. Sign in again to continue.");
     expect(primary).toContain("We couldn’t read this file. Try a text-based PDF or DOCX.");
-    expect(primary).toContain("Reconnect AI access and try again.");
+    expect(primary).toContain("Reconnect your AI provider and try again.");
     expect(primary).toContain("We couldn’t finish your resume safely. Please try again.");
   });
 
