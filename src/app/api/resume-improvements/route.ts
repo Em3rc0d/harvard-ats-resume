@@ -122,6 +122,16 @@ async function resolveAIConfig(request: Request, client: Awaited<ReturnType<type
   const byokProviderKey = parsedByok?.success ? parsedByok.data : null;
   if (accessMode === "BYOK_GEMINI" && !byokProviderKey) throw new Error("V12_BYOK_REQUIRED");
 
+  const byokModelOverride = accessMode === "BYOK_GEMINI"
+    ? (
+        byokProvider === "OPENAI"
+          ? process.env.CVENGINE_OPENAI_BYOK_MODEL
+          : byokProvider === "ANTHROPIC"
+            ? process.env.CVENGINE_ANTHROPIC_BYOK_MODEL
+            : process.env.CVENGINE_GEMINI_BYOK_MODEL
+      )?.trim() || null
+    : null;
+
   const configuredOllamaUrl = process.env.OLLAMA_BASE_URL?.trim() || null;
   return {
     credentialMode: credentialModeForAccess(accessMode),
@@ -129,6 +139,7 @@ async function resolveAIConfig(request: Request, client: Awaited<ReturnType<type
     byokGeminiKey: byokProvider === "GEMINI" ? byokProviderKey : null,
     byokProvider,
     byokProviderKey,
+    byokModelOverride,
     geminiBaseUrl: process.env.GEMINI_API_BASE_URL?.trim() || "https://generativelanguage.googleapis.com",
     openaiBaseUrl: process.env.OPENAI_API_BASE_URL?.trim() || "https://api.openai.com",
     anthropicBaseUrl: process.env.ANTHROPIC_API_BASE_URL?.trim() || "https://api.anthropic.com",
