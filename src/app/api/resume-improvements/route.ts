@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { CredentialMode } from "../../../domain/ai/AICapability";
-import { GeminiCredentialInputSchema, type AIAccessMode } from "../../../domain/ai/AIAccess";
+import { BYOKCredentialInputSchema, byokProviderForAccessMode, type AIAccessMode } from "../../../domain/ai/AIAccess";
 import { CURRENT_TRUST_DISCLOSURE_VERSION } from "../../../domain/trust/FirstRunTrust";
 import { AuthenticationRequiredError, requireAuthenticatedSupabaseContext } from "../../../application/auth/requireAuthenticatedUser";
 import { understandResumeSemantics } from "../../../application/import/ResumeSemanticUnderstandingService";
 import { createImportLineProposals, extractResumeMechanically, sha256Text } from "../../../application/import/ResumeExtractor";
-import { recordResumeImport } from "../../../application/import/ImportRepository";
+import { loadImportReceipt, recordResumeImport } from "../../../application/import/ImportRepository";
 import { improveResumeHolistically } from "../../../application/resume/HolisticResumeEditorService";
 import { guardAndRepairResume } from "../../../application/resume/FactGuardianService";
 import { listResumeImprovementRuns, loadResumeImprovementRun, recordResumeImprovementRun } from "../../../application/resume/ResumeImprovementRunRepository";
@@ -17,7 +17,7 @@ import {
   preserveCriticalSourcePresentation,
   resumeOutputQualityRank,
 } from "../../../application/resume/ResumeOutputQualityService";
-import { getAIExecutionBudget, type SafeAIEvent } from "../../../application/ai/AIGatewayRuntime";
+import { BrowserLocalExecutionRequired, getAIExecutionBudget, type SafeAIEvent } from "../../../application/ai/AIGatewayRuntime";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -41,8 +41,7 @@ function classifyUpload(file: File) {
   return byName ?? byMime;
 }
 function credentialModeForAccess(mode: AIAccessMode | null): CredentialMode {
-  if (mode === "PLATFORM_GEMINI") return "PLATFORM_KEY";
-  if (mode === "BYOK_GEMINI") return "BYOK_REQUEST_SCOPED";
+  if (mode?.startsWith("BYOK_")) return "BYOK_REQUEST_SCOPED";
   return "NO_CLOUD_AI";
 }
 function safeLogger(event: SafeAIEvent) {
@@ -80,7 +79,7 @@ function errorResponse(error: unknown) {
   return NextResponse.json({ error: publicCode }, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 
-async function resolveAIConfig(request: Request, client: Awaited<ReturnType<typeof requireAuthenticatedSupabaseContext>>["client"], ownerUserId: string) {
+async function resolveAIConfig(request: Request, client: Awaited<ReturnType<typeof requireAuthenticatedSupabaseContext>>["client"], ownerUserId: string, localResponses: Readonly<Record<string, string>>) {
   const consent = await client
     .from("consent_receipts")
     .select("ai_access_mode_preference, acknowledged_at")
@@ -92,58 +91,102 @@ async function resolveAIConfig(request: Request, client: Awaited<ReturnType<type
   if (consent.error) throw new Error("V12_AI_ACCESS_LOOKUP_FAILED");
   const accessMode = (consent.data?.ai_access_mode_preference as AIAccessMode | null | undefined) ?? null;
   if (accessMode === null) throw new Error("V12_AI_ACCESS_REQUIRED");
-  const suppliedByok = accessMode === "BYOK_GEMINI" ? request.headers.get("x-cvengine-byok-key") : null;
-  const parsedByok = accessMode === "BYOK_GEMINI" ? GeminiCredentialInputSchema.safeParse(suppliedByok) : null;
-  const byokGeminiKey = parsedByok?.success ? parsedByok.data : null;
-  if (accessMode === "BYOK_GEMINI" && !byokGeminiKey) throw new Error("V12_BYOK_REQUIRED");
-  const production = process.env.NODE_ENV === "production";
-  const configuredOllamaUrl = process.env.OLLAMA_BASE_URL?.trim() || null;
-  if (accessMode === "NO_CLOUD_AI" && production && configuredOllamaUrl === null) throw new Error("V12_AI_PROVIDER_UNAVAILABLE");
+  if (accessMode === "PLATFORM_GEMINI") throw new Error("V12_PLATFORM_AI_PRIVATE");
+  if (accessMode === "LOCAL_BROWSER") {
+    return {
+      credentialMode: "NO_CLOUD_AI" as const,
+      platformGeminiKey: null,
+      byokGeminiKey: null,
+      byokCredential: null,
+      geminiBaseUrl: "https://generativelanguage.googleapis.com",
+      openaiBaseUrl: "https://api.openai.com",
+      anthropicBaseUrl: "https://api.anthropic.com",
+      ollamaBaseUrl: "http://127.0.0.1:9",
+      ollamaApiKey: null,
+      logger: safeLogger,
+      browserLocalExecution: {
+        model: "onnx-community/Qwen3-0.6B-Instruct-ONNX:q4f16",
+        responses: localResponses,
+        state: { nextIndex: 0 },
+      },
+      budgetOverrides: { RESUME_FACT_GUARD: FACT_GUARD_PRODUCTION_BUDGET },
+    } as const;
+  }
+  if (accessMode === "NO_CLOUD_AI") throw new Error("V12_LOCAL_AI_BROWSER_REQUIRED");
+
+  const byokProvider = byokProviderForAccessMode(accessMode);
+  if (!byokProvider) throw new Error("V12_BYOK_REQUIRED");
+  const suppliedByok = request.headers.get("x-cvengine-byok-key");
+  const parsedByok = BYOKCredentialInputSchema.safeParse(suppliedByok);
+  if (!parsedByok.success) throw new Error("V12_BYOK_REQUIRED");
+
   return {
     credentialMode: credentialModeForAccess(accessMode),
-    platformGeminiKey: process.env.GEMINI_API_KEY?.trim() || null,
-    byokGeminiKey,
+    // Public resume improvement must never consume the operator-owned Gemini key.
+    platformGeminiKey: null,
+    byokGeminiKey: byokProvider === "GEMINI" ? parsedByok.data : null,
+    byokCredential: parsedByok.data,
+    byokProvider,
     geminiBaseUrl: process.env.GEMINI_API_BASE_URL?.trim() || "https://generativelanguage.googleapis.com",
-    ollamaBaseUrl: configuredOllamaUrl || (production ? "http://127.0.0.1:9" : "http://127.0.0.1:11434"),
-    ollamaApiKey: process.env.OLLAMA_API_KEY?.trim() || null,
+    openaiBaseUrl: process.env.OPENAI_API_BASE_URL?.trim() || "https://api.openai.com",
+    anthropicBaseUrl: process.env.ANTHROPIC_API_BASE_URL?.trim() || "https://api.anthropic.com",
+    ollamaBaseUrl: "http://127.0.0.1:9",
+    ollamaApiKey: null,
     logger: safeLogger,
-    budgetOverrides: {
-      RESUME_FACT_GUARD: FACT_GUARD_PRODUCTION_BUDGET,
-    },
+    budgetOverrides: { RESUME_FACT_GUARD: FACT_GUARD_PRODUCTION_BUDGET },
   } as const;
 }
 
 export async function POST(request: Request) {
+  let activeReceiptId: string | null = null;
   try {
     const { user, client } = await requireAuthenticatedSupabaseContext();
     const formData = await request.formData();
+    const localResponsesValue = formData.get("localResponses");
+    let localResponses: Record<string, string> = {};
+    if (typeof localResponsesValue === "string" && localResponsesValue.length > 0) {
+      const parsed = JSON.parse(localResponsesValue) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("V12_LOCAL_RESPONSES_INVALID");
+      localResponses = Object.fromEntries(Object.entries(parsed as Record<string, unknown>)
+        .filter(([key, value]) => /^[a-f0-9]{64}$/.test(key) && typeof value === "string" && value.length <= 60_000)
+        .slice(0, 12)) as Record<string, string>;
+    }
+
+    const existingReceiptValue = formData.get("receiptId");
+    const existingReceiptId = typeof existingReceiptValue === "string" && existingReceiptValue.length > 0 ? existingReceiptValue : null;
     const fileValue = formData.get("file");
-    if (!(fileValue instanceof File)) return NextResponse.json({ error: "RESUME_FILE_REQUIRED" }, { status: 400 });
-    if (fileValue.size === 0) return NextResponse.json({ error: "EMPTY_FILE" }, { status: 422 });
-    if (fileValue.size > MAX_SOURCE_BYTES) return NextResponse.json({ error: "SOURCE_TOO_LARGE", maxBytes: MAX_SOURCE_BYTES }, { status: 413 });
-    const mediaType = classifyUpload(fileValue);
-    if (!mediaType) return NextResponse.json({ error: "SUPPORTED_FORMATS_ARE_PDF_AND_DOCX" }, { status: 415 });
     const targetValue = formData.get("targetText");
     const targetText = typeof targetValue === "string" && targetValue.trim().length > 0 ? targetValue.trim() : null;
     if (targetText && targetText.length > MAX_TARGET_CHARS) return NextResponse.json({ error: "TARGET_TEXT_TOO_LARGE", maxChars: MAX_TARGET_CHARS }, { status: 413 });
 
-    const sourceBuffer = Buffer.from(await fileValue.arrayBuffer());
-    const extraction = extractResumeMechanically(sourceBuffer, fileValue.name, fileValue.type);
-    if (extraction.mediaType !== mediaType) return NextResponse.json({ error: "MEDIA_TYPE_MISMATCH" }, { status: 422 });
-    const proposals = extraction.status === "EXTRACTED" ? createImportLineProposals(extraction.text) : [];
-    const receipt = await recordResumeImport(client, user.userId, {
-      sourceName: fileValue.name.slice(0, 255),
-      mediaType,
-      sourceSizeBytes: sourceBuffer.length,
-      sourceSha256: sha256Text(sourceBuffer),
-      extractedTextSha256: extraction.status === "EXTRACTED" ? sha256Text(extraction.text) : null,
-      status: extraction.status,
-      warningCode: extraction.warningCode,
-      proposals,
-    });
+    let receipt;
+    if (existingReceiptId) {
+      receipt = await loadImportReceipt(client, user.userId, existingReceiptId);
+    } else {
+      if (!(fileValue instanceof File)) return NextResponse.json({ error: "RESUME_FILE_REQUIRED" }, { status: 400 });
+      if (fileValue.size === 0) return NextResponse.json({ error: "EMPTY_FILE" }, { status: 422 });
+      if (fileValue.size > MAX_SOURCE_BYTES) return NextResponse.json({ error: "SOURCE_TOO_LARGE", maxBytes: MAX_SOURCE_BYTES }, { status: 413 });
+      const mediaType = classifyUpload(fileValue);
+      if (!mediaType) return NextResponse.json({ error: "SUPPORTED_FORMATS_ARE_PDF_AND_DOCX" }, { status: 415 });
+      const sourceBuffer = Buffer.from(await fileValue.arrayBuffer());
+      const extraction = extractResumeMechanically(sourceBuffer, fileValue.name, fileValue.type);
+      if (extraction.mediaType !== mediaType) return NextResponse.json({ error: "MEDIA_TYPE_MISMATCH" }, { status: 422 });
+      const proposals = extraction.status === "EXTRACTED" ? createImportLineProposals(extraction.text) : [];
+      receipt = await recordResumeImport(client, user.userId, {
+        sourceName: fileValue.name.slice(0, 255),
+        mediaType,
+        sourceSizeBytes: sourceBuffer.length,
+        sourceSha256: sha256Text(sourceBuffer),
+        extractedTextSha256: extraction.status === "EXTRACTED" ? sha256Text(extraction.text) : null,
+        status: extraction.status,
+        warningCode: extraction.warningCode,
+        proposals,
+      });
+    }
     if (receipt.status !== "EXTRACTED" || receipt.proposals.length === 0) throw new Error("SOURCE_UNREADABLE");
 
-    const aiConfig = await resolveAIConfig(request, client, user.userId);
+    activeReceiptId = receipt.id;
+    const aiConfig = await resolveAIConfig(request, client, user.userId, localResponses);
     const semantic = await understandResumeSemantics(receipt, aiConfig);
     if (!semantic.ok) throw new Error(`SEMANTIC_UNDERSTANDING_FAILED:${semantic.failureCode}`);
 
@@ -220,6 +263,12 @@ export async function POST(request: Request) {
       },
     }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
+    if (error instanceof BrowserLocalExecutionRequired) {
+      return NextResponse.json(
+        { error: "LOCAL_AI_TASK_REQUIRED", receiptId: activeReceiptId, task: error.task },
+        { status: 428, headers: { "Cache-Control": "private, no-store" } },
+      );
+    }
     return errorResponse(error);
   }
 }

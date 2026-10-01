@@ -26,6 +26,8 @@ describe("B0.5 trust and AI access contracts", () => {
       jobDescriptionCannotCreateCandidateTruth: true,
       cloudProcessingDisclosed: true,
       byokIsTransient: true,
+      cvContentNotSoldForAdvertising: true,
+      localInferenceDisclosed: true,
     });
   });
 

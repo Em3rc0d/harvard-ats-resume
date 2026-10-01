@@ -39,7 +39,7 @@ export const FactGuardianFindingSchema = z.object({
 });
 
 export const FactGuardianProviderProvenanceSchema = z.object({
-  provider: z.enum(["gemini", "ollama"]),
+  provider: z.enum(["gemini", "openai", "anthropic", "browser-local", "ollama"]),
   model: z.string().trim().min(1).max(200),
   requestId: z.string().uuid(),
   contractVersion: z.string().trim().min(1).max(100),

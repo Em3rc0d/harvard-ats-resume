@@ -16,7 +16,7 @@ export const AICapabilityNameSchema = z.enum([
 
 export type AICapabilityName = z.infer<typeof AICapabilityNameSchema>;
 
-export const AIProviderSchema = z.enum(["GEMINI", "OLLAMA"]);
+export const AIProviderSchema = z.enum(["GEMINI", "OPENAI", "ANTHROPIC", "BROWSER_LOCAL", "OLLAMA"]);
 export type AIProvider = z.infer<typeof AIProviderSchema>;
 
 export type ModelRoute = Readonly<{
@@ -78,7 +78,7 @@ export type AIProviderAttemptPlan = Readonly<{
 }>;
 
 export type AIExecutionProvenance = Readonly<{
-  provider: "gemini" | "ollama";
+  provider: "gemini" | "openai" | "anthropic" | "browser-local" | "ollama";
   model: string;
   capability: AICapabilityName;
   contractVersion: string;
@@ -106,25 +106,28 @@ export function getModelRoute(capability: AICapabilityName): ModelRoute {
  * retry classification, provider adapters, deadlines, cost accounting and
  * runtime fallback behavior.
  */
+const DEFAULT_BYOK_MODELS: Readonly<Record<"OPENAI" | "ANTHROPIC", string>> = {
+  OPENAI: "gpt-5.6-luna",
+  ANTHROPIC: "claude-sonnet-5",
+};
+
 export function buildProviderAttemptPlan(
   capability: AICapabilityName,
   credentialModeInput: CredentialMode,
+  byokProvider: "GEMINI" | "OPENAI" | "ANTHROPIC" = "GEMINI",
 ): readonly AIProviderAttemptPlan[] {
   const credentialMode = CredentialModeSchema.parse(credentialModeInput);
   const route = getModelRoute(capability);
   const attempts: AIProviderAttemptPlan[] = [];
 
   if (credentialMode !== "NO_CLOUD_AI") {
-    for (const model of route.geminiModels) {
-      attempts.push({ provider: "GEMINI", model, credentialMode });
+    if (credentialMode === "PLATFORM_KEY" || byokProvider === "GEMINI") {
+      for (const model of route.geminiModels) attempts.push({ provider: "GEMINI", model, credentialMode });
+    } else {
+      attempts.push({ provider: byokProvider, model: DEFAULT_BYOK_MODELS[byokProvider], credentialMode });
     }
   }
 
-  attempts.push({
-    provider: "OLLAMA",
-    model: route.ollamaModel,
-    credentialMode: "NO_CLOUD_AI",
-  });
-
+  attempts.push({ provider: "OLLAMA", model: route.ollamaModel, credentialMode: "NO_CLOUD_AI" });
   return attempts;
 }

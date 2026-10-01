@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { runBrowserLocalAITask, type BrowserLocalAITask } from "../../application/ai/BrowserLocalModelClient";
 import { useAIAccessSession } from "../providers/AIAccessSessionProvider";
 import styles from "./ResumeImprovementWorkspace.module.css";
 
@@ -27,7 +28,9 @@ function friendlyError(code: unknown) {
   if (code === "EMPTY_FILE") return "This file is empty. Choose another PDF or DOCX.";
   if (code === "SOURCE_TOO_LARGE") return "This file is too large. Choose a resume under 5 MB.";
   if (code === "SUPPORTED_FORMATS_ARE_PDF_AND_DOCX") return "Choose a PDF or DOCX resume.";
-  if (code === "V12_AI_ACCESS_REQUIRED" || code === "V12_BYOK_REQUIRED") return "Reconnect AI access and try again.";
+  if (code === "V12_AI_ACCESS_REQUIRED" || code === "V12_BYOK_REQUIRED") return "Reconnect your AI provider and try again.";
+  if (code === "V12_PLATFORM_AI_PRIVATE") return "Managed CV Engine AI is private and is not available for public usage.";
+  if (code === "V12_LOCAL_AI_BROWSER_REQUIRED") return "Local AI must run in your browser, not on CV Engine servers.";
   if (code === "TARGET_TEXT_TOO_LARGE") return "The job description is too long. Shorten it and try again.";
   return "We couldn’t finish your resume safely. Please try again.";
 }
@@ -40,6 +43,7 @@ export function ResumeImprovementWorkspace() {
   const [result, setResult] = useState<ImprovementResult | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
+  const [localProgress, setLocalProgress] = useState<string | null>(null);
   const { mode, readByokCredential } = useAIAccessSession();
 
   async function improve() {
@@ -49,30 +53,55 @@ export function ResumeImprovementWorkspace() {
     setResult(null);
     setReviewOpen(false);
     setAuditOpen(false);
+    setLocalProgress(null);
     try {
-      const form = new FormData();
-      form.set("file", file);
-      if (targetText.trim()) form.set("targetText", targetText.trim());
       const headers: Record<string, string> = {};
-      if (mode === "BYOK_GEMINI") {
+      if (mode?.startsWith("BYOK_")) {
         const credential = readByokCredential();
         if (!credential) {
-          setError("Reconnect AI access and try again.");
+          setError("Reconnect your AI provider and try again.");
           return;
         }
         headers["x-cvengine-byok-key"] = credential;
       }
-      const response = await fetch("/api/resume-improvements", { method: "POST", body: form, headers });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) {
-        setError(friendlyError(body?.error));
+
+      let receiptId: string | null = null;
+      const localResponses: Record<string, string> = {};
+      for (let round = 0; round < 12; round += 1) {
+        const form = new FormData();
+        if (receiptId) form.set("receiptId", receiptId);
+        else form.set("file", file);
+        if (targetText.trim()) form.set("targetText", targetText.trim());
+        if (mode === "LOCAL_BROWSER") form.set("localResponses", JSON.stringify(localResponses));
+
+        const response = await fetch("/api/resume-improvements", { method: "POST", body: form, headers });
+        const body = await response.json().catch(() => null);
+
+        if (mode === "LOCAL_BROWSER" && response.status === 428 && body?.error === "LOCAL_AI_TASK_REQUIRED") {
+          if (typeof body.receiptId === "string") receiptId = body.receiptId;
+          const task = body.task as BrowserLocalAITask | undefined;
+          if (!task?.id) throw new Error("LOCAL_AI_TASK_INVALID");
+          const localText = await runBrowserLocalAITask(task, setLocalProgress);
+          localResponses[task.id] = localText;
+          continue;
+        }
+
+        if (!response.ok) {
+          setError(friendlyError(body?.error));
+          return;
+        }
+        setResult(body as ImprovementResult);
+        setLocalProgress(null);
         return;
       }
-      setResult(body as ImprovementResult);
-    } catch {
-      setError("We couldn’t finish your resume safely. Please try again.");
+      setError("Local AI exceeded the safe task limit for one resume.");
+    } catch (error) {
+      setError(mode === "LOCAL_BROWSER"
+        ? `Local AI could not finish safely: ${error instanceof Error ? error.message : "unknown error"}`
+        : "We couldn’t finish your resume safely. Please try again.");
     } finally {
       setBusy(false);
+      setLocalProgress(null);
     }
   }
 
@@ -145,7 +174,7 @@ export function ResumeImprovementWorkspace() {
       </div>
 
       <button className="primary" type="button" disabled={!file || busy} onClick={() => void improve()}>{busy ? "Improving your resume…" : "Improve my resume"}</button>
-      {busy ? <p className="status" role="status">Improving your resume and checking every fact…</p> : null}
+      {busy ? <p className="status" role="status">{localProgress ?? (mode === "LOCAL_BROWSER" ? "Preparing local AI…" : "Improving your resume and checking every fact…")}</p> : null}
       {error ? <p className="status error" role="alert">{error}</p> : null}
       <p className="fine-print">CV Engine can improve wording and structure, but it does not invent employers, skills, dates, metrics, responsibilities, or achievements.</p>
     </section>
