@@ -94,6 +94,7 @@ export type AIGatewayRuntimeConfig = Readonly<{
   byokGeminiKey: string | null;
   byokProvider?: UserAIProvider;
   byokProviderKey?: string | null;
+  byokModelOverride?: string | null;
   geminiBaseUrl: string;
   openaiBaseUrl?: string;
   anthropicBaseUrl?: string;
@@ -315,10 +316,20 @@ function attemptPlanForBudget(
   credentialMode: CredentialMode,
   budget: AIExecutionBudget,
   byokProvider: UserAIProvider,
+  byokModelOverride?: string | null,
 ) {
   let cloud = 0;
   let ollama = 0;
-  return buildProviderAttemptPlan(capability, credentialMode, byokProvider).filter((attempt) => {
+  const override = byokModelOverride?.trim()
+    ? z.string().trim().min(1).max(200).parse(byokModelOverride)
+    : null;
+  return buildProviderAttemptPlan(capability, credentialMode, byokProvider)
+    .map((attempt) =>
+      override && credentialMode === "BYOK_REQUEST_SCOPED" && attempt.provider !== "OLLAMA"
+        ? { ...attempt, model: override }
+        : attempt,
+    )
+    .filter((attempt) => {
     if (attempt.provider !== "OLLAMA") {
       cloud += 1;
       return cloud <= budget.maxGeminiAttempts;
@@ -585,6 +596,7 @@ export async function executeAICapability(
     input.credentialMode,
     budget,
     config.byokProvider ?? "GEMINI",
+    config.byokModelOverride,
   );
   let lastFailure: AIExecutionFailureCode = "TOTAL_PROVIDER_OUTAGE";
 
