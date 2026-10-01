@@ -23,10 +23,12 @@ import {
 } from "../../../../../../application/presentation/PresentationRevisionRepository";
 import {
   AIAccessModeSchema,
-  GeminiCredentialInputSchema,
   type AIAccessMode,
 } from "../../../../../../domain/ai/AIAccess";
-import type { CredentialMode } from "../../../../../../domain/ai/AICapability";
+import {
+  AIRequestPolicyError,
+  resolveAIRequestCredential,
+} from "../../../../../../application/ai/RequestScopedAIConfig";
 import { CURRENT_TRUST_DISCLOSURE_VERSION } from "../../../../../../domain/trust/FirstRunTrust";
 
 const EvidenceIdSchema = z.string().uuid();
@@ -35,12 +37,6 @@ const ProposalInputSchema = z.object({
 }).strict();
 
 type RouteContext = { params: Promise<{ evidenceId: string }> };
-
-function credentialModeForAccess(mode: AIAccessMode): CredentialMode {
-  if (mode === "PLATFORM_GEMINI") return "PLATFORM_KEY";
-  if (mode === "BYOK_GEMINI") return "BYOK_REQUEST_SCOPED";
-  return "NO_CLOUD_AI";
-}
 
 function safeLogger(event: SafeAIEvent) {
   console.info("CV_ENGINE_AI_EVENT", JSON.stringify(event));
@@ -61,7 +57,7 @@ function actualPaidCostUsd(
   }[],
 ) {
   return attempts.reduce((total, attempt) => {
-    if (attempt.provider !== "GEMINI") return total;
+    if (attempt.provider !== "GEMINI" || attempt.credentialMode !== "PLATFORM") return total;
     const estimate = geminiActualPaidCostUsd(
       attempt.model,
       attempt.inputTokens,
@@ -165,31 +161,25 @@ export async function POST(request: Request, { params }: RouteContext) {
       );
     }
 
-    const suppliedByok = request.headers.get("x-cvengine-byok-key");
-    if (accessMode !== "BYOK_GEMINI" && suppliedByok) {
+    let resolved;
+    try {
+      resolved = resolveAIRequestCredential(request, accessMode);
+    } catch (error) {
+      const code = error instanceof AIRequestPolicyError
+        ? error.code
+        : "AI_ACCESS_REQUEST_INVALID";
       return NextResponse.json(
-        { error: "UNEXPECTED_BYOK_CREDENTIAL" },
-        { status: 400 },
+        { error: code },
+        { status: code === "PLATFORM_AI_NOT_ENTITLED" ? 403 : 400 },
       );
     }
 
-    let byokGeminiKey: string | null = null;
-    if (accessMode === "BYOK_GEMINI") {
-      const key = GeminiCredentialInputSchema.safeParse(suppliedByok);
-      if (!key.success) {
-        return NextResponse.json(
-          { error: "BYOK_CREDENTIAL_REQUIRED" },
-          { status: 400 },
-        );
-      }
-      byokGeminiKey = key.data;
-    }
-
-    const credentialMode = credentialModeForAccess(accessMode);
+    const credentialMode = resolved.credentialMode;
     const budget = getAIExecutionBudget("INLINE_WORDING_OPTIMIZATION");
     const plannedAttempts = buildProviderAttemptPlan(
       "INLINE_WORDING_OPTIMIZATION",
       credentialMode,
+      resolved.byokProvider,
     );
 
     let economics;
@@ -226,10 +216,13 @@ export async function POST(request: Request, { params }: RouteContext) {
       {
         executeAI: (aiInput) => executeAICapability(aiInput, {
           platformGeminiKey: process.env.GEMINI_API_KEY?.trim() || null,
-          byokGeminiKey,
-          geminiBaseUrl:
-            process.env.GEMINI_API_BASE_URL?.trim()
-            || "https://generativelanguage.googleapis.com",
+          byokGeminiKey: resolved.byokGeminiKey,
+          byokProvider: resolved.byokProvider,
+          byokProviderKey: resolved.byokProviderKey,
+          byokModelOverride: resolved.byokModelOverride,
+          geminiBaseUrl: resolved.geminiBaseUrl,
+          openaiBaseUrl: resolved.openaiBaseUrl,
+          anthropicBaseUrl: resolved.anthropicBaseUrl,
           ollamaBaseUrl,
           ollamaApiKey: process.env.OLLAMA_API_KEY?.trim() || null,
           logger: safeLogger,
