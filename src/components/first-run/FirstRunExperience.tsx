@@ -76,7 +76,9 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
         setStep("AI_ACCESS");
         return;
       }
-      if (restoredMode === "PLATFORM_GEMINI" && !platformGeminiAvailable) {
+      // Platform-funded AI is no longer a public entitlement. Legacy users who
+      // previously selected it must choose BYOK or browser-local AI explicitly.
+      if (restoredMode === "PLATFORM_GEMINI") {
         setStep("AI_ACCESS");
         return;
       }
@@ -176,7 +178,7 @@ export function FirstRunExperience({ authConfigured, platformGeminiAvailable }: 
       {step === "BOOTSTRAP" ? <section className="panel"><p className="muted">Opening CV Engine…</p></section> : null}
       {step === "TRUST" ? <TrustDisclosurePanel onAcknowledge={acknowledgeDisclosure} /> : null}
       {step === "AUTH" ? <AuthPanel authConfigured={authConfigured} onAuthenticated={resolveAuthenticatedStep} /> : null}
-      {step === "AI_ACCESS" ? <AIAccessPanel platformGeminiAvailable={platformGeminiAvailable} onReady={finalizeAIAccess} /> : null}
+      {step === "AI_ACCESS" ? <AIAccessPanel onReady={finalizeAIAccess} /> : null}
       {authStatus ? <p className="floating-status" role="status">{authStatus}</p> : null}
     </main>
   );
