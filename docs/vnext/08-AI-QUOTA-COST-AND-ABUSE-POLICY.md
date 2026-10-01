@@ -244,9 +244,10 @@ CV Engine is not a generic AI-provider proxy.
 
 If a user's key cannot access a configured model, normalize the provider error and either:
 
-- try another allowlisted model when policy permits;
-- fall back to Ollama;
-- degrade safely.
+- try another allowlisted model from the **same user-selected provider** when policy permits;
+- degrade safely and ask the user to change provider/model or use Browser Local AI.
+
+BYOK must never silently fall through to CV Engine-owned/self-hosted inference.
 
 Do not enumerate arbitrary provider resources using the user's key unless a future capability explicitly requires and discloses it.
 
