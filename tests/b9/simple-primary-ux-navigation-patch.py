@@ -5,12 +5,12 @@ from pathlib import Path
 SOURCE = Path("tests/b9/production-browser-e2e.py")
 
 LANDING_ANCHOR = '''            page.get_by_role("heading", name="Build the career evidence you can defend.").wait_for(timeout=30_000)
-            report["checks"].append("PLATFORM_AI_SELECTED")
+            report["checks"].append("BYOK_GEMINI_SELECTED")
 
             page.get_by_role("button", name="Resume Import", exact=True).click()
 '''
 LANDING_REPLACEMENT = '''            page.get_by_role("heading", name="Improve your resume").wait_for(timeout=30_000)
-            report["checks"].append("PLATFORM_AI_SELECTED")
+            report["checks"].append("BYOK_GEMINI_SELECTED")
             report["checks"].append("SIMPLE_PRIMARY_IMPROVE_RESUME_LANDING")
 
             page.get_by_role("button", name="Advanced tools", exact=True).click()

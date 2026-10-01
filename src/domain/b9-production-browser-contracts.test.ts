@@ -84,6 +84,7 @@ describe("B9 production browser certification contract", () => {
     expect(wrapper).not.toContain("SUPABASE_SERVICE_ROLE");
     expect(workflow).not.toContain("SUPABASE_SERVICE_ROLE");
     expect(workflow).not.toContain("CVENGINE_SYNTHETIC_PASSWORD:");
+    expect(workflow).toContain("CVENGINE_E2E_BYOK_KEY: ${{ secrets.CVENGINE_E2E_BYOK_KEY }}");
   });
 
   it("preserves whitespace semantics in confirmation URL extraction instead of excluding literal s", () => {
@@ -153,7 +154,9 @@ describe("B9 production browser certification contract", () => {
 
   it("certifies the full B9 browser golden path including explicit PresentationRevision approval", () => {
     const script = read("tests/b9/production-browser-e2e.py");
-    expect(script).toContain("PLATFORM_AI_SELECTED");
+    expect(script).toContain("BYOK_GEMINI_SELECTED");
+    expect(script).toContain("B9_BROWSER_BYOK_CERT_KEY_MISSING");
+    expect(script).not.toContain("Use CV Engine AI");
     expect(script).toContain("DOCX_UPLOAD_AND_REVIEW_PROPOSAL");
     expect(script).toContain("IMPORTED_EVIDENCE_EXPLICITLY_VERIFIED");
     expect(script).toContain("PRESENTATION_BEFORE_AFTER_VALIDATED_AND_APPROVED");

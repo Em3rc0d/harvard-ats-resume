@@ -9,13 +9,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { AIAccessMode } from "../../domain/ai/AIAccess";
+import type { AIAccessMode, UserAIProvider } from "../../domain/ai/AIAccess";
 import { TransientBYOKStore } from "../../application/ai/TransientBYOKStore";
 
 type AIAccessSessionContextValue = {
   mode: AIAccessMode | null;
+  provider: UserAIProvider;
   hasByokCredential: boolean;
   selectMode: (mode: AIAccessMode) => void;
+  selectProvider: (provider: UserAIProvider) => void;
   setByokCredential: (credential: string) => void;
   readByokCredential: () => string | null;
   clearSessionSecrets: () => void;
@@ -31,6 +33,7 @@ export function AIAccessSessionProvider({ children }: { children: ReactNode }) {
   }
 
   const [mode, setMode] = useState<AIAccessMode | null>(null);
+  const [provider, setProvider] = useState<UserAIProvider>("GEMINI");
   const [hasByokCredential, setHasByokCredential] = useState(false);
 
   const clearSessionSecrets = useCallback(() => {
@@ -40,13 +43,16 @@ export function AIAccessSessionProvider({ children }: { children: ReactNode }) {
 
   const selectMode = useCallback(
     (nextMode: AIAccessMode) => {
-      if (nextMode !== "BYOK_GEMINI") {
-        clearSessionSecrets();
-      }
+      if (nextMode !== "BYOK_GEMINI") clearSessionSecrets();
       setMode(nextMode);
     },
     [clearSessionSecrets],
   );
+
+  const selectProvider = useCallback((nextProvider: UserAIProvider) => {
+    clearSessionSecrets();
+    setProvider(nextProvider);
+  }, [clearSessionSecrets]);
 
   const setByokCredential = useCallback((credential: string) => {
     storeRef.current?.set(credential);
@@ -57,14 +63,17 @@ export function AIAccessSessionProvider({ children }: { children: ReactNode }) {
 
   const resetAIAccess = useCallback(() => {
     clearSessionSecrets();
+    setProvider("GEMINI");
     setMode(null);
   }, [clearSessionSecrets]);
 
   const value = useMemo<AIAccessSessionContextValue>(
     () => ({
       mode,
+      provider,
       hasByokCredential,
       selectMode,
+      selectProvider,
       setByokCredential,
       readByokCredential,
       clearSessionSecrets,
@@ -72,8 +81,10 @@ export function AIAccessSessionProvider({ children }: { children: ReactNode }) {
     }),
     [
       mode,
+      provider,
       hasByokCredential,
       selectMode,
+      selectProvider,
       setByokCredential,
       readByokCredential,
       clearSessionSecrets,
@@ -86,8 +97,6 @@ export function AIAccessSessionProvider({ children }: { children: ReactNode }) {
 
 export function useAIAccessSession() {
   const context = useContext(AIAccessSessionContext);
-  if (!context) {
-    throw new Error("useAIAccessSession must be used inside AIAccessSessionProvider");
-  }
+  if (!context) throw new Error("useAIAccessSession must be used inside AIAccessSessionProvider");
   return context;
 }

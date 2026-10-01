@@ -20,6 +20,7 @@ EXPECTED_SHA = os.environ.get("CVENGINE_EXPECTED_SHA", "").strip()
 RUN_ID = os.environ.get("GITHUB_RUN_ID", "local")
 RUN_ATTEMPT = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
 OUTPUT_DIR = Path(os.environ.get("CVENGINE_E2E_OUTPUT_DIR", "artifacts/b9-production-browser"))
+E2E_BYOK_KEY = os.environ.get("CVENGINE_E2E_BYOK_KEY", "").strip()
 SOURCE_TEXT = "Built a synthetic inventory API using Java Spring Boot and PostgreSQL."
 CANDIDATE_NAME = "CV Engine Synthetic Candidate"
 TARGET_ROLE = "Backend Engineer"
@@ -244,20 +245,22 @@ def run_browser(report: dict[str, Any]) -> None:
             page.get_by_label("Password", exact=True).fill(SYNTHETIC_PASSWORD)
             page.get_by_role("button", name="Create account", exact=True).click()
             try:
-                page.get_by_role("heading", name="Choose how CV Engine may use AI").wait_for(timeout=30_000)
+                page.get_by_role("heading", name="Choose who provides the compute").wait_for(timeout=30_000)
             except PlaywrightTimeoutError:
                 statuses = " | ".join(page.get_by_role("status").all_text_contents())
                 if "Check your email" in statuses:
                     fail("B9_BROWSER_SIGNUP_REQUIRES_EMAIL_CONFIRMATION")
                 fail("B9_BROWSER_AUTH_DID_NOT_ADVANCE", statuses)
 
-            platform_ai = page.get_by_role("radio", name=re.compile("Use CV Engine AI", re.I))
-            if platform_ai.count() != 1:
-                fail("B9_BROWSER_PLATFORM_AI_NOT_AVAILABLE")
-            platform_ai.click()
+            if not E2E_BYOK_KEY:
+                fail("B9_BROWSER_BYOK_CERT_KEY_MISSING")
+            page.get_by_role("radio", name=re.compile("Use my AI provider", re.I)).click()
+            page.get_by_role("radio", name=re.compile("Google Gemini", re.I)).click()
+            page.get_by_label("Gemini API key", exact=True).fill(E2E_BYOK_KEY)
+            page.get_by_role("button", name="Use key for this session", exact=True).click()
             page.get_by_role("button", name="Continue to CV Engine").click()
             page.get_by_role("heading", name="Build the career evidence you can defend.").wait_for(timeout=30_000)
-            report["checks"].append("PLATFORM_AI_SELECTED")
+            report["checks"].append("BYOK_GEMINI_SELECTED")
 
             page.get_by_role("button", name="Resume Import", exact=True).click()
             page.get_by_label("Resume file").set_input_files(str(source_docx))

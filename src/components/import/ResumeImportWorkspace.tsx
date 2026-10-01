@@ -65,7 +65,7 @@ export function ResumeImportWorkspace() {
   const [kindByProposal, setKindByProposal] = useState<Record<string, CareerEvidenceKind>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { mode, readByokCredential } = useAIAccessSession();
+  const { mode, provider, readByokCredential } = useAIAccessSession();
 
   async function refreshImports() {
     const response = await fetch("/api/imports/resume", { cache: "no-store" });
@@ -102,7 +102,10 @@ export function ResumeImportWorkspace() {
       const headers: Record<string, string> = {};
       if (mode === "BYOK_GEMINI") {
         const credential = readByokCredential();
-        if (credential) headers["x-cvengine-byok-key"] = credential;
+        if (credential) {
+          headers["x-cvengine-byok-key"] = credential;
+          headers["x-cvengine-ai-provider"] = provider;
+        }
       }
       const response = await fetch("/api/imports/resume", { method: "POST", body: form, headers });
       const body = await response.json().catch(() => null);

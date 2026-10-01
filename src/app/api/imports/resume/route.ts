@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import type { CredentialMode } from "../../../../domain/ai/AICapability";
-import { GeminiCredentialInputSchema, type AIAccessMode } from "../../../../domain/ai/AIAccess";
+import type { AIAccessMode } from "../../../../domain/ai/AIAccess";
+import {
+  resolveAIRequestCredential,
+  type ResolvedAIRequestCredential,
+} from "../../../../application/ai/RequestScopedAIConfig";
 import { CURRENT_TRUST_DISCLOSURE_VERSION } from "../../../../domain/trust/FirstRunTrust";
 import { requireAuthenticatedSupabaseContext } from "../../../../application/auth/requireAuthenticatedUser";
 import { buildProviderAttemptPlan } from "../../../../application/ai/AIGatewayFoundation";
@@ -28,12 +31,6 @@ function classifyUpload(file: File) {
   if (!byName && !byMime) return null;
   if (byName && byMime && byName !== byMime) return null;
   return byName ?? byMime;
-}
-
-function credentialModeForAccess(mode: AIAccessMode | null): CredentialMode {
-  if (mode === "PLATFORM_GEMINI") return "PLATFORM_KEY";
-  if (mode === "BYOK_GEMINI") return "BYOK_REQUEST_SCOPED";
-  return "NO_CLOUD_AI";
 }
 
 function safeLogger(event: SafeAIEvent) {
@@ -89,38 +86,47 @@ export async function POST(request: Request) {
       const accessMode = consent.error
         ? null
         : ((consent.data?.ai_access_mode_preference as AIAccessMode | null | undefined) ?? null);
-      const suppliedByok = accessMode === "BYOK_GEMINI" ? request.headers.get("x-cvengine-byok-key") : null;
-      const parsedByok = accessMode === "BYOK_GEMINI" ? GeminiCredentialInputSchema.safeParse(suppliedByok) : null;
-      const byokGeminiKey = parsedByok?.success ? parsedByok.data : null;
       const production = process.env.NODE_ENV === "production";
       const configuredOllamaUrl = process.env.OLLAMA_BASE_URL?.trim() || null;
-      const credentialMode = credentialModeForAccess(accessMode);
-
-      let economicsAllowed = true;
+      let resolved: ResolvedAIRequestCredential | null = null;
       try {
-        const capability = "RESUME_IMPORT_FRAGMENT" as const;
-        assertProviderEconomicsWithinPolicy(
-          capability,
-          buildProviderAttemptPlan(capability, credentialMode),
-          getAIExecutionBudget(capability),
-        );
+        resolved = resolveAIRequestCredential(request, accessMode);
       } catch (error) {
-        economicsAllowed = false;
-        console.info("CV_ENGINE_IMPORT_AI_ECONOMICS_FALLBACK", error instanceof Error ? error.message : "UNKNOWN");
+        console.info("CV_ENGINE_IMPORT_AI_ACCESS_FALLBACK", error instanceof Error ? error.message : "UNKNOWN");
+      }
+
+      let economicsAllowed = resolved !== null;
+      if (resolved) {
+        try {
+          const capability = "RESUME_IMPORT_FRAGMENT" as const;
+          assertProviderEconomicsWithinPolicy(
+            capability,
+            buildProviderAttemptPlan(capability, resolved.credentialMode, resolved.byokProvider),
+            getAIExecutionBudget(capability),
+          );
+        } catch (error) {
+          economicsAllowed = false;
+          console.info("CV_ENGINE_IMPORT_AI_ECONOMICS_FALLBACK", error instanceof Error ? error.message : "UNKNOWN");
+        }
       }
 
       const runtimeConfig = {
-        credentialMode,
+        credentialMode: resolved?.credentialMode ?? "NO_CLOUD_AI",
         platformGeminiKey: process.env.GEMINI_API_KEY?.trim() || null,
-        byokGeminiKey,
-        geminiBaseUrl: process.env.GEMINI_API_BASE_URL?.trim() || "https://generativelanguage.googleapis.com",
+        byokGeminiKey: resolved?.byokGeminiKey ?? null,
+        byokProvider: resolved?.byokProvider ?? "GEMINI",
+        byokProviderKey: resolved?.byokProviderKey ?? null,
+        byokModelOverride: resolved?.byokModelOverride ?? null,
+        geminiBaseUrl: resolved?.geminiBaseUrl ?? "https://generativelanguage.googleapis.com",
+        openaiBaseUrl: resolved?.openaiBaseUrl ?? "https://api.openai.com",
+        anthropicBaseUrl: resolved?.anthropicBaseUrl ?? "https://api.anthropic.com",
         ollamaBaseUrl: configuredOllamaUrl || (production ? "http://127.0.0.1:9" : "http://127.0.0.1:11434"),
         ollamaApiKey: process.env.OLLAMA_API_KEY?.trim() || null,
         logger: safeLogger,
         skipProviderExecution: !economicsAllowed
           || accessMode === null
-          || (accessMode === "BYOK_GEMINI" && byokGeminiKey === null)
-          || (accessMode === "NO_CLOUD_AI" && production && configuredOllamaUrl === null),
+          || accessMode === "NO_CLOUD_AI"
+          || resolved === null,
       } as const;
 
       const previousImports = await listImportReceipts(client, user.userId);

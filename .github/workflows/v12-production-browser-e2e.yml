@@ -21,6 +21,7 @@ jobs:
       CVENGINE_BASE_URL: https://harvard-ats-resume.vercel.app
       CVENGINE_EXPECTED_SHA: ${{ github.sha }}
       CVENGINE_E2E_OUTPUT_DIR: artifacts/v12-production-browser
+      CVENGINE_E2E_BYOK_KEY: ${{ secrets.CVENGINE_E2E_BYOK_KEY }}
     steps:
       - name: Checkout exact release candidate
         uses: actions/checkout@v7

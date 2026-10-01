@@ -40,7 +40,7 @@ AUTH_FLOW_ANCHOR = '''            page.get_by_role("button", name="Create an acc
             page.get_by_label("Password", exact=True).fill(SYNTHETIC_PASSWORD)
             page.get_by_role("button", name="Create account", exact=True).click()
             try:
-                page.get_by_role("heading", name="Choose how CV Engine may use AI").wait_for(timeout=30_000)
+                page.get_by_role("heading", name="Choose who provides the compute").wait_for(timeout=30_000)
             except PlaywrightTimeoutError:
                 statuses = " | ".join(page.get_by_role("status").all_text_contents())
                 if "Check your email" in statuses:
@@ -54,7 +54,7 @@ AUTH_FLOW_REPLACEMENT = '''            page.get_by_role("button", name="Create a
             page.get_by_role("button", name="Create account", exact=True).click()
 
             try:
-                page.get_by_role("heading", name="Choose how CV Engine may use AI").wait_for(timeout=5_000)
+                page.get_by_role("heading", name="Choose who provides the compute").wait_for(timeout=5_000)
             except PlaywrightTimeoutError:
                 try:
                     page.get_by_role("status").filter(has_text="Check your email").wait_for(timeout=15_000)
@@ -68,11 +68,11 @@ AUTH_FLOW_REPLACEMENT = '''            page.get_by_role("button", name="Create a
                 confirmation_url = CERT_AUTH_WAIT_FOR_CONFIRMATION()
                 page.goto(confirmation_url, wait_until="domcontentloaded", timeout=30_000)
 
-                ai_heading = page.get_by_role("heading", name="Choose how CV Engine may use AI")
+                ai_heading = page.get_by_role("heading", name="Choose who provides the compute")
                 if not ai_heading.is_visible():
                     trust_heading = page.get_by_role(
                         "heading",
-                        name="Your career evidence stays separate from AI suggestions.",
+                        name="Your CV is your information.",
                     )
                     trust_heading.wait_for(timeout=30_000)
                     page.get_by_label(

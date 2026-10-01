@@ -54,7 +54,7 @@ export function geminiActualPaidCostUsd(model: string, inputTokens: number | nul
 
 export function plannedMaximumPaidCostUsd(plans: readonly AIProviderAttemptPlan[], budget: AIExecutionBudget): number {
   return plans.reduce((total, plan) => {
-    if (plan.provider !== "GEMINI") return total;
+    if (plan.provider !== "GEMINI" || plan.credentialMode !== "PLATFORM_KEY") return total;
     const estimate = geminiAttemptMaximumPaidCostUsd(plan.model, budget);
     if (estimate === null) return Number.POSITIVE_INFINITY;
     return total + estimate;
@@ -71,8 +71,11 @@ export function assertProviderEconomicsWithinPolicy(
   budget: AIExecutionBudget,
   at: Date = new Date(),
 ) {
+  const hasPlatformGemini = plans.some(
+    (plan) => plan.provider === "GEMINI" && plan.credentialMode === "PLATFORM_KEY",
+  );
   const validityEnd = new Date(`${GEMINI_PRICING_VALID_THROUGH}T23:59:59.999Z`);
-  if (at.getTime() > validityEnd.getTime()) {
+  if (hasPlatformGemini && at.getTime() > validityEnd.getTime()) {
     throw new Error("GEMINI_PRICING_CONTRACT_EXPIRED");
   }
   const maximumPaidCostUsd = plannedMaximumPaidCostUsd(plans, budget);

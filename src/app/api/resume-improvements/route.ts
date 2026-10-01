@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { CredentialMode } from "../../../domain/ai/AICapability";
-import { GeminiCredentialInputSchema, type AIAccessMode } from "../../../domain/ai/AIAccess";
+import {
+  ProviderCredentialInputSchema,
+  UserAIProviderSchema,
+  type AIAccessMode,
+} from "../../../domain/ai/AIAccess";
 import { CURRENT_TRUST_DISCLOSURE_VERSION } from "../../../domain/trust/FirstRunTrust";
 import { AuthenticationRequiredError, requireAuthenticatedSupabaseContext } from "../../../application/auth/requireAuthenticatedUser";
 import { understandResumeSemantics } from "../../../application/import/ResumeSemanticUnderstandingService";
@@ -92,18 +96,53 @@ async function resolveAIConfig(request: Request, client: Awaited<ReturnType<type
   if (consent.error) throw new Error("V12_AI_ACCESS_LOOKUP_FAILED");
   const accessMode = (consent.data?.ai_access_mode_preference as AIAccessMode | null | undefined) ?? null;
   if (accessMode === null) throw new Error("V12_AI_ACCESS_REQUIRED");
-  const suppliedByok = accessMode === "BYOK_GEMINI" ? request.headers.get("x-cvengine-byok-key") : null;
-  const parsedByok = accessMode === "BYOK_GEMINI" ? GeminiCredentialInputSchema.safeParse(suppliedByok) : null;
-  const byokGeminiKey = parsedByok?.success ? parsedByok.data : null;
-  if (accessMode === "BYOK_GEMINI" && !byokGeminiKey) throw new Error("V12_BYOK_REQUIRED");
   const production = process.env.NODE_ENV === "production";
+  if (
+    accessMode === "PLATFORM_GEMINI" &&
+    production &&
+    process.env.CVENGINE_ALLOW_PLATFORM_AI?.trim() !== "1"
+  ) {
+    throw new Error("V12_PLATFORM_AI_NOT_ENTITLED");
+  }
+
+  if (accessMode === "NO_CLOUD_AI") {
+    // Browser-local AI is orchestrated by the client. The server-side improvement
+    // endpoint must never silently convert it into platform or hosted inference.
+    throw new Error("V12_LOCAL_AI_REQUIRES_BROWSER");
+  }
+
+  const providerHeader = request.headers.get("x-cvengine-ai-provider") ?? "GEMINI";
+  const parsedProvider = UserAIProviderSchema.safeParse(providerHeader);
+  if (accessMode === "BYOK_GEMINI" && !parsedProvider.success) {
+    throw new Error("V12_BYOK_PROVIDER_INVALID");
+  }
+  const byokProvider = parsedProvider.success ? parsedProvider.data : "GEMINI";
+  const suppliedByok = accessMode === "BYOK_GEMINI" ? request.headers.get("x-cvengine-byok-key") : null;
+  const parsedByok = accessMode === "BYOK_GEMINI" ? ProviderCredentialInputSchema.safeParse(suppliedByok) : null;
+  const byokProviderKey = parsedByok?.success ? parsedByok.data : null;
+  if (accessMode === "BYOK_GEMINI" && !byokProviderKey) throw new Error("V12_BYOK_REQUIRED");
+
+  const byokModelOverride = accessMode === "BYOK_GEMINI"
+    ? (
+        byokProvider === "OPENAI"
+          ? process.env.CVENGINE_OPENAI_BYOK_MODEL
+          : byokProvider === "ANTHROPIC"
+            ? process.env.CVENGINE_ANTHROPIC_BYOK_MODEL
+            : process.env.CVENGINE_GEMINI_BYOK_MODEL
+      )?.trim() || null
+    : null;
+
   const configuredOllamaUrl = process.env.OLLAMA_BASE_URL?.trim() || null;
-  if (accessMode === "NO_CLOUD_AI" && production && configuredOllamaUrl === null) throw new Error("V12_AI_PROVIDER_UNAVAILABLE");
   return {
     credentialMode: credentialModeForAccess(accessMode),
     platformGeminiKey: process.env.GEMINI_API_KEY?.trim() || null,
-    byokGeminiKey,
+    byokGeminiKey: byokProvider === "GEMINI" ? byokProviderKey : null,
+    byokProvider,
+    byokProviderKey,
+    byokModelOverride,
     geminiBaseUrl: process.env.GEMINI_API_BASE_URL?.trim() || "https://generativelanguage.googleapis.com",
+    openaiBaseUrl: process.env.OPENAI_API_BASE_URL?.trim() || "https://api.openai.com",
+    anthropicBaseUrl: process.env.ANTHROPIC_API_BASE_URL?.trim() || "https://api.anthropic.com",
     ollamaBaseUrl: configuredOllamaUrl || (production ? "http://127.0.0.1:9" : "http://127.0.0.1:11434"),
     ollamaApiKey: process.env.OLLAMA_API_KEY?.trim() || null,
     logger: safeLogger,

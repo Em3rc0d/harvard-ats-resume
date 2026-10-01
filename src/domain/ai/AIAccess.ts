@@ -8,9 +8,12 @@ export const AIAccessModeSchema = z.enum([
 
 export type AIAccessMode = z.infer<typeof AIAccessModeSchema>;
 
+export const UserAIProviderSchema = z.enum(["GEMINI", "OPENAI", "ANTHROPIC"]);
+export type UserAIProvider = z.infer<typeof UserAIProviderSchema>;
+
 /**
- * Durable preference only. Raw BYOK credentials are intentionally impossible
- * to represent in this schema.
+ * Durable preference only. Raw BYOK credentials and provider credentials are
+ * intentionally impossible to represent in this schema.
  */
 export const AIAccessPreferenceSchema = z
   .object({
@@ -20,11 +23,14 @@ export const AIAccessPreferenceSchema = z
 
 export type AIAccessPreference = z.infer<typeof AIAccessPreferenceSchema>;
 
-export const GeminiCredentialInputSchema = z
+export const ProviderCredentialInputSchema = z
   .string()
   .trim()
-  .min(16, "Gemini API key is too short")
-  .max(512, "Gemini API key is too long");
+  .min(16, "API key is too short")
+  .max(1_024, "API key is too long");
+
+// Backward-compatible export for existing Gemini contracts.
+export const GeminiCredentialInputSchema = ProviderCredentialInputSchema;
 
 export type BrowserOriginLike = Readonly<{
   protocol: string;
@@ -43,17 +49,35 @@ export function isByokTransportAllowed(origin: BrowserOriginLike): boolean {
   return LOCAL_BYOK_HOSTS.has(origin.hostname.toLowerCase());
 }
 
+export const USER_AI_PROVIDER_COPY: Readonly<Record<UserAIProvider, { title: string; keyLabel: string; description: string }>> = {
+  GEMINI: {
+    title: "Google Gemini",
+    keyLabel: "Gemini API key",
+    description: "Use your own Google AI Studio / Gemini API quota.",
+  },
+  OPENAI: {
+    title: "OpenAI",
+    keyLabel: "OpenAI API key",
+    description: "Use your own OpenAI API account and quota.",
+  },
+  ANTHROPIC: {
+    title: "Anthropic Claude",
+    keyLabel: "Anthropic API key",
+    description: "Use your own Anthropic API account and quota.",
+  },
+};
+
 export const AI_ACCESS_COPY: Readonly<Record<AIAccessMode, { title: string; description: string }>> = {
   PLATFORM_GEMINI: {
-    title: "Use CV Engine AI",
-    description: "Use CV Engine's server-side Gemini access under platform quotas and safeguards.",
+    title: "CV Engine managed AI",
+    description: "Internal/private platform route. It is not offered as a public entitlement.",
   },
   BYOK_GEMINI: {
-    title: "Use my Gemini API key",
-    description: "Keep your Gemini key in this browser session only. CV Engine does not intentionally persist it.",
+    title: "Use my AI provider",
+    description: "Connect Gemini, OpenAI, or Claude with your own API key for this browser session.",
   },
   NO_CLOUD_AI: {
-    title: "Continue without cloud AI",
-    description: "Keep the trusted core available without sending career content to Gemini.",
+    title: "Run AI on this device",
+    description: "Download a small model in your browser and use your own CPU/GPU instead of CV Engine inference infrastructure.",
   },
 };

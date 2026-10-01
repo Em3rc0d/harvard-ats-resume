@@ -19,6 +19,19 @@ This policy governs:
 
 Truth acceptance remains governed by domain validation, not quota policy.
 
+## Public-release cost boundary — 2026-09-30
+
+This section supersedes the earlier assumption that platform-owned Gemini is the ordinary public route.
+
+For the public release:
+
+- PLATFORM_KEY is private/internal and disabled for ordinary production users;
+- public cloud AI is BYOK across the allowlisted Gemini, OpenAI, and Anthropic routes;
+- BYOK provider usage is user-funded and counts as **zero CV Engine platform-AI cost**;
+- Browser Local AI performs LLM inference on the user's device and must never silently fall back to a CV Engine-owned provider key;
+- the historical platform-key quotas below remain relevant only to internal certification, demos, allowlisted operation, and future managed paid AI.
+
+The detailed release contract is docs/vnext/14-USER-FUNDED-AND-BROWSER-LOCAL-AI.md.
 ## 2. Observed development quota baseline
 
 The supplied Gemini free-tier project snapshot on 2026-08-26 provides the initial engineering baseline:
@@ -214,7 +227,7 @@ Never charge unexpectedly by disabling a budget guard automatically.
 
 ## 12. BYOK policy
 
-BYOK moves Gemini provider quota/cost to the user's Google project, but does **not** remove CV Engine controls.
+BYOK moves provider quota/cost to the user's selected Gemini, OpenAI, or Anthropic account, but does **not** remove CV Engine controls.
 
 Still enforce:
 
@@ -227,13 +240,14 @@ Still enforce:
 - abuse/rate limits;
 - truth validation.
 
-CV Engine is not a generic Gemini proxy.
+CV Engine is not a generic AI-provider proxy.
 
 If a user's key cannot access a configured model, normalize the provider error and either:
 
-- try another allowlisted model when policy permits;
-- fall back to Ollama;
-- degrade safely.
+- try another allowlisted model from the **same user-selected provider** when policy permits;
+- degrade safely and ask the user to change provider/model or use Browser Local AI.
+
+BYOK must never silently fall through to CV Engine-owned/self-hosted inference.
 
 Do not enumerate arbitrary provider resources using the user's key unless a future capability explicitly requires and discloses it.
 
