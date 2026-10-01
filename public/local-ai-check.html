@@ -21,7 +21,7 @@
     <section class="card">
       <div class="eyebrow">CVEngine · browser-local diagnostic</div>
       <h1>Test Local AI on this device</h1>
-      <p>This page tests the exact boundary we need before integrating Local AI into the public CV flow: WebGPU availability, real model loading, and constrained JSON generation. The AI model runs in your browser; Vercel serves only these static files.</p>
+      <p>This staged diagnostic separates raw local generation from constrained JSON so we can distinguish GPU speed from structured-output failures. The AI model runs in your browser; Vercel serves only these static files.</p>
       <div class="notice"><strong>Large first download:</strong> the balanced model may require roughly 1.6 GB of GPU memory and a substantial one-time download. If it cannot load, the check automatically tries the lighter ~0.9 GB model. Nothing starts until you press the button.</div>
       <div class="grid">
         <div class="mini"><strong>1. Qwen2.5 1.5B</strong><span>Balanced candidate · q4f16 · documented ~1629.75 MB VRAM.</span></div>
@@ -36,6 +36,6 @@
       <pre id="report"></pre>
     </section>
   </main>
-  <script type="module" src="/local-ai-check.js"></script>
+  <script type="module" src="/local-ai-check-v2.js"></script>
 </body>
 </html>
