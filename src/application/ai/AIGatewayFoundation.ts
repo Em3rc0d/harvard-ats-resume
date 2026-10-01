@@ -146,11 +146,24 @@ export function buildProviderAttemptPlan(
     for (const model of route.geminiModels) {
       attempts.push({ provider: "GEMINI", model, credentialMode });
     }
-  } else if (credentialMode === "BYOK_REQUEST_SCOPED") {
+    // Private/internal platform operation may retain the legacy self-hosted
+    // fallback. Public users never enter PLATFORM_KEY without entitlement.
+    attempts.push({
+      provider: "OLLAMA",
+      model: route.ollamaModel,
+      credentialMode: "NO_CLOUD_AI",
+    });
+    return attempts;
+  }
+
+  if (credentialMode === "BYOK_REQUEST_SCOPED") {
     const byokProvider = UserAIProviderSchema.parse(byokProviderInput);
     for (const model of modelsForUserProvider(route, byokProvider)) {
       attempts.push({ provider: byokProvider, model, credentialMode });
     }
+    // BYOK is user-funded by definition. Never fall through to CV Engine
+    // compute when the user's provider is unavailable.
+    return attempts;
   }
 
   attempts.push({
@@ -158,6 +171,5 @@ export function buildProviderAttemptPlan(
     model: route.ollamaModel,
     credentialMode: "NO_CLOUD_AI",
   });
-
   return attempts;
 }
