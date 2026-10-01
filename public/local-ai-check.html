@@ -21,11 +21,11 @@
     <section class="card">
       <div class="eyebrow">CVEngine · browser-local diagnostic</div>
       <h1>Test Local AI on this device</h1>
-      <p>This staged diagnostic treats manual WebGPU adapter probing as advisory and lets WebLLM itself decide whether local inference can initialize. The AI model runs in your browser; Vercel serves only these static files.</p>
-      <div class="notice"><strong>Large first download:</strong> the balanced model may require roughly 1.6 GB of GPU memory and a substantial one-time download. If it cannot load, the check automatically tries the lighter ~0.9 GB model. Nothing starts until you press the button.</div>
+      <p>This recovery diagnostic uses one small local model per session to verify stable WebGPU inference without stressing older integrated GPUs. The AI model runs in your browser; Vercel serves only these static files.</p>
+      <div class="notice"><strong>Recovery test:</strong> fully close and reopen Chrome before running this version. It loads only one low-resource model (~580 MB VRAM) and stops immediately if Chrome has not recovered a WebGPU adapter.</div>
       <div class="grid">
-        <div class="mini"><strong>1. Qwen2.5 1.5B</strong><span>Balanced candidate · q4f16 · documented ~1629.75 MB VRAM.</span></div>
-        <div class="mini"><strong>2. Llama 3.2 1B</strong><span>Light fallback · q4f16 · documented ~879.04 MB VRAM.</span></div>
+        <div class="mini"><strong>SmolLM2 360M</strong><span>Safe smoke-test candidate · q4f32 · documented ~579.61 MB VRAM.</span></div>
+        <div class="mini"><strong>Purpose</strong><span>Prove stable local generation first. Larger CV-quality models are tested only after this passes.</span></div>
       </div>
       <div class="actions"><button class="primary" id="run">Run Local AI check</button><button class="secondary" id="copy">Copy diagnostic report</button></div>
       <div id="status">Ready. No model has been downloaded.</div>
@@ -36,6 +36,6 @@
       <pre id="report"></pre>
     </section>
   </main>
-  <script type="module" src="/local-ai-check-v3.js"></script>
+  <script type="module" src="/local-ai-check-v4.js"></script>
 </body>
 </html>
