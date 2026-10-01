@@ -43,3 +43,6 @@ jobs:
           src/domain/v12-improvement-artifact.test.ts
           src/domain/v12-holistic-resume-editor.test.ts
           src/domain/v12-resume-semantic-understanding.test.ts
+          src/domain/v12-production-certification-contracts.test.ts
+          src/domain/browser-local-ai-contracts.test.ts
+          src/domain/byok-multi-provider-runtime.test.ts
