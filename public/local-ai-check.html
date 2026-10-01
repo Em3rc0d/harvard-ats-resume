@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>CVEngine Local AI Check</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e8edf7;background:#080b10;color-scheme:dark}
+    *{box-sizing:border-box} body{margin:0;min-height:100vh;background:radial-gradient(circle at 20% 0%,#182136 0,transparent 36%),#080b10;padding:32px 18px}
+    main{max-width:880px;margin:0 auto}.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#9badc9}.card{background:rgba(14,19,28,.92);border:1px solid #273247;border-radius:20px;padding:28px;box-shadow:0 24px 80px rgba(0,0,0,.35)}
+    h1{font-size:clamp(30px,5vw,52px);line-height:1.03;margin:10px 0 14px}p{color:#aebbd0;line-height:1.65}.notice{border:1px solid #34445e;border-radius:14px;padding:14px 16px;margin:20px 0;background:#101722}.notice strong{color:#fff}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0}button{border:0;border-radius:12px;padding:12px 18px;font-weight:700;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}.primary{background:#eef4ff;color:#08101c}.secondary{background:#182335;color:#dbe7fb;border:1px solid #31415b}
+    #status{font-weight:700;color:#d8e4f7;margin:8px 0}#status[data-kind="success"]{color:#8fe1ad}#status[data-kind="warn"]{color:#ffd586}#status[data-kind="error"]{color:#ff9b9b}#progress{min-height:24px;color:#91a5c4}
+    pre{white-space:pre-wrap;word-break:break-word;background:#070a0f;border:1px solid #202b3e;border-radius:14px;padding:16px;overflow:auto;color:#bdcbe0;font-size:12px;line-height:1.55}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.mini{background:#0c111a;border:1px solid #202b3e;border-radius:14px;padding:15px}.mini strong{display:block;color:#fff;margin-bottom:5px}.mini span{color:#95a5be;font-size:13px}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}.card{padding:20px}}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <div class="eyebrow">CVEngine · browser-local diagnostic</div>
+      <h1>Test Local AI on this device</h1>
+      <p>This page tests the exact boundary we need before integrating Local AI into the public CV flow: WebGPU availability, real model loading, and constrained JSON generation. The AI model runs in your browser; Vercel serves only these static files.</p>
+      <div class="notice"><strong>Large first download:</strong> the balanced model may require roughly 1.6 GB of GPU memory and a substantial one-time download. If it cannot load, the check automatically tries the lighter ~0.9 GB model. Nothing starts until you press the button.</div>
+      <div class="grid">
+        <div class="mini"><strong>1. Qwen2.5 1.5B</strong><span>Balanced candidate · q4f16 · documented ~1629.75 MB VRAM.</span></div>
+        <div class="mini"><strong>2. Llama 3.2 1B</strong><span>Light fallback · q4f16 · documented ~879.04 MB VRAM.</span></div>
+      </div>
+      <div class="actions"><button class="primary" id="run">Run Local AI check</button><button class="secondary" id="copy">Copy diagnostic report</button></div>
+      <div id="status">Ready. No model has been downloaded.</div>
+      <div id="progress"></div>
+      <h2>Structured probe output</h2>
+      <pre id="result">Not run yet.</pre>
+      <h2>Diagnostic report</h2>
+      <pre id="report"></pre>
+    </section>
+  </main>
+  <script type="module" src="/local-ai-check.js"></script>
+</body>
+</html>
