@@ -1,4 +1,4 @@
-import { GeminiCredentialInputSchema } from "../../domain/ai/AIAccess";
+import { ProviderCredentialInputSchema } from "../../domain/ai/AIAccess";
 
 /**
  * Request/session-only secret holder. The private field is intentionally not
@@ -9,7 +9,7 @@ export class TransientBYOKStore {
   #credential: string | null = null;
 
   set(rawCredential: string) {
-    this.#credential = GeminiCredentialInputSchema.parse(rawCredential);
+    this.#credential = ProviderCredentialInputSchema.parse(rawCredential);
   }
 
   read(): string | null {
