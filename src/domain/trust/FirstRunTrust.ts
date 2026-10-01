@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AIAccessModeSchema } from "../ai/AIAccess";
 
-export const CURRENT_TRUST_DISCLOSURE_VERSION = "cv-engine-trust-v1" as const;
+export const CURRENT_TRUST_DISCLOSURE_VERSION = "cv-engine-trust-v2" as const;
 
 export const TrustDisclosureSchema = z
   .object({
@@ -11,6 +11,9 @@ export const TrustDisclosureSchema = z
     jobDescriptionCannotCreateCandidateTruth: z.literal(true),
     cloudProcessingDisclosed: z.literal(true),
     byokIsTransient: z.literal(true),
+    commercialUseProhibited: z.literal(true),
+    localInferenceDisclosed: z.literal(true),
+    thirdPartyProviderTermsDisclosed: z.literal(true),
   })
   .strict();
 
@@ -21,6 +24,9 @@ export const CURRENT_TRUST_DISCLOSURE = TrustDisclosureSchema.parse({
   jobDescriptionCannotCreateCandidateTruth: true,
   cloudProcessingDisclosed: true,
   byokIsTransient: true,
+  commercialUseProhibited: true,
+  localInferenceDisclosed: true,
+  thirdPartyProviderTermsDisclosed: true,
 });
 
 export const ConsentReceiptSchema = z
