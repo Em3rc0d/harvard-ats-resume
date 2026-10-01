@@ -11,6 +11,7 @@ describe("v1.2 production certification contract", () => {
     expect(workflow).toContain("CVENGINE_EXPECTED_SHA: ${{ github.sha }}");
     expect(workflow).toContain("tests/b9/production-runtime-preflight.py");
     expect(workflow).toContain("tests/v12/production-improve-resume-cert.py");
+    expect(workflow).toContain("CVENGINE_E2E_BYOK_KEY: ${{ secrets.CVENGINE_E2E_BYOK_KEY }}");
     expect(workflow).toContain("branches:\n      - main");
   });
 
@@ -31,6 +32,9 @@ describe("v1.2 production certification contract", () => {
     }
     expect(harness).toContain('name="Improve my resume"');
     expect(harness).toContain('"unsupportedNewClaims"');
+    expect(harness).toContain("BYOK_GEMINI_SELECTED");
+    expect(harness).toContain("V12_BROWSER_BYOK_CERT_KEY_MISSING");
+    expect(harness).not.toContain("Use CV Engine AI");
     expect(harness).toContain('payload.get("export")');
     expect(harness).not.toContain("Accept as NEEDS_REVIEW");
   });
