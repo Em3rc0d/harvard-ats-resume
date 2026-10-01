@@ -36,11 +36,11 @@ function extractJson(value) {
 async function generator() {
   if (!generatorPromise) {
     generatorPromise = (async () => {
-      progress("LOADING", "Preparing local AI…");
+      progress("LOADING", "Preparing local AI beta…");
       const { pipeline } = await import(TRANSFORMERS_URL);
       selectedDevice = self.navigator?.gpu ? "webgpu" : "wasm";
       return pipeline("text-generation", MODEL_ID, {
-        dtype: "q4",
+        dtype: selectedDevice === "webgpu" ? "q4f16" : "int8",
         device: selectedDevice,
         progress_callback: (event) => {
           const raw = typeof event?.progress === "number" ? event.progress : null;
