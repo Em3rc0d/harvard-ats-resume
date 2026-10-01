@@ -6,11 +6,13 @@ const read = (path: string) => fs.readFileSync(path, "utf8");
 describe("browser-local AI access contracts", () => {
   it("does not expose platform-funded Gemini in the public AI chooser", () => {
     const panel = read("src/components/first-run/AIAccessPanel.tsx");
+    const access = read("src/domain/ai/AIAccess.ts");
     expect(panel).toContain('const publicModes: AIAccessMode[] = ["BYOK_GEMINI", "NO_CLOUD_AI"]');
     expect(panel).not.toContain('publicModes: AIAccessMode[] = ["PLATFORM_GEMINI"');
-    expect(panel).toContain("Google Gemini");
-    expect(panel).toContain("OpenAI");
-    expect(panel).toContain("Anthropic Claude");
+    expect(panel).toContain("USER_AI_PROVIDER_COPY");
+    expect(access).toContain("Google Gemini");
+    expect(access).toContain("OpenAI");
+    expect(access).toContain("Anthropic Claude");
   });
 
   it("runs browser-local inference in a Web Worker instead of a server AI route", () => {
